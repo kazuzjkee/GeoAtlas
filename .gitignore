@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# База данных результатов тестов и временные файлы
+quiz_results.json
+quiz_data/
+
+# Сгенерированные карты
+rostov_quiz_map.html
+
+# Конфиденциальные файлы или ключи
+secret_config.json
+*.key
