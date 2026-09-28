@@ -1557,7 +1557,8 @@ document.addEventListener('DOMContentLoaded', function() {{
         setTimeout(openWelcomeModal, 400);
     }}
 }});
-'''
+''';
+
         self.map.get_root().html.add_child(folium.Element(f"<script>{js_code}</script>"))
 
         quiz_html = '''
@@ -2091,11 +2092,6 @@ document.addEventListener('DOMContentLoaded', function() {{
             margin-bottom: 24px;
         }
 
-        @media (max-width: 600px) {
-            .welcome-grid { grid-template-columns: 1fr; }
-            .top-nav-buttons { right: auto; left: 14px; top: 180px; }
-        }
-
         .welcome-feature {
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
@@ -2446,6 +2442,68 @@ document.addEventListener('DOMContentLoaded', function() {{
             color: #1E293B;
         }
         .score-sub { font-size: 11px; color: #64748B; font-weight: 500; margin-top: 2px; }
+
+        /* ================= MOBILE ADAPTIVE STYLES ================= */
+        @media (max-width: 768px) {
+            .top-nav-buttons {
+                top: 10px;
+                right: 10px;
+                left: auto;
+                gap: 6px;
+            }
+            .nav-top-btn, .help-circle-btn {
+                padding: 6px 10px;
+                font-size: 11px;
+                height: 32px;
+            }
+            .help-circle-btn {
+                width: 32px;
+                font-size: 14px;
+            }
+            .app-card {
+                position: fixed;
+                top: auto;
+                bottom: 10px;
+                right: 10px;
+                left: 10px;
+                width: auto;
+                max-height: 42vh;
+                padding: 12px;
+                z-index: 1001;
+            }
+            .welcome-grid {
+                grid-template-columns: 1fr;
+            }
+            .welcome-card, .auth-card {
+                padding: 18px 20px;
+                max-width: 95vw;
+                max-height: 85vh;
+            }
+
+            /* Переводим слои в компактную кнопку с выпадающим списком */
+            .leaflet-bottom.leaflet-left .leaflet-control-layers {
+                border-radius: 8px !important;
+                margin-bottom: 46vh !important;
+                margin-left: 10px !important;
+                background: rgba(255, 255, 255, 0.95) !important;
+            }
+            .leaflet-control-layers-expanded {
+                max-height: 140px;
+                overflow-y: auto;
+                padding: 6px 10px !important;
+                font-size: 11px !important;
+            }
+            .leaflet-control-layers::before {
+                font-size: 11.5px !important;
+                padding-bottom: 2px !important;
+                margin-bottom: 4px !important;
+            }
+
+            /* Скрываем легенду на мобильных, чтобы не перегружать экран */
+            div[style*="top: 14px; left: 60px;"] {
+                display: none !important;
+            }
+        }
         </style>
         '''
         self.map.get_root().html.add_child(folium.Element(quiz_html))
