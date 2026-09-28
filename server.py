@@ -79,13 +79,13 @@ def send_email_smtp(to_email: str, code: str):
     msg["To"] = to_email
 
     try:
-        with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+        with smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=5.0) as server:
             server.login(sender_email, app_password)
             server.send_message(msg)
         print(f"✅ Письмо успешно отправлено на почту: {to_email}")
     except Exception as e:
-        print(f"⚠️ Ошибка отправки SMTP (DEV дубль в консоль): {e}")
-        print(f"🔑 [DEV ДУБЛЬ] Код для {to_email}: {code}")
+        print(f"⚠️ SMTP соединение заблокировано или завершилось ошибкой: {e}")
+        print(f"🔑 [РЕЗЕРВНЫЙ ДУБЛЬ В ЛОГИ] Код для {to_email}: {code}")
 
 
 @app.post("/api/auth/send-code")
@@ -101,8 +101,14 @@ def send_code(req: AuthRequest):
         "name": req.full_name.strip(),
         "group": req.group_num.strip()
     }
-    print(f"\n🔑 [ЮФУ АВТОРИЗАЦИЯ] Код для {email}: {code}\n")
-    send_email_smtp(email, code)
+    print(f"\n🔑 [ЮФУ АВТОРИЗАЦИЯ] Сгенерирован код для {email}: {code}\n")
+    
+    # Отправка почты без риска положить запрос 500 ошибкой
+    try:
+        send_email_smtp(email, code)
+    except Exception:
+        pass
+
     return {"status": "ok", "message": "Код подтверждения отправлен"}
 
 
