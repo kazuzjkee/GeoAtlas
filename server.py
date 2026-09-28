@@ -9,6 +9,12 @@ import smtplib
 from email.message import EmailMessage
 import json
 
+# Автоматически генерируем карту при старте сервера, если её нет (например, на хостинге)
+if not os.path.exists("rostov_quiz_map.html"):
+    print("Карта rostov_quiz_map.html не найдена, запускаем генерацию через main.py...")
+    import main
+    main.main()
+
 app = FastAPI(title="Геоатлас Ростовской области — Портал ЮФУ")
 
 app.add_middleware(
