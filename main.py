@@ -1491,7 +1491,7 @@ async function requestSfeduCode() {{
         errBox.style.display = 'none';
 
         if (data.dev_code) {{
-            alert(`[Демо/ЮФУ] Ваш проверочный код: ${data.dev_code}`);
+            alert(`[Демо/ЮФУ] Ваш проверочный код: ${{data.dev_code}}`);
         }}
     }} catch(e) {{
         showAuthError(e.message || 'Ошибка соединения с сервером');
@@ -2571,7 +2571,7 @@ document.addEventListener('DOMContentLoaded', function() {{
                 <div style="width: 18px; height: 3px; background: #1E90FF; margin-right: 8px; border-radius: 2px;"></div>
                 <span>Реки</span>
             </div>
-            <div style="display: flex; align-items: center; margin-bottom: 6px;">
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
                 <div style="width: 18px; height: 14px; background: #87CEEB; margin-right: 8px; opacity: 0.6; border-radius: 2px;"></div>
                 <span>Водоемы</span>
             </div>
