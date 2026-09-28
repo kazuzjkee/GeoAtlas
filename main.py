@@ -196,7 +196,14 @@ class RostovMap:
             
             center_name = "г. Ростов-на-Дону (Областной центр)" if 'Ростов-на-Дону' in current_name else "Райцентр"
             area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if idx in metric_gdf.index else 500
-            population = KNOWN_POPULATION.get(current_name, int(area_sq_km * 20))
+
+            population = None
+            for key, val in KNOWN_POPULATION.items():
+                if key in current_name:
+                    population = val
+                    break
+            if population is None:
+                population = int(area_sq_km * 20)
 
             neighbors_data.append({
                 'name': current_name,
@@ -1482,6 +1489,10 @@ async function requestSfeduCode() {{
         document.getElementById('auth-step-2').style.display = 'block';
         document.getElementById('auth-target-email').textContent = email;
         errBox.style.display = 'none';
+
+        if (data.dev_code) {{
+            alert(`[Демо/ЮФУ] Ваш проверочный код: ${data.dev_code}`);
+        }}
     }} catch(e) {{
         showAuthError(e.message || 'Ошибка соединения с сервером');
     }}
@@ -2226,7 +2237,6 @@ document.addEventListener('DOMContentLoaded', function() {{
         .btn-warning { background: #F59E0B; }
         .btn-danger { background: #EF4444; }
 
-        /* Кнопка подтверждения ответа */
         .btn-confirm {
             display: block;
             width: 100%;
@@ -2561,7 +2571,7 @@ document.addEventListener('DOMContentLoaded', function() {{
                 <div style="width: 18px; height: 3px; background: #1E90FF; margin-right: 8px; border-radius: 2px;"></div>
                 <span>Реки</span>
             </div>
-            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; margin-bottom: 6px;">
                 <div style="width: 18px; height: 14px; background: #87CEEB; margin-right: 8px; opacity: 0.6; border-radius: 2px;"></div>
                 <span>Водоемы</span>
             </div>
