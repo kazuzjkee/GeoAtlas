@@ -8,7 +8,6 @@ import webbrowser
 BASE_PATH = 'Py_Geo/shape/'
 
 SHAPEFILES = {
-    'boundary': 'boundary-polygon-land.shp',
     'districts': 'raion.shp',
     'district_centers': 'raicentr.shp',
     'rivers': 'water-line.shp',
@@ -16,12 +15,6 @@ SHAPEFILES = {
 }
 
 STYLES = {
-    'boundary': {
-        'color': '#1E293B',
-        'weight': 3,
-        'fillColor': 'transparent',
-        'fillOpacity': 0.0
-    },
     'districts': {
         'color': '#2E8B57',
         'weight': 2,
@@ -43,14 +36,12 @@ STYLES = {
 }
 
 LAYER_NAMES = {
-    'boundary': 'Граница Ростовской области',
     'districts': 'Районы',
     'rivers': 'Реки',
     'water_bodies': 'Водоемы'
 }
 
 POPUP_PREFIXES = {
-    'boundary': 'Название:',
     'districts': 'Район:',
     'rivers': 'Река:',
     'water_bodies': 'Водоем:'
@@ -144,14 +135,16 @@ class RostovMap:
             print(f"  Ошибка загрузки: {e}")
             return None
 
-    def add_boundary(self, shp_path): return self.add_layer(shp_path, 'boundary', interactive=False)
     def add_districts(self, shp_path):
         self.districts_gdf = self.add_layer(shp_path, 'districts', with_id=True, interactive=True)
         return self.districts_gdf
+
     def add_rivers(self, shp_path):
         self.rivers_gdf = self.add_layer(shp_path, 'rivers', simplify_tolerance=0.001)
         return self.rivers_gdf
-    def add_water_bodies(self, shp_path): return self.add_layer(shp_path, 'water_bodies', simplify_tolerance=0.001)
+
+    def add_water_bodies(self, shp_path):
+        return self.add_layer(shp_path, 'water_bodies', simplify_tolerance=0.001)
 
     def add_district_centers(self, shp_path):
         print("Загружаю райцентры...")
@@ -184,9 +177,11 @@ class RostovMap:
             print(f"  Ошибка загрузки райцентров: {e}")
 
     def _calculate_neighbors_data(self):
-        if self.districts_gdf is None or len(self.districts_gdf) == 0: return []
+        if self.districts_gdf is None or len(self.districts_gdf) == 0:
+            return []
         name_field = self._detect_name_field(self.districts_gdf)
-        if not name_field: return []
+        if not name_field:
+            return []
 
         valid_gdf = self.districts_gdf[self.districts_gdf.geometry.is_valid & ~self.districts_gdf.geometry.is_empty].copy()
         metric_gdf = valid_gdf.to_crs('EPSG:3857')
@@ -213,9 +208,11 @@ class RostovMap:
         return neighbors_data
 
     def _extract_rivers_data(self):
-        if self.rivers_gdf is None or len(self.rivers_gdf) == 0: return []
+        if self.rivers_gdf is None or len(self.rivers_gdf) == 0:
+            return []
         name_field = self._detect_name_field(self.rivers_gdf)
-        if not name_field: return []
+        if not name_field:
+            return []
 
         valid_rivers = self.rivers_gdf[self.rivers_gdf[name_field].notnull() & (self.rivers_gdf[name_field] != '')].copy()
         valid_rivers['clean_name'] = valid_rivers[name_field].astype(str).str.strip()
@@ -335,14 +332,14 @@ function setQuizLayers(quizMode) {{
         if (!input) return;
 
         if (quizMode === 'center') {{
-            if (text.includes('Реки') || text.includes('Водоемы') || text.includes('Граница')) {{
+            if (text.includes('Реки') || text.includes('Водоемы')) {{
                 if (input.checked) input.click();
             }}
             if (text.includes('Районы') || text.includes('Райцентры')) {{
                 if (!input.checked) input.click();
             }}
         }} else if (quizMode === 'district' || quizMode === 'neighbor') {{
-            if (text.includes('Реки') || text.includes('Водоемы') || text.includes('Граница') || text.includes('Райцентры')) {{
+            if (text.includes('Реки') || text.includes('Водоемы') || text.includes('Райцентры')) {{
                 if (input.checked) input.click();
             }}
             if (text.includes('Районы')) {{
@@ -352,7 +349,7 @@ function setQuizLayers(quizMode) {{
             if (text.includes('Районы') || text.includes('Райцентры')) {{
                 if (input.checked) input.click();
             }}
-            if (text.includes('Реки') || text.includes('Водоемы') || text.includes('Граница')) {{
+            if (text.includes('Реки') || text.includes('Водоемы')) {{
                 if (!input.checked) input.click();
             }}
         }} else {{
@@ -745,9 +742,8 @@ function showConfirmButton() {{
     if (oldButton) oldButton.remove();
 
     const confirmButton = document.createElement('button');
-    confirmButton.textContent = 'Подтвердить ответ';
-    confirmButton.className = 'btn-primary';
-    confirmButton.style.marginTop = '10px';
+    confirmButton.textContent = '✓ Подтвердить ответ';
+    confirmButton.className = 'btn-confirm';
     confirmButton.onclick = checkAnswer;
     confirmButton.id = 'confirm-button';
     optionsContainer.appendChild(confirmButton);
@@ -1095,6 +1091,7 @@ function setupDistrictClickListeners() {{
             const props = layer.feature.properties;
             const name = props.name || props.NAME || props.Название || props.название;
             if (name && (props.adm_level || (layer.feature.geometry && layer.feature.geometry.type.includes('Polygon')))) {{
+                layer.off('click');
                 layer.on('click', function(e) {{
                     if (currentQuiz === null) {{
                         showDistrictInfoCard(name);
@@ -1111,6 +1108,9 @@ function showResults() {{
     resetMapView();
     restoreAllLayers();
     enablePopups();
+
+    currentQuiz = null;
+    setTimeout(setupDistrictClickListeners, 500);
 
     const qm = document.getElementById('quiz-mode');
     const rm = document.getElementById('results-mode');
@@ -1360,7 +1360,10 @@ function finishQuizDirectly() {{
     restoreAllLayers();
     resetMapView();
 
+    currentQuiz = null;
     resetQuiz();
+    setTimeout(setupDistrictClickListeners, 300);
+
     const qm = document.getElementById('quiz-mode');
     const rm = document.getElementById('results-mode');
     const nm = document.getElementById('normal-mode');
@@ -1473,14 +1476,14 @@ async function requestSfeduCode() {{
             body: JSON.stringify({{ email, full_name: name, group_num: group }})
         }});
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Ошибка отправки');
+        if (!res.ok) throw new Error(data.detail || 'Ошибка отправки кода');
 
         document.getElementById('auth-step-1').style.display = 'none';
         document.getElementById('auth-step-2').style.display = 'block';
         document.getElementById('auth-target-email').textContent = email;
         errBox.style.display = 'none';
     }} catch(e) {{
-        showAuthError(e.message);
+        showAuthError(e.message || 'Ошибка соединения с сервером');
     }}
 }}
 
@@ -1506,7 +1509,7 @@ async function verifySfeduCode() {{
         updateStudentHeader();
         closeAuthModal();
     }} catch(e) {{
-        showAuthError(e.message);
+        showAuthError(e.message || 'Неверный или просроченный код');
     }}
 }}
 
@@ -1557,7 +1560,7 @@ document.addEventListener('DOMContentLoaded', function() {{
         setTimeout(openWelcomeModal, 400);
     }}
 }});
-''';
+'''
 
         self.map.get_root().html.add_child(folium.Element(f"<script>{js_code}</script>"))
 
@@ -1705,7 +1708,7 @@ document.addEventListener('DOMContentLoaded', function() {{
                         Код верификации отправлен на адрес: <br><strong id="auth-target-email" style="color: #0F172A;"></strong>
                     </p>
                     <div class="form-group">
-                        <label>6-значный код из письма / консоли:</label>
+                        <label>6-значный код:</label>
                         <input type="text" id="auth-code-input" maxlength="6" placeholder="000000" class="auth-input code-input">
                     </div>
                     <button onclick="verifySfeduCode()" class="btn-start" style="width: 100%; margin-top: 14px;">
@@ -1868,7 +1871,6 @@ document.addEventListener('DOMContentLoaded', function() {{
             box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
         }
 
-        /* Плавные переходы и стили модального окна лидеров */
         .lb-main-tabs {
             display: flex;
             background: #F1F5F9;
@@ -2224,6 +2226,29 @@ document.addEventListener('DOMContentLoaded', function() {{
         .btn-warning { background: #F59E0B; }
         .btn-danger { background: #EF4444; }
 
+        /* Кнопка подтверждения ответа */
+        .btn-confirm {
+            display: block;
+            width: 100%;
+            border: none;
+            padding: 10px 14px;
+            margin-top: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #2563EB, #1D4ED8);
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+        .btn-confirm:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+            background: linear-gradient(135deg, #1D4ED8, #1E40AF);
+        }
+
         .timer-setting-box {
             margin: 8px 0;
             padding: 8px 10px;
@@ -2480,7 +2505,6 @@ document.addEventListener('DOMContentLoaded', function() {{
                 max-height: 85vh;
             }
 
-            /* Переводим слои в компактную кнопку с выпадающим списком */
             .leaflet-bottom.leaflet-left .leaflet-control-layers {
                 border-radius: 8px !important;
                 margin-bottom: 46vh !important;
@@ -2499,7 +2523,6 @@ document.addEventListener('DOMContentLoaded', function() {{
                 margin-bottom: 4px !important;
             }
 
-            /* Скрываем легенду на мобильных, чтобы не перегружать экран */
             div[style*="top: 14px; left: 60px;"] {
                 display: none !important;
             }
@@ -2507,24 +2530,6 @@ document.addEventListener('DOMContentLoaded', function() {{
         </style>
         '''
         self.map.get_root().html.add_child(folium.Element(quiz_html))
-
-    def export_quiz_data(self, output_dir='quiz_data'):
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        if self.districts_gdf is not None:
-            name_field = self._detect_name_field(self.districts_gdf)
-            data = [{"id": int(idx), "name": str(row[name_field])} for idx, row in self.districts_gdf.iterrows() if name_field and name_field in row]
-            with open(os.path.join(output_dir, 'districts.json'), 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        if self.centers_gdf is not None:
-            name_field = self._detect_name_field(self.centers_gdf)
-            data = []
-            for idx, row in self.centers_gdf.iterrows():
-                if name_field and name_field in row:
-                    lon, lat = (row.geometry.x, row.geometry.y) if hasattr(row.geometry, 'x') else (row.geometry.centroid.x, row.geometry.centroid.y)
-                    data.append({"id": int(idx), "name": str(row[name_field]), "lat": lat, "lon": lon})
-            with open(os.path.join(output_dir, 'centers.json'), 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
 
     def add_legend(self):
         legend_html = '''
@@ -2556,13 +2561,9 @@ document.addEventListener('DOMContentLoaded', function() {{
                 <div style="width: 18px; height: 3px; background: #1E90FF; margin-right: 8px; border-radius: 2px;"></div>
                 <span>Реки</span>
             </div>
-            <div style="display: flex; align-items: center; margin-bottom: 6px;">
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
                 <div style="width: 18px; height: 14px; background: #87CEEB; margin-right: 8px; opacity: 0.6; border-radius: 2px;"></div>
                 <span>Водоемы</span>
-            </div>
-            <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <div style="width: 18px; height: 3px; background: #1E293B; margin-right: 8px; border-radius: 2px;"></div>
-                <span>Граница области</span>
             </div>
             <div style="border-top: 1px solid #E2E8F0; padding-top: 8px; font-size: 11px; color: #94A3B8; text-align: center;">
                 Ростовская область
@@ -2779,7 +2780,6 @@ def main():
             print(f"  {filename} - не найден")
 
     rostov_map = RostovMap()
-    rostov_map.add_boundary(os.path.join(BASE_PATH, SHAPEFILES['boundary']))
     rostov_map.add_water_bodies(os.path.join(BASE_PATH, SHAPEFILES['water_bodies']))
     rostov_map.add_rivers(os.path.join(BASE_PATH, SHAPEFILES['rivers']))
     rostov_map.add_districts(os.path.join(BASE_PATH, SHAPEFILES['districts']))
