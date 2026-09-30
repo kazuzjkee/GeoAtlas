@@ -125,14 +125,13 @@ def get_leaderboard():
     sorted_res = sorted(results, key=lambda x: (x.get("accuracy", 0), x.get("score", 0)), reverse=True)
     return sorted_res[:25]
 
-# ================= МАКСИМАЛЬНО ФУНКЦИОНАЛЬНАЯ ПАНЕЛЬ ПРЕПОДАВАТЕЛЯ =================
+# ================= ПАНЕЛЬ ПРЕПОДАВАТЕЛЯ =================
 @app.get("/admin", response_class=HTMLResponse)
 def admin_panel(username: str = Depends(check_admin)):
     results = load_results()
     total_tests = len(results)
     avg_accuracy = round(sum(r.get("accuracy", 0) for r in results) / total_tests, 1) if total_tests else 0
     
-    # Сводка по группам
     groups_stat = {}
     for r in results:
         grp = r.get("group", "Не указана")
@@ -250,7 +249,5 @@ def get_index():
 
 if __name__ == "__main__":
     import uvicorn
-    print("\nСервер запущен! Перейдите в браузере:")
-    print("  - Картографический атлас: http://127.0.0.1:8000")
-    print("  - Панель преподавателя:   http://127.0.0.1:8000/admin (Логин: sfedu_admin / Пароль: geodean2026)\n")
-    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("server:app", host="0.0.0.0", port=port)
