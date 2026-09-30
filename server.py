@@ -6,8 +6,6 @@ from pydantic import BaseModel
 import random
 import time
 import os
-import smtplib
-from email.message import EmailMessage
 import json
 import secrets
 import csv
@@ -16,11 +14,8 @@ import io
 # Автоматически генерируем карту при старте сервера, если её нет
 if not os.path.exists("rostov_quiz_map.html"):
     print("Карта rostov_quiz_map.html не найдена, запускаем генерацию через main.py...")
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("main", "main — копия_2.py")
-    main_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(main_module)
-    main_module.main()
+    import main
+    main.main()
 
 app = FastAPI(title="Геоатлас Ростовской области — Портал ЮФУ")
 security = HTTPBasic()
