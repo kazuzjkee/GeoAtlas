@@ -107,7 +107,6 @@ class RostovMap:
         if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
             gdf = gdf.to_crs('EPSG:4326')
         
-        # Гарантируем извлечение настоящего названия для всех 55 районов и округов
         gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME', 'NAME_RU', 'name']), axis=1)
         self.districts_gdf = gdf
 
@@ -329,6 +328,20 @@ let studyCategory = 'districts';
 let studyQueue = [];
 let studyIndex = 0;
 let studyCenterMarker = null;
+
+function togglePanelCollapse() {{
+    const panel = document.getElementById('quiz-controls');
+    const btn = document.getElementById('panel-collapse-btn');
+    if (panel) {{
+        panel.classList.toggle('collapsed');
+        document.body.classList.toggle('ui-collapsed');
+        if (panel.classList.contains('collapsed')) {{
+            if (btn) btn.innerHTML = '▲ Развернуть панель атласа';
+        }} else {{
+            if (btn) btn.innerHTML = '▼ Свернуть панель к карте';
+        }}
+    }}
+}}
 
 function clearMarkers() {{
     if (clickMarker) {{ try {{ clickMarker.remove(); }} catch(e) {{}} clickMarker = null; }}
@@ -1185,25 +1198,30 @@ function updateScore() {{
     if (accEl) accEl.textContent = `Эффективность: ${{accuracy}}%`;
 }}
 
+function cleanSearchName(n) {{
+    return (n || '').toLowerCase()
+        .replace('городской округ', '')
+        .replace('район', '')
+        .replace('р-н', '')
+        .replace('г.', '')
+        .replace(/[^a-zа-яё0-9]/gi, '')
+        .trim();
+}}
+
 function highlightDistrictOnMapByName(districtName) {{
     let map = getMapObject();
-    if (!map || typeof map.eachLayer !== 'function') {{
-        mapSearchAttempts++;
-        if (mapSearchAttempts < MAX_MAP_SEARCH_ATTEMPTS) {{
-            setTimeout(() => highlightDistrictOnMapByName(districtName), 300);
-        }}
-        return;
-    }}
-    mapSearchAttempts = 0;
+    if (!map || typeof map.eachLayer !== 'function') return;
 
     resetActiveHighlight();
+    const searchClean = cleanSearchName(districtName);
 
     let targetLayer = null;
     map.eachLayer(function(layer) {{
         if (layer.feature && layer.feature.properties) {{
             const props = layer.feature.properties;
-            const pName = props.display_name || props.name || props.NAME || '';
-            if (pName.trim().toLowerCase() === districtName.trim().toLowerCase()) {{
+            const pName = props.display_name || props.name || props.NAME || props.NAME_RU || '';
+            const pClean = cleanSearchName(pName);
+            if (pClean && (pClean === searchClean || pClean.includes(searchClean) || searchClean.includes(pClean))) {{
                 targetLayer = layer;
             }}
         }}
@@ -1229,6 +1247,7 @@ function highlightRiverOnMapByName(riverName) {{
     if (!map || typeof map.eachLayer !== 'function') return;
 
     resetActiveHighlight(true);
+    const searchClean = cleanSearchName(riverName);
 
     let targetGroup = L.featureGroup();
     highlightedRiverLayers = [];
@@ -1237,7 +1256,8 @@ function highlightRiverOnMapByName(riverName) {{
         if (layer.feature && layer.feature.properties) {{
             const props = layer.feature.properties;
             const pName = props.clean_name || props.display_name || props.name || '';
-            if (pName.trim().toLowerCase() === riverName.trim().toLowerCase()) {{
+            const pClean = cleanSearchName(pName);
+            if (pClean && (pClean === searchClean || pClean.includes(searchClean))) {{
                 highlightedRiverLayers.push(layer);
                 try {{
                     layer.setStyle({{
@@ -1259,13 +1279,14 @@ function highlightRiverOnMapByName(riverName) {{
 }}
 
 function showDistrictInfoCard(districtName) {{
-    const district = EMBEDDED_NEIGHBORS.find(d => d.name === districtName);
+    const searchClean = cleanSearchName(districtName);
+    const district = EMBEDDED_NEIGHBORS.find(d => cleanSearchName(d.name) === searchClean || cleanSearchName(d.name).includes(searchClean));
     if (!district) return;
 
     const card = document.getElementById('district-info-card');
     if (!card) return;
 
-    highlightDistrictOnMapByName(districtName);
+    highlightDistrictOnMapByName(district.name);
 
     const neighborsHtml = district.neighbors && district.neighbors.length > 0 
         ? district.neighbors.map(n => `<span class="neighbor-tag" onclick="showDistrictInfoCard('${{n}}')">${{n}}</span>`).join('')
@@ -1309,7 +1330,7 @@ function setupDistrictClickListeners() {{
     map.eachLayer(function(layer) {{
         if (layer.feature && layer.feature.properties) {{
             const props = layer.feature.properties;
-            const name = props.display_name || props.name || props.NAME;
+            const name = props.display_name || props.name || props.NAME || props.NAME_RU;
             if (name && (props.ADMIN_LVL || props.oktmo || (layer.feature.geometry && layer.feature.geometry.type.includes('Polygon') && !props.WATERWAY && !props.NATURAL))) {{
                 layer.off('click');
                 layer.on('click', function(e) {{
@@ -1352,7 +1373,6 @@ function exitQuizDirectly() {{
     resetQuiz();
     setTimeout(setupDistrictClickListeners, 300);
 
-    // Прячем всё лишнее и открываем только чистую панель главного меню
     document.getElementById('quiz-mode').style.display = 'none';
     document.getElementById('results-mode').style.display = 'none';
     document.getElementById('study-mode').style.display = 'none';
@@ -1370,7 +1390,6 @@ function showResults() {{
     currentQuiz = null;
     setTimeout(setupDistrictClickListeners, 500);
 
-    // Скрываем квиз и меню, показываем ТОЛЬКО карточку результатов
     document.getElementById('quiz-mode').style.display = 'none';
     document.getElementById('normal-mode').style.display = 'none';
     document.getElementById('study-mode').style.display = 'none';
@@ -1774,7 +1793,10 @@ document.addEventListener('DOMContentLoaded', function() {{
         self.map.get_root().html.add_child(folium.Element(f"<script>{js_code}</script>"))
 
         quiz_html = '''
-        <div class="top-nav-buttons">
+        <div class="top-nav-buttons" id="top-nav-panel">
+            <button class="nav-top-btn admin-btn" onclick="window.open('/admin', '_blank')" title="Панель преподавателя">
+                <span>📊 Преподавателю</span>
+            </button>
             <button id="auth-top-btn" class="nav-top-btn auth-btn" onclick="openAuthModal()" title="Вход для студентов ЮФУ">
                 <span>🎓 Вход ЮФУ</span>
             </button>
@@ -1791,6 +1813,11 @@ document.addEventListener('DOMContentLoaded', function() {{
         </div>
 
         <div id="quiz-controls" class="app-card">
+            <!-- Кнопка мобильной шторки -->
+            <button id="panel-collapse-btn" class="mobile-collapse-trigger" onclick="togglePanelCollapse()">
+                ▼ Свернуть панель к карте
+            </button>
+
             <div class="panel-header">
                 <h3>Учебно-картографический атлас</h3>
             </div>
@@ -2053,7 +2080,8 @@ document.addEventListener('DOMContentLoaded', function() {{
             z-index: 1000;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
+            transition: opacity 0.25s ease, transform 0.25s ease;
         }
 
         .nav-top-btn {
@@ -2076,6 +2104,15 @@ document.addEventListener('DOMContentLoaded', function() {{
             transform: translateY(-1px);
             background: #ffffff;
             box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+        }
+
+        .admin-btn {
+            background: linear-gradient(135deg, #F0FDF4, #DCFCE7);
+            border-color: #86EFAC;
+            color: #166534;
+        }
+        .admin-btn:hover {
+            background: linear-gradient(135deg, #DCFCE7, #BBF7D0);
         }
 
         .leaderboard-top-btn {
@@ -2463,6 +2500,7 @@ document.addEventListener('DOMContentLoaded', function() {{
             max-height: calc(100vh - 28px);
             overflow-y: auto;
             box-sizing: border-box;
+            transition: max-height 0.25s cubic-bezier(0.16, 1, 0.3, 1), padding 0.25s ease;
         }
 
         .panel-header h3 {
@@ -2826,15 +2864,37 @@ document.addEventListener('DOMContentLoaded', function() {{
         }
         .score-sub { font-size: 11px; color: #64748B; font-weight: 500; margin-top: 2px; }
 
+        /* Кнопка-триггер складной шторки */
+        .mobile-collapse-trigger {
+            display: none;
+            width: 100%;
+            background: #F1F5F9;
+            border: 1px solid #CBD5E1;
+            padding: 7px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #334155;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        /* ================= МОБИЛЬНАЯ АДАПТАЦИЯ (<= 768px) ================= */
         @media (max-width: 768px) {
+            .mobile-collapse-trigger {
+                display: block;
+            }
+
             .top-nav-buttons {
-                top: 10px;
-                right: 10px;
-                left: auto;
-                gap: 6px;
+                top: 8px;
+                left: 8px;
+                right: 8px;
+                justify-content: flex-end;
+                gap: 5px;
             }
             .nav-top-btn, .help-circle-btn {
-                padding: 6px 10px;
+                padding: 6px 9px;
                 font-size: 11px;
                 height: 32px;
             }
@@ -2842,44 +2902,56 @@ document.addEventListener('DOMContentLoaded', function() {{
                 width: 32px;
                 font-size: 14px;
             }
+
+            /* Панель внизу экрана со скруглением сверху */
             .app-card {
                 position: fixed;
                 top: auto;
-                bottom: 10px;
-                right: 10px;
-                left: 10px;
-                width: auto;
-                max-height: 46vh;
-                padding: 12px;
+                bottom: 0;
+                right: 0;
+                left: 0;
+                width: 100%;
+                border-radius: 18px 18px 0 0;
+                max-height: 48vh;
+                padding: 12px 14px;
                 z-index: 1001;
-            }
-            .welcome-grid {
-                grid-template-columns: 1fr;
-            }
-            .welcome-card, .auth-card {
-                padding: 18px 20px;
-                max-width: 95vw;
-                max-height: 85vh;
+                box-shadow: 0 -4px 22px rgba(0,0,0,0.18);
             }
 
-            .leaflet-bottom.leaflet-left .leaflet-control-layers {
+            /* Состояние со свернутой панелью */
+            .app-card.collapsed {
+                max-height: 46px;
+                overflow: hidden;
+                padding-top: 7px;
+                background: rgba(255, 255, 255, 0.95);
+            }
+            .app-card.collapsed > *:not(.mobile-collapse-trigger) {
+                display: none !important;
+            }
+
+            /* Когда панель свернута — скрываем верхние кнопки и блок слоев */
+            body.ui-collapsed #top-nav-panel {
+                opacity: 0 !important;
+                pointer-events: none !important;
+                transform: translateY(-20px);
+            }
+            body.ui-collapsed .leaflet-control-layers {
+                opacity: 0 !important;
+                pointer-events: none !important;
+            }
+
+            /* Слои карты при открытой шторке */
+            .leaflet-bottom.leaflet-left {
+                bottom: 50vh !important;
+                margin-left: 6px !important;
+            }
+            .leaflet-control-layers {
                 border-radius: 8px !important;
-                margin-bottom: 48vh !important;
-                margin-left: 10px !important;
                 background: rgba(255, 255, 255, 0.95) !important;
-            }
-            .leaflet-control-layers-expanded {
-                max-height: 140px;
-                overflow-y: auto;
-                padding: 6px 10px !important;
-                font-size: 11px !important;
-            }
-            .leaflet-control-layers::before {
-                font-size: 11.5px !important;
-                padding-bottom: 2px !important;
-                margin-bottom: 4px !important;
+                transition: opacity 0.25s ease;
             }
 
+            /* Скрываем фиксированную легенду на смартфонах */
             div[style*="top: 14px; left: 60px;"] {
                 display: none !important;
             }
