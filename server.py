@@ -11,12 +11,6 @@ import secrets
 import csv
 import io
 
-# Автоматически генерируем карту при старте сервера, если её нет
-if not os.path.exists("rostov_quiz_map.html"):
-    print("Карта rostov_quiz_map.html не найдена, запускаем генерацию через main.py...")
-    import main
-    main.main()
-
 app = FastAPI(title="Геоатлас Ростовской области — Портал ЮФУ")
 security = HTTPBasic()
 
@@ -125,7 +119,6 @@ def get_leaderboard():
     sorted_res = sorted(results, key=lambda x: (x.get("accuracy", 0), x.get("score", 0)), reverse=True)
     return sorted_res[:25]
 
-# ================= ПАНЕЛЬ ПРЕПОДАВАТЕЛЯ =================
 @app.get("/admin", response_class=HTMLResponse)
 def admin_panel(username: str = Depends(check_admin)):
     results = load_results()
@@ -161,32 +154,33 @@ def admin_panel(username: str = Depends(check_admin)):
     <html lang="ru">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Панель преподавателя | Геоатлас ЮФУ</title>
         <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F8FAFC; margin: 0; padding: 24px; color: #1E293B; }}
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F8FAFC; margin: 0; padding: 20px; color: #1E293B; }}
             .container {{ max-width: 1100px; margin: 0 auto; }}
-            .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #E2E8F0; padding-bottom: 16px; margin-bottom: 24px; }}
-            .card-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }}
-            .stat-card {{ background: white; padding: 18px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; }}
-            .stat-val {{ font-size: 28px; font-weight: 800; color: #0284C7; margin-top: 4px; }}
-            table {{ width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; margin-bottom: 24px; }}
-            th, td {{ padding: 11px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #F1F5F9; }}
+            .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #E2E8F0; padding-bottom: 16px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }}
+            .card-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px; }}
+            .stat-card {{ background: white; padding: 16px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; }}
+            .stat-val {{ font-size: 26px; font-weight: 800; color: #0284C7; margin-top: 4px; }}
+            .table-wrap {{ overflow-x: auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; margin-bottom: 20px; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th, td {{ padding: 10px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #F1F5F9; white-space: nowrap; }}
             th {{ background: #F8FAFC; color: #64748B; font-weight: 700; }}
             .badge {{ background: #DCFCE7; color: #166534; font-weight: 700; padding: 3px 8px; border-radius: 6px; }}
             .type-tag {{ background: #E0F2FE; color: #0369A1; padding: 3px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 600; }}
             .btn {{ text-decoration: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; display: inline-block; cursor: pointer; border: none; }}
             .btn-primary {{ background: #10B981; color: white; }}
-            .btn-primary:hover {{ background: #059669; }}
             .btn-back {{ background: #0284C7; color: white; }}
-            .actions-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }}
+            .actions-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }}
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
                 <div>
-                    <h2 style="margin: 0;">🎓 Аналитическая панель преподавателя</h2>
-                    <p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px;">Институт наук о Земле ЮФУ — Мониторинг успеваемости студентов</p>
+                    <h2 style="margin: 0; font-size: 20px;">🎓 Панель преподавателя</h2>
+                    <p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px;">Институт наук о Земле ЮФУ — Мониторинг успеваемости</p>
                 </div>
                 <a href="/" class="btn btn-back">← На карту атласа</a>
             </div>
@@ -206,20 +200,24 @@ def admin_panel(username: str = Depends(check_admin)):
                 </div>
             </div>
 
-            <h3 style="font-size: 16px; margin-bottom: 10px;">Сводка по учебным группам</h3>
-            <table>
-                <tr><th>Академическая группа</th><th>Количество попыток</th><th>Средний показатель успеваемости</th></tr>
-                {groups_rows if groups_rows else "<tr><td colspan='3' style='text-align: center; color: #94A3B8;'>Пока нет данных тестирования</td></tr>"}
-            </table>
+            <h3 style="font-size: 15px; margin-bottom: 10px;">Сводка по учебным группам</h3>
+            <div class="table-wrap">
+                <table>
+                    <tr><th>Академическая группа</th><th>Попыток</th><th>Успеваемость</th></tr>
+                    {groups_rows if groups_rows else "<tr><td colspan='3' style='text-align: center; color: #94A3B8;'>Пока нет данных</td></tr>"}
+                </table>
+            </div>
 
             <div class="actions-bar">
-                <h3 style="font-size: 16px; margin: 0;">Журнал прохождений студентов</h3>
+                <h3 style="font-size: 15px; margin: 0;">Журнал тестирований</h3>
                 <a href="/admin/export-csv" class="btn btn-primary">📥 Экспорт ведомости в CSV</a>
             </div>
-            <table>
-                <tr><th>Дата и время</th><th>Студент</th><th>Группа</th><th>Вид викторины</th><th>Баллы</th><th>% успеха</th><th>Время</th></tr>
-                {rows if rows else "<tr><td colspan='7' style='text-align: center; color: #94A3B8;'>Журнал пуст</td></tr>"}
-            </table>
+            <div class="table-wrap">
+                <table>
+                    <tr><th>Дата</th><th>Студент</th><th>Группа</th><th>Вид теста</th><th>Баллы</th><th>% успеха</th><th>Время</th></tr>
+                    {rows if rows else "<tr><td colspan='7' style='text-align: center; color: #94A3B8;'>Журнал пуст</td></tr>"}
+                </table>
+            </div>
         </div>
     </body>
     </html>
@@ -245,6 +243,8 @@ def export_csv(username: str = Depends(check_admin)):
 
 @app.get("/")
 def get_index():
+    if not os.path.exists("rostov_quiz_map.html"):
+        return HTMLResponse("<h2>Карта еще не сгенерирована. Запустите 'python main.py' локально и закоммитьте rostov_quiz_map.html</h2>", status_code=503)
     return FileResponse("rostov_quiz_map.html")
 
 if __name__ == "__main__":

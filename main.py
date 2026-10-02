@@ -19,7 +19,7 @@ STYLES = {
         'color': '#2E8B57',
         'weight': 2,
         'fillColor': '#90EE90',
-        'fillOpacity': 0.2,
+        'fillOpacity': 0.25,
         'dashArray': '5, 5'
     },
     'rivers': {
@@ -41,7 +41,7 @@ LAYER_NAMES = {
     'water_bodies': 'Водоемы'
 }
 
-MAP_CENTER = [47.23, 39.72]
+MAP_CENTER = [48.0, 40.5]
 INITIAL_ZOOM = 8
 CARTO_KEY = 'cb1_3wsm_1_6bdccfe40c07a69c4fce7b68'
 
@@ -77,7 +77,7 @@ class RostovMap:
         self.centers_gdf = None
         self.rivers_gdf = None
 
-    def _extract_valid_name(self, row, preferred_order=['NAME', 'NAME_RU', 'name']):
+    def _extract_valid_name(self, row, preferred_order=['NAME_RU', 'NAME', 'name']):
         for col in preferred_order:
             if col in row and row[col] is not None:
                 val = str(row[col]).strip()
@@ -88,18 +88,10 @@ class RostovMap:
     def _clean_river_name(self, name):
         if not name or str(name).lower() in ['none', 'nan', 'null', '']:
             return ''
-        n = str(name).strip()
-        n = n.replace('река ', '').replace('р. ', '').replace('р.', '').replace('"', '').strip()
-        if 'Маныч' in n:
-            return 'Маныч'
-        if 'Северский Донец' in n:
-            return 'Северский Донец'
-        if 'Калитва' in n:
-            return 'Калитва'
-        if 'Тузлов' in n:
-            return 'Тузлов'
-        if 'Сал' in n:
-            return 'Сал'
+        n = str(name).strip().replace('река ', '').replace('р. ', '').replace('р.', '').replace('"', '').strip()
+        for key in ['Маныч', 'Северский Донец', 'Калитва', 'Тузлов', 'Сал']:
+            if key in n:
+                return key
         return n
 
     def add_districts(self, shp_path):
@@ -107,7 +99,7 @@ class RostovMap:
         if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
             gdf = gdf.to_crs('EPSG:4326')
         
-        gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME', 'NAME_RU', 'name']), axis=1)
+        gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME_RU', 'NAME', 'name']), axis=1)
         self.districts_gdf = gdf
 
         tooltip = folium.GeoJsonTooltip(
@@ -152,7 +144,7 @@ class RostovMap:
             name=LAYER_NAMES['water_bodies'],
             style_function=lambda x: STYLES['water_bodies'],
             tooltip=tooltip,
-            interactive=True
+            interactive=False
         ).add_to(self.map)
         return gdf
 
@@ -183,7 +175,7 @@ class RostovMap:
             name=LAYER_NAMES['rivers'],
             style_function=lambda x: STYLES['rivers'],
             tooltip=tooltip,
-            interactive=True
+            interactive=False
         ).add_to(self.map)
 
         return all_rivers
@@ -308,8 +300,6 @@ let maxPossibleScore = 0;
 let totalQuestions = 10;
 let quizData = [];
 let selectedOption = null;
-let mapSearchAttempts = 0;
-const MAX_MAP_SEARCH_ATTEMPTS = 50;
 let clickMarker = null;
 let resultMarker = null;
 let resultLine = null;
@@ -323,11 +313,28 @@ const QUESTION_TIME_LIMIT = 20;
 let timeLeft = QUESTION_TIME_LIMIT;
 let quizStartTime = 0;
 
-/* ====== ОБУЧАЮЩИЙ РЕЖИМ (3 КАТЕГОРИИ) ====== */
 let studyCategory = 'districts';
 let studyQueue = [];
 let studyIndex = 0;
 let studyCenterMarker = null;
+
+function getMapObject() {{
+    if (window._leaflet_map) return window._leaflet_map;
+    for (let key in window) {{
+        if (window[key] && window[key]._layers && typeof window[key].eachLayer === 'function') {{
+            window._leaflet_map = window[key];
+            return window._leaflet_map;
+        }}
+    }}
+    return null;
+}}
+
+function setBasemapVisible(isVisible) {{
+    const tilePane = document.querySelector('.leaflet-tile-pane');
+    if (tilePane) {{
+        tilePane.style.visibility = isVisible ? 'visible' : 'hidden';
+    }}
+}}
 
 function togglePanelCollapse() {{
     const panel = document.getElementById('quiz-controls');
@@ -347,12 +354,23 @@ function clearMarkers() {{
     if (clickMarker) {{ try {{ clickMarker.remove(); }} catch(e) {{}} clickMarker = null; }}
     if (resultMarker) {{ try {{ resultMarker.remove(); }} catch(e) {{}} resultMarker = null; }}
     if (resultLine) {{ try {{ resultLine.remove(); }} catch(e) {{}} resultLine = null; }}
-    if (studyCenterMarker) {{ try {{ studyCenterMarker.remove(); }} catch(e) {{}} studyCenterMarker = null; }}
+    if (typeof studyCenterMarker !== 'undefined' && studyCenterMarker) {{ 
+        try {{ studyCenterMarker.remove(); }} catch(e) {{}} 
+        studyCenterMarker = null; 
+    }}
 }}
 
 function resetActiveHighlight(hideRiverCompletely = false) {{
     if (highlightedDistrictLayer) {{
-        try {{ highlightedDistrictLayer.setStyle({{ color: '#2E8B57', weight: 2, fillColor: '#90EE90', fillOpacity: 0.2, dashArray: '5, 5' }}); }} catch(e) {{}}
+        try {{
+            highlightedDistrictLayer.setStyle({{
+                color: '#2E8B57',
+                weight: 2,
+                fillColor: '#90EE90',
+                fillOpacity: 0.25,
+                dashArray: '5, 5'
+            }});
+        }} catch(e) {{}}
         highlightedDistrictLayer = null;
     }}
 
@@ -388,28 +406,30 @@ function resetMapView() {{
 }}
 
 function setQuizLayers(quizMode) {{
-    const layers = document.querySelectorAll('.leaflet-control-layers-overlays label');
-    layers.forEach(label => {{
-        const text = label.textContent.trim();
-        const input = label.querySelector('input[type="checkbox"]');
-        if (!input) return;
+    try {{
+        const layers = document.querySelectorAll('.leaflet-control-layers-overlays label');
+        layers.forEach(label => {{
+            const text = label.textContent.trim();
+            const input = label.querySelector('input[type="checkbox"]');
+            if (!input) return;
 
-        if (quizMode === 'center') {{
-            if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
-            if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
-        }} else if (quizMode === 'district' || quizMode === 'neighbor' || quizMode === 'study_districts') {{
-            if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
-            if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
-        }} else if (quizMode === 'river' || quizMode === 'study_rivers') {{
-            if (text.includes('Районы') || text.includes('Райцентры')) {{ if (input.checked) input.click(); }}
-            if (text.includes('Реки') || text.includes('Водоемы')) {{ if (!input.checked) input.click(); }}
-        }} else if (quizMode === 'study_centers') {{
-            if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
-            if (text.includes('Райцентры') || text.includes('Районы')) {{ if (!input.checked) input.click(); }}
-        }} else {{
-            if (!input.checked) input.click();
-        }}
-    }});
+            if (quizMode === 'center') {{
+                if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
+                if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
+            }} else if (quizMode === 'district' || quizMode === 'neighbor' || quizMode === 'study_districts') {{
+                if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
+                if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
+            }} else if (quizMode === 'river' || quizMode === 'study_rivers') {{
+                if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
+                if (text.includes('Реки') || text.includes('Водоемы')) {{ if (!input.checked) input.click(); }}
+            }} else if (quizMode === 'study_centers') {{
+                if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
+                if (text.includes('Райцентры') || text.includes('Районы')) {{ if (!input.checked) input.click(); }}
+            }} else {{
+                if (!input.checked) input.click();
+            }}
+        }});
+    }} catch(e) {{}}
 }}
 
 function restoreAllLayers() {{
@@ -502,10 +522,11 @@ function handleTimeout() {{
     }}, 1800);
 }}
 
-/* ==================== ОБУЧЕНИЕ: РАЙОНЫ, РЕКИ, РАЙЦЕНТРЫ ==================== */
+/* ==================== ОБУЧАЮЩИЙ РЕЖИМ ==================== */
 function startStudyMode(category = 'districts') {{
     studyCategory = category;
     currentQuiz = 'study';
+    setBasemapVisible(true);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -551,6 +572,7 @@ function switchStudyCategory(category) {{
 }}
 
 function renderStudyItem() {{
+    if (!studyQueue || studyQueue.length === 0) return;
     if (studyIndex < 0) studyIndex = 0;
     if (studyIndex >= studyQueue.length) studyIndex = studyQueue.length - 1;
 
@@ -643,6 +665,7 @@ function jumpToStudyItem(name) {{
 }}
 
 function exitStudyMode() {{
+    setBasemapVisible(true);
     clearMarkers();
     resetActiveHighlight(false);
     restoreAllLayers();
@@ -657,10 +680,11 @@ function exitStudyMode() {{
     setTimeout(setupDistrictClickListeners, 300);
 }}
 
-/* ==================== ВИКТОРИНЫ (QUIZ) ==================== */
+/* ==================== ВИКТОРИНЫ ==================== */
 function startDistrictQuiz() {{
     currentQuiz = 'district';
     quizStartTime = Date.now();
+    setBasemapVisible(false);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -672,37 +696,15 @@ function startDistrictQuiz() {{
     document.getElementById('quiz-mode').style.display = 'block';
     document.getElementById('results-mode').style.display = 'none';
 
-    const qt = document.getElementById('quiz-title');
-    const hb = document.getElementById('hint-button');
-    if (qt) qt.textContent = 'Угадай район по очертаниям';
-    if (hb) hb.style.display = 'block';
+    document.getElementById('quiz-title').textContent = 'Угадай район по очертаниям';
+    document.getElementById('hint-button').style.display = 'block';
     loadDistrictQuiz();
-}}
-
-function startCenterQuiz() {{
-    currentQuiz = 'center';
-    quizStartTime = Date.now();
-    closeInfoCard();
-    clearMarkers();
-    resetActiveHighlight();
-    disablePopups();
-    setQuizLayers('center');
-
-    document.getElementById('normal-mode').style.display = 'none';
-    document.getElementById('study-mode').style.display = 'none';
-    document.getElementById('quiz-mode').style.display = 'block';
-    document.getElementById('results-mode').style.display = 'none';
-
-    const qt = document.getElementById('quiz-title');
-    const hb = document.getElementById('hint-button');
-    if (qt) qt.textContent = 'Найди райцентр на карте';
-    if (hb) hb.style.display = 'block';
-    loadCenterQuiz();
 }}
 
 function startNeighborQuiz() {{
     currentQuiz = 'neighbor';
     quizStartTime = Date.now();
+    setBasemapVisible(false);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -714,11 +716,29 @@ function startNeighborQuiz() {{
     document.getElementById('quiz-mode').style.display = 'block';
     document.getElementById('results-mode').style.display = 'none';
 
-    const qt = document.getElementById('quiz-title');
-    const hb = document.getElementById('hint-button');
-    if (qt) qt.textContent = 'Районы-соседи';
-    if (hb) hb.style.display = 'none';
+    document.getElementById('quiz-title').textContent = 'Районы-соседи';
+    document.getElementById('hint-button').style.display = 'none';
     loadNeighborQuiz();
+}}
+
+function startCenterQuiz() {{
+    currentQuiz = 'center';
+    quizStartTime = Date.now();
+    setBasemapVisible(true);
+    closeInfoCard();
+    clearMarkers();
+    resetActiveHighlight();
+    disablePopups();
+    setQuizLayers('center');
+
+    document.getElementById('normal-mode').style.display = 'none';
+    document.getElementById('study-mode').style.display = 'none';
+    document.getElementById('quiz-mode').style.display = 'block';
+    document.getElementById('results-mode').style.display = 'none';
+
+    document.getElementById('quiz-title').textContent = 'Найди райцентр на карте';
+    document.getElementById('hint-button').style.display = 'block';
+    loadCenterQuiz();
 }}
 
 function startRiverQuiz() {{
@@ -728,6 +748,7 @@ function startRiverQuiz() {{
     }}
     currentQuiz = 'river';
     quizStartTime = Date.now();
+    setBasemapVisible(true);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -740,10 +761,8 @@ function startRiverQuiz() {{
     document.getElementById('quiz-mode').style.display = 'block';
     document.getElementById('results-mode').style.display = 'none';
 
-    const qt = document.getElementById('quiz-title');
-    const hb = document.getElementById('hint-button');
-    if (qt) qt.textContent = 'Угадай реку по руслу';
-    if (hb) hb.style.display = 'block';
+    document.getElementById('quiz-title').textContent = 'Угадай реку по руслу';
+    document.getElementById('hint-button').style.display = 'block';
     loadRiverQuiz();
 }}
 
@@ -902,17 +921,15 @@ function showQuestion() {{
     if (oldBtn) oldBtn.remove();
 
     const question = quizData[currentQuestion];
-    const cqEl = document.getElementById('current-question');
-    const tqEl = document.getElementById('total-questions');
+    document.getElementById('current-question').textContent = currentQuestion + 1;
+    document.getElementById('total-questions').textContent = quizData.length;
     const qTextEl = document.getElementById('question-text');
     const optionsContainer = document.getElementById('options-container');
 
-    if (cqEl) cqEl.textContent = currentQuestion + 1;
-    if (tqEl) tqEl.textContent = quizData.length;
     if (optionsContainer) optionsContainer.innerHTML = '';
 
     if (question.type === 'district') {{
-        if (qTextEl) qTextEl.textContent = 'Угадайте район по очертаниям:';
+        qTextEl.textContent = 'Угадайте район по очертаниям:';
         question.options.forEach(option => {{
             const button = document.createElement('button');
             button.className = 'quiz-option';
@@ -923,7 +940,7 @@ function showQuestion() {{
         highlightDistrictOnMapByName(question.districtName);
 
     }} else if (question.type === 'neighbor') {{
-        if (qTextEl) qTextEl.textContent = `С каким районом НЕ граничит ${{question.districtName}}?`;
+        qTextEl.textContent = `С каким районом НЕ граничит ${{question.districtName}}?`;
         question.options.forEach(option => {{
             const button = document.createElement('button');
             button.className = 'quiz-option';
@@ -934,7 +951,7 @@ function showQuestion() {{
         highlightDistrictOnMapByName(question.districtName);
 
     }} else if (question.type === 'river') {{
-        if (qTextEl) qTextEl.textContent = 'Какая река подсвечена на карте?';
+        qTextEl.textContent = 'Какая река подсвечена на карте?';
         question.options.forEach(option => {{
             const button = document.createElement('button');
             button.className = 'quiz-option';
@@ -945,7 +962,7 @@ function showQuestion() {{
         highlightRiverOnMapByName(question.riverName);
 
     }} else if (question.type === 'center') {{
-        if (qTextEl) qTextEl.textContent = `Найдите на карте: ${{question.correctAnswer}}`;
+        qTextEl.textContent = `Найдите на карте: ${{question.correctAnswer}}`;
         if (optionsContainer) {{
             optionsContainer.innerHTML = '<div class="center-quiz-instruction">Кликните на карту в точке нахождения объекта<br><span>до 5 км: +3 очка | до 15 км: +2 | до 30 км: +1</span></div>';
         }}
@@ -1019,10 +1036,7 @@ function checkAnswer() {{
 
 function setupMapClickListener(question) {{
     const map = getMapObject();
-    if (!map) {{
-        setTimeout(() => setupMapClickListener(question), 500);
-        return;
-    }}
+    if (!map) return;
 
     if (window._clickBlocker) {{
         try {{ map.removeLayer(window._clickBlocker); }} catch(e) {{}}
@@ -1039,36 +1053,6 @@ function setupMapClickListener(question) {{
     }};
 
     window._clickBlocker.on('click', window._clickHandler);
-}}
-
-function getMapObject() {{
-    let map = window._leaflet_map;
-    if (!map || typeof map.eachLayer !== 'function') {{
-        const mapElement = document.querySelector('.leaflet-container');
-        if (mapElement && typeof L !== 'undefined') {{
-            try {{
-                const possibleMap = L.DomUtil.get(mapElement);
-                if (possibleMap && typeof possibleMap.eachLayer === 'function') {{
-                    map = possibleMap;
-                    window._leaflet_map = map;
-                }}
-            }} catch(e) {{}}
-        }}
-    }}
-    if (!map || typeof map.eachLayer !== 'function') {{
-        if (typeof L !== 'undefined' && L.Map) {{
-            try {{
-                for (let key in window) {{
-                    if (window[key] && window[key] instanceof L.Map) {{
-                        map = window[key];
-                        window._leaflet_map = map;
-                        break;
-                    }}
-                }}
-            }} catch(e) {{}}
-        }}
-    }}
-    return map;
 }}
 
 function handleMapClick(lat, lon, question) {{
@@ -1198,34 +1182,60 @@ function updateScore() {{
     if (accEl) accEl.textContent = `Эффективность: ${{accuracy}}%`;
 }}
 
-function cleanSearchName(n) {{
-    return (n || '').toLowerCase()
-        .replace('городской округ', '')
-        .replace('район', '')
-        .replace('р-н', '')
-        .replace('г.', '')
-        .replace(/[^a-zа-яё0-9]/gi, '')
-        .trim();
+function normalizeDistrictName(str) {{
+    if (!str) return '';
+    let s = str.toString().toLowerCase().trim();
+    let isDistrict = s.includes('район') || s.includes('р-н');
+    let isCity = s.includes('город') || s.includes('округ') || s.includes('г.');
+
+    let clean = s.replace('городской округ', '')
+                 .replace('район', '')
+                 .replace('р-н', '')
+                 .replace('г.', '')
+                 .replace(/[^a-zа-яё0-9]/gi, '')
+                 .trim();
+
+    if (isDistrict) return clean + '_raion';
+    if (isCity) return clean + '_city';
+    return clean;
 }}
 
+/* ПОДСВЕТКА РАЙОНА С УМНЫМ ОТДАЛЕНИЕМ (макс. зум 9) */
 function highlightDistrictOnMapByName(districtName) {{
-    let map = getMapObject();
-    if (!map || typeof map.eachLayer !== 'function') return;
+    const map = getMapObject();
+    if (!map) return;
 
     resetActiveHighlight();
-    const searchClean = cleanSearchName(districtName);
+    const targetNorm = normalizeDistrictName(districtName);
+    const targetSimple = districtName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
 
     let targetLayer = null;
+
     map.eachLayer(function(layer) {{
-        if (layer.feature && layer.feature.properties) {{
+        if (layer.feature && layer.feature.properties && !targetLayer) {{
             const props = layer.feature.properties;
-            const pName = props.display_name || props.name || props.NAME || props.NAME_RU || '';
-            const pClean = cleanSearchName(pName);
-            if (pClean && (pClean === searchClean || pClean.includes(searchClean) || searchClean.includes(pClean))) {{
-                targetLayer = layer;
+            if (props.ADMIN_LVL === '6' || props.ADMIN_LVL === 6 || props.oktmo) {{
+                const pName = props.display_name || props.NAME_RU || props.NAME || '';
+                if (normalizeDistrictName(pName) === targetNorm) {{
+                    targetLayer = layer;
+                }}
             }}
         }}
     }});
+
+    if (!targetLayer) {{
+        map.eachLayer(function(layer) {{
+            if (layer.feature && layer.feature.properties && !targetLayer) {{
+                const props = layer.feature.properties;
+                if (props.ADMIN_LVL === '6' || props.ADMIN_LVL === 6 || props.oktmo) {{
+                    const pSimple = (props.display_name || props.NAME_RU || props.NAME || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+                    if (pSimple === targetSimple || pSimple.includes(targetSimple) || targetSimple.includes(pSimple)) {{
+                        targetLayer = layer;
+                    }}
+                }}
+            }}
+        }});
+    }}
 
     if (targetLayer) {{
         highlightedDistrictLayer = targetLayer;
@@ -1237,36 +1247,39 @@ function highlightDistrictOnMapByName(districtName) {{
                 fillOpacity: 0.5,
                 dashArray: null
             }});
-            map.fitBounds(targetLayer.getBounds(), {{padding: [30, 30]}});
+            // Отдаляем камеру, чтобы видеть район в контексте области (максимальный зум 9)
+            map.fitBounds(targetLayer.getBounds(), {{ maxZoom: 9, padding: [50, 50] }});
         }} catch(e) {{}}
     }}
 }}
 
 function highlightRiverOnMapByName(riverName) {{
-    let map = getMapObject();
-    if (!map || typeof map.eachLayer !== 'function') return;
+    const map = getMapObject();
+    if (!map) return;
 
     resetActiveHighlight(true);
-    const searchClean = cleanSearchName(riverName);
+    const target = riverName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
 
     let targetGroup = L.featureGroup();
     highlightedRiverLayers = [];
 
     map.eachLayer(function(layer) {{
-        if (layer.feature && layer.feature.properties) {{
-            const props = layer.feature.properties;
-            const pName = props.clean_name || props.display_name || props.name || '';
-            const pClean = cleanSearchName(pName);
-            if (pClean && (pClean === searchClean || pClean.includes(searchClean))) {{
-                highlightedRiverLayers.push(layer);
-                try {{
-                    layer.setStyle({{
-                        color: '#EF4444',
-                        weight: 5,
-                        opacity: 1.0
-                    }});
-                    targetGroup.addLayer(layer);
-                }} catch(e) {{}}
+        if (layer.feature && layer.feature.geometry) {{
+            const gType = layer.feature.geometry.type || '';
+            if (gType.includes('LineString')) {{
+                const props = layer.feature.properties || {{}};
+                const pName = (props.clean_name || props.display_name || props.name || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+                if (pName && pName === target) {{
+                    highlightedRiverLayers.push(layer);
+                    try {{
+                        layer.setStyle({{
+                            color: '#EF4444',
+                            weight: 5,
+                            opacity: 1.0
+                        }});
+                        targetGroup.addLayer(layer);
+                    }} catch(e) {{}}
+                }}
             }}
         }}
     }});
@@ -1279,8 +1292,17 @@ function highlightRiverOnMapByName(riverName) {{
 }}
 
 function showDistrictInfoCard(districtName) {{
-    const searchClean = cleanSearchName(districtName);
-    const district = EMBEDDED_NEIGHBORS.find(d => cleanSearchName(d.name) === searchClean || cleanSearchName(d.name).includes(searchClean));
+    const targetNorm = normalizeDistrictName(districtName);
+    const targetSimple = districtName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+
+    let district = EMBEDDED_NEIGHBORS.find(d => normalizeDistrictName(d.name) === targetNorm);
+    if (!district) {{
+        district = EMBEDDED_NEIGHBORS.find(d => {{
+            let s = d.name.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+            return s === targetSimple || s.includes(targetSimple) || targetSimple.includes(s);
+        }});
+    }}
+
     if (!district) return;
 
     const card = document.getElementById('district-info-card');
@@ -1293,7 +1315,7 @@ function showDistrictInfoCard(districtName) {{
         : '<em>Нет смежных границ</em>';
 
     const popFormatted = district.population 
-        ? `${{Number(district.population).toLocaleString('ru-RU')}} чел.` 
+        ? `${{Number(district.population).toLocaleString('ru-RU'))}} чел.` 
         : 'Нет данных';
 
     card.innerHTML = `
@@ -1309,6 +1331,10 @@ function showDistrictInfoCard(districtName) {{
                 <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит с районами:</span>
                 <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${{neighborsHtml}}</div>
             </div>
+            <!-- КНОПКА СБРОСА ВИДА НА ВСЮ ОБЛАСТЬ -->
+            <button onclick="resetMapView()" class="btn btn-secondary" style="margin-top: 10px; font-size: 11.5px; padding: 6px;">
+                🌍 Показать всю область
+            </button>
         </div>
     `;
     card.style.display = 'block';
@@ -1323,35 +1349,38 @@ function closeInfoCard() {{
 function setupDistrictClickListeners() {{
     const map = getMapObject();
     if (!map) {{
-        setTimeout(setupDistrictClickListeners, 500);
+        setTimeout(setupDistrictClickListeners, 400);
         return;
     }}
 
     map.eachLayer(function(layer) {{
         if (layer.feature && layer.feature.properties) {{
             const props = layer.feature.properties;
-            const name = props.display_name || props.name || props.NAME || props.NAME_RU;
-            if (name && (props.ADMIN_LVL || props.oktmo || (layer.feature.geometry && layer.feature.geometry.type.includes('Polygon') && !props.WATERWAY && !props.NATURAL))) {{
-                layer.off('click');
-                layer.on('click', function(e) {{
-                    if (currentQuiz === null) {{
-                        showDistrictInfoCard(name);
-                    }}
-                }});
+            const isDistrictPoly = (props.ADMIN_LVL === '6' || props.ADMIN_LVL === 6 || props.oktmo);
+            if (isDistrictPoly) {{
+                const name = props.display_name || props.NAME_RU || props.NAME;
+                if (name) {{
+                    layer.off('click');
+                    layer.on('click', function(e) {{
+                        if (currentQuiz === null) {{
+                            showDistrictInfoCard(name);
+                        }}
+                    }});
+                }}
             }}
         }}
     }});
 }}
 
-/* Досрочный выход из викторины — сразу возврат в главное меню */
 function exitQuiz() {{
-    if (confirm('Завершить викторину? Текущий прогресс будет сброшен.')) {{
+    if (confirm('Завершить викторину?')) {{
         exitQuizDirectly();
     }}
 }}
 
 function exitQuizDirectly() {{
     stopTimer();
+    setBasemapVisible(true);
     const map = getMapObject();
     if (map && window._clickBlocker) {{
         try {{
@@ -1379,9 +1408,9 @@ function exitQuizDirectly() {{
     document.getElementById('normal-mode').style.display = 'block';
 }}
 
-/* Полноценное завершение (после 10 вопросов) — экран результатов */
 function showResults() {{
     clearMarkers();
+    setBasemapVisible(true);
     resetActiveHighlight(true);
     resetMapView();
     restoreAllLayers();
@@ -1595,7 +1624,7 @@ function getLbContentHtml() {{
             <h4 style="margin: 0 0 5px 0; font-size: 12.5px; color: #1E293B;">⭐ Лучший результат:</h4>
             <div style="background: #FFFBEB; border: 1px solid #FDE68A; padding: 8px 12px; border-radius: 9px; font-size: 11.5px; color: #92400E; display: flex; justify-content: space-between; align-items: center;">
                 <span>Тест: <b>${{bestResult.type}}</b> | Баллы: <b>${{bestResult.score}}/${{bestResult.maxScore}}</b> (${{bestResult.accuracy}}%)</span>
-                <span>⏱️ ${{bestResult.time_spent}}</span>
+                <span>⏱ ${{bestResult.time_spent}}</span>
             </div>
         </div>
 
@@ -1781,8 +1810,8 @@ function updateStudentHeader() {{
     }}
 }}
 
-document.addEventListener('DOMContentLoaded', function() {{
-    setTimeout(setupDistrictClickListeners, 1000);
+window.addEventListener('load', function() {{
+    setTimeout(setupDistrictClickListeners, 400);
     updateStudentHeader();
     if (!localStorage.getItem('rostovMapHideWelcome')) {{
         setTimeout(openWelcomeModal, 400);
@@ -1938,7 +1967,7 @@ document.addEventListener('DOMContentLoaded', function() {{
                 </button>
             </div>
 
-            <!-- ЭКРАН РЕЗУЛЬТАТОВ (ОТОБРАЖАЕТСЯ ТОЛЬКО ПОСЛЕ 10 ВОПРОСОВ) -->
+            <!-- ЭКРАН РЕЗУЛЬТАТОВ -->
             <div id="results-mode" style="display: none; text-align: center;">
                 <h4 style="color: #10B981; margin: 0 0 10px 0; font-size: 15px;">Результаты теста</h4>
                 <div id="results-content">
@@ -2111,18 +2140,11 @@ document.addEventListener('DOMContentLoaded', function() {{
             border-color: #86EFAC;
             color: #166534;
         }
-        .admin-btn:hover {
-            background: linear-gradient(135deg, #DCFCE7, #BBF7D0);
-        }
 
         .leaderboard-top-btn {
             background: linear-gradient(135deg, #FFF7ED, #FFEDD5);
             border-color: #FDBA74;
             color: #C2410C;
-        }
-        .leaderboard-top-btn:hover {
-            background: linear-gradient(135deg, #FFEDD5, #FED7AA);
-            color: #9A3412;
         }
 
         .student-badge {
@@ -2864,7 +2886,6 @@ document.addEventListener('DOMContentLoaded', function() {{
         }
         .score-sub { font-size: 11px; color: #64748B; font-weight: 500; margin-top: 2px; }
 
-        /* Кнопка-триггер складной шторки */
         .mobile-collapse-trigger {
             display: none;
             width: 100%;
@@ -2880,7 +2901,6 @@ document.addEventListener('DOMContentLoaded', function() {{
             text-align: center;
         }
 
-        /* ================= МОБИЛЬНАЯ АДАПТАЦИЯ (<= 768px) ================= */
         @media (max-width: 768px) {
             .mobile-collapse-trigger {
                 display: block;
@@ -2903,7 +2923,6 @@ document.addEventListener('DOMContentLoaded', function() {{
                 font-size: 14px;
             }
 
-            /* Панель внизу экрана со скруглением сверху */
             .app-card {
                 position: fixed;
                 top: auto;
@@ -2918,7 +2937,6 @@ document.addEventListener('DOMContentLoaded', function() {{
                 box-shadow: 0 -4px 22px rgba(0,0,0,0.18);
             }
 
-            /* Состояние со свернутой панелью */
             .app-card.collapsed {
                 max-height: 46px;
                 overflow: hidden;
@@ -2929,7 +2947,6 @@ document.addEventListener('DOMContentLoaded', function() {{
                 display: none !important;
             }
 
-            /* Когда панель свернута — скрываем верхние кнопки и блок слоев */
             body.ui-collapsed #top-nav-panel {
                 opacity: 0 !important;
                 pointer-events: none !important;
@@ -2940,7 +2957,6 @@ document.addEventListener('DOMContentLoaded', function() {{
                 pointer-events: none !important;
             }
 
-            /* Слои карты при открытой шторке */
             .leaflet-bottom.leaflet-left {
                 bottom: 50vh !important;
                 margin-left: 6px !important;
@@ -2951,7 +2967,6 @@ document.addEventListener('DOMContentLoaded', function() {{
                 transition: opacity 0.25s ease;
             }
 
-            /* Скрываем фиксированную легенду на смартфонах */
             div[style*="top: 14px; left: 60px;"] {
                 display: none !important;
             }
@@ -3018,41 +3033,6 @@ document.addEventListener('DOMContentLoaded', function() {{
         print(f"Карта успешно создана: {filename}")
         print(f"{'='*60}")
 
-        force_map_script = '''
-        <script>
-        function findMapForce() {
-            const mapElement = document.querySelector('.leaflet-container');
-            if (mapElement) {
-                try {
-                    if (typeof L !== 'undefined') {
-                        const map = L.DomUtil.get(mapElement);
-                        if (map && typeof map.eachLayer === 'function') {
-                            window._leaflet_map = map;
-                            return true;
-                        }
-                    }
-                } catch(e) {}
-            }
-            return false;
-        }
-
-        let attempts = 0;
-        const maxAttempts = 30;
-
-        function tryFindMap() {
-            attempts++;
-            if (findMapForce()) return;
-            if (attempts < maxAttempts) setTimeout(tryFindMap, 300);
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(tryFindMap, 300);
-        });
-        </script>
-        '''
-        self.map.get_root().html.add_child(folium.Element(force_map_script))
-        self.map.save(filename)
-
         with open(filename, 'r', encoding='utf-8') as f:
             html = f.read()
 
@@ -3074,10 +3054,6 @@ document.addEventListener('DOMContentLoaded', function() {{
             width: 0 !important;
             height: 0 !important;
             overflow: hidden !important;
-        }
-        .leaflet-control-attribution::before,
-        .leaflet-control-attribution::after {
-            display: none !important;
         }
 
         .my-attribution {
@@ -3126,43 +3102,6 @@ document.addEventListener('DOMContentLoaded', function() {{
             display: none !important;
         }
         </style>
-
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            function hideBasemapUrl() {
-                const baseLabels = document.querySelectorAll('.leaflet-control-layers-base label');
-                baseLabels.forEach(function(label) {
-                    label.style.display = 'none';
-                });
-
-                const links = document.querySelectorAll('.leaflet-control-layers a');
-                links.forEach(function(link) {
-                    if (link.href && (link.href.includes('cartocdn') || link.href.includes('carto'))) {
-                        link.style.display = 'none';
-                    }
-                });
-
-                const spans = document.querySelectorAll('.leaflet-control-layers span');
-                spans.forEach(function(span) {
-                    if (span.textContent && span.textContent.includes('basemaps')) {
-                        span.style.display = 'none';
-                    }
-                });
-            }
-
-            let tries = 0;
-            const interval = setInterval(function() {
-                tries++;
-                hideBasemapUrl();
-                if (tries > 30) clearInterval(interval);
-            }, 200);
-
-            window.addEventListener('load', function() {
-                hideBasemapUrl();
-                setTimeout(hideBasemapUrl, 500);
-            });
-        });
-        </script>
         """
 
         my_attribution_html = """
@@ -3186,7 +3125,7 @@ document.addEventListener('DOMContentLoaded', function() {{
 
         try:
             webbrowser.open(f'file://{os.path.abspath(filename)}')
-        except:
+        except Exception:
             pass
 
         return filename
@@ -3198,9 +3137,9 @@ def main():
     print("=" * 60)
 
     rostov_map = RostovMap()
-    rostov_map.add_districts(os.path.join(BASE_PATH, SHAPEFILES['districts']))
     rostov_map.add_water_bodies(os.path.join(BASE_PATH, SHAPEFILES['water_bodies']))
     rostov_map.add_rivers(os.path.join(BASE_PATH, SHAPEFILES['rivers']))
+    rostov_map.add_districts(os.path.join(BASE_PATH, SHAPEFILES['districts']))
     rostov_map.add_district_centers(os.path.join(BASE_PATH, SHAPEFILES['district_centers']))
 
     output_file = rostov_map.save('rostov_quiz_map.html')
