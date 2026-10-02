@@ -10,9 +10,6 @@ env/
 quiz_results.json
 quiz_data/
 
-# Сгенерированные карты
-rostov_quiz_map.html
-
 # Конфиденциальные файлы или ключи
 secret_config.json
 *.key

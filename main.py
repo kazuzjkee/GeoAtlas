@@ -293,6 +293,7 @@ const EMBEDDED_CENTERS = {json.dumps(centers_data, ensure_ascii=False)};
 const EMBEDDED_NEIGHBORS = {json.dumps(neighbors_data, ensure_ascii=False)};
 const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
 
+/* ВСЕ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ОБЪЯВЛЯЕМ СРАЗУ НАВЕРХУ */
 let currentQuiz = null;
 let currentQuestion = 0;
 let score = 0;
@@ -318,6 +319,7 @@ let studyQueue = [];
 let studyIndex = 0;
 let studyCenterMarker = null;
 
+/* ГАРАНТИРОВАННЫЙ ДОСТУП К ОБЪЕКТУ КАРТЫ */
 function getMapObject() {{
     if (window._leaflet_map) return window._leaflet_map;
     for (let key in window) {{
@@ -329,6 +331,7 @@ function getMapObject() {{
     return null;
 }}
 
+/* Управление видимостью подложки тайлов */
 function setBasemapVisible(isVisible) {{
     const tilePane = document.querySelector('.leaflet-tile-pane');
     if (tilePane) {{
@@ -336,6 +339,7 @@ function setBasemapVisible(isVisible) {{
     }}
 }}
 
+/* Мобильная складная шторка */
 function togglePanelCollapse() {{
     const panel = document.getElementById('quiz-controls');
     const btn = document.getElementById('panel-collapse-btn');
@@ -420,7 +424,7 @@ function setQuizLayers(quizMode) {{
                 if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
                 if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
             }} else if (quizMode === 'river' || quizMode === 'study_rivers') {{
-                if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
+                if (text.includes('Районы') || text.includes('Райцентры')) {{ if (input.checked) input.click(); }}
                 if (text.includes('Реки') || text.includes('Водоемы')) {{ if (!input.checked) input.click(); }}
             }} else if (quizMode === 'study_centers') {{
                 if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
@@ -684,7 +688,7 @@ function exitStudyMode() {{
 function startDistrictQuiz() {{
     currentQuiz = 'district';
     quizStartTime = Date.now();
-    setBasemapVisible(false);
+    setBasemapVisible(false); // Для районов скрываем подложку
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -704,7 +708,7 @@ function startDistrictQuiz() {{
 function startNeighborQuiz() {{
     currentQuiz = 'neighbor';
     quizStartTime = Date.now();
-    setBasemapVisible(false);
+    setBasemapVisible(false); // Для соседей скрываем подложку
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -724,7 +728,7 @@ function startNeighborQuiz() {{
 function startCenterQuiz() {{
     currentQuiz = 'center';
     quizStartTime = Date.now();
-    setBasemapVisible(true);
+    setBasemapVisible(true); // Для центров подложка ВКЛЮЧЕНА
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -748,7 +752,7 @@ function startRiverQuiz() {{
     }}
     currentQuiz = 'river';
     quizStartTime = Date.now();
-    setBasemapVisible(true);
+    setBasemapVisible(true); // Для рек подложка ВКЛЮЧЕНА
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -1146,7 +1150,6 @@ function calculateDistance(lat1, lon1, lat2, lon2) {{
         Math.sin(dLat/2) * Math.sin(dLat/2) +
         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
         Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
 }}
 
@@ -1182,6 +1185,7 @@ function updateScore() {{
     if (accEl) accEl.textContent = `Эффективность: ${{accuracy}}%`;
 }}
 
+/* Умная нормализация с сохранением типа (район или город) */
 function normalizeDistrictName(str) {{
     if (!str) return '';
     let s = str.toString().toLowerCase().trim();
@@ -1200,7 +1204,7 @@ function normalizeDistrictName(str) {{
     return clean;
 }}
 
-/* ПОДСВЕТКА РАЙОНА С УМНЫМ ОТДАЛЕНИЕМ (макс. зум 9) */
+/* ПОДСВЕТКА РАЙОНА: точное сравнение по слоям с ADMIN_LVL === '6' */
 function highlightDistrictOnMapByName(districtName) {{
     const map = getMapObject();
     if (!map) return;
@@ -1247,12 +1251,12 @@ function highlightDistrictOnMapByName(districtName) {{
                 fillOpacity: 0.5,
                 dashArray: null
             }});
-            // Отдаляем камеру, чтобы видеть район в контексте области (максимальный зум 9)
-            map.fitBounds(targetLayer.getBounds(), {{ maxZoom: 9, padding: [50, 50] }});
+            map.fitBounds(targetLayer.getBounds(), {{padding: [30, 30]}});
         }} catch(e) {{}}
     }}
 }}
 
+/* ПОДСВЕТКА РЕКИ */
 function highlightRiverOnMapByName(riverName) {{
     const map = getMapObject();
     if (!map) return;
@@ -1315,7 +1319,7 @@ function showDistrictInfoCard(districtName) {{
         : '<em>Нет смежных границ</em>';
 
     const popFormatted = district.population 
-        ? `${{Number(district.population).toLocaleString('ru-RU'))}} чел.` 
+        ? `${{Number(district.population).toLocaleString('ru-RU')}} чел.` 
         : 'Нет данных';
 
     card.innerHTML = `
@@ -1331,10 +1335,6 @@ function showDistrictInfoCard(districtName) {{
                 <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит с районами:</span>
                 <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${{neighborsHtml}}</div>
             </div>
-            <!-- КНОПКА СБРОСА ВИДА НА ВСЮ ОБЛАСТЬ -->
-            <button onclick="resetMapView()" class="btn btn-secondary" style="margin-top: 10px; font-size: 11.5px; padding: 6px;">
-                🌍 Показать всю область
-            </button>
         </div>
     `;
     card.style.display = 'block';
@@ -1346,6 +1346,7 @@ function closeInfoCard() {{
     resetActiveHighlight();
 }}
 
+/* НАДЁЖНЫЕ КЛИКИ ПО ВСЕМ РАЙОНАМ */
 function setupDistrictClickListeners() {{
     const map = getMapObject();
     if (!map) {{
@@ -1857,7 +1858,7 @@ window.addEventListener('load', function() {{
                     Обучающий режим
                 </div>
                 <div class="study-pick-grid">
-                    <button onclick="startStudyMode('districts')" class="btn btn-study-action">🗺️ Районы</button>
+                    <button onclick="startStudyMode('districts')" class="btn btn-study-action">🗺️️ Районы</button>
                     <button onclick="startStudyMode('rivers')" class="btn btn-study-action">🌊 Реки</button>
                     <button onclick="startStudyMode('centers')" class="btn btn-study-action">📍 Центры</button>
                 </div>
