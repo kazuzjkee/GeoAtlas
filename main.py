@@ -97,7 +97,7 @@ class RostovMap:
     def add_districts(self, shp_path):
         gdf = gpd.read_file(shp_path)
         if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
-            gdf = gdf.to_crs('EPSG:4326')
+            gdf = gpd.to_crs('EPSG:4326')
         
         gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME_RU', 'NAME', 'name']), axis=1)
         self.districts_gdf = gdf
@@ -1331,10 +1331,6 @@ function showDistrictInfoCard(districtName) {{
                 <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит с районами:</span>
                 <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${{neighborsHtml}}</div>
             </div>
-            <!-- КНОПКА ВОЗВРАТА К ВИДУ ВСЕЙ ОБЛАСТИ -->
-            <button onclick="resetMapView()" class="btn btn-secondary" style="margin-top: 10px; font-size: 11.5px; padding: 6px;">
-                🌍 Показать всю область
-            </button>
         </div>
     `;
     card.style.display = 'block';
@@ -1823,6 +1819,9 @@ window.addEventListener('load', function() {{
 
         quiz_html = '''
         <div class="top-nav-buttons" id="top-nav-panel">
+            <button class="nav-top-btn" onclick="resetMapView()" title="Показать всю область">
+                <span>🌍 Вся область</span>
+            </button>
             <button class="nav-top-btn admin-btn" onclick="window.open('/admin', '_blank')" title="Панель преподавателя">
                 <span>📊 Преподавателю</span>
             </button>
@@ -1857,7 +1856,7 @@ window.addEventListener('load', function() {{
                     Обучающий режим
                 </div>
                 <div class="study-pick-grid">
-                    <button onclick="startStudyMode('districts')" class="btn btn-study-action">🗺️ Районы</button>
+                    <button onclick="startStudyMode('districts')" class="btn btn-study-action">🗺️️ Районы</button>
                     <button onclick="startStudyMode('rivers')" class="btn btn-study-action">🌊 Реки</button>
                     <button onclick="startStudyMode('centers')" class="btn btn-study-action">📍 Центры</button>
                 </div>
@@ -2045,7 +2044,7 @@ window.addEventListener('load', function() {{
                         <div class="feature-icon" style="background: #E0F2FE; color: #0284C7;">🌊</div>
                         <div class="feature-content">
                             <h4>Гидрография</h4>
-                            <p>Викторина по главным водным артериям региона. Карта фокусируется на русле реки и предлагает варианты ответа.</p>
+                            <p>Викторина по главных водным артериям региона. Карта фокусируется на русле реки и предлагает варианты ответа.</p>
                         </div>
                     </div>
                     <div class="welcome-feature">
