@@ -97,7 +97,7 @@ class RostovMap:
     def add_districts(self, shp_path):
         gdf = gpd.read_file(shp_path)
         if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
-            gdf = gpd.to_crs('EPSG:4326')
+            gdf = gdf.to_crs('EPSG:4326')
         
         gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME_RU', 'NAME', 'name']), axis=1)
         self.districts_gdf = gdf
@@ -287,7 +287,15 @@ class RostovMap:
                     "lon": lon
                 })
 
+        # Вычисляем точные границы области для адаптивного зума
+        if self.districts_gdf is not None and not self.districts_gdf.empty:
+            bounds = self.districts_gdf.total_bounds # [min_lon, min_lat, max_lon, max_lat]
+            region_bounds = [[bounds[1], bounds[0]], [bounds[3], bounds[2]]]
+        else:
+            region_bounds = [[45.89, 38.15], [50.26, 44.33]]
+
         js_code = f'''
+const REGION_BOUNDS = {json.dumps(region_bounds)};
 const EMBEDDED_DISTRICTS = {json.dumps(districts_data, ensure_ascii=False)};
 const EMBEDDED_CENTERS = {json.dumps(centers_data, ensure_ascii=False)};
 const EMBEDDED_NEIGHBORS = {json.dumps(neighbors_data, ensure_ascii=False)};
@@ -398,10 +406,11 @@ function restoreAllRiverStyles() {{
     }});
 }}
 
+/* ДИНАМИЧЕСКИЙ СБРОС ВИДА - АДАПТИРУЕТСЯ ПОД ЭКРАН 1080p ИЛИ 4K */
 function resetMapView() {{
     const map = getMapObject();
     if (map) {{
-        try {{ map.setView([{MAP_CENTER[0]}, {MAP_CENTER[1]}], {INITIAL_ZOOM}); }} catch(e) {{}}
+        try {{ map.fitBounds(REGION_BOUNDS, {{padding: [15, 15]}}); }} catch(e) {{}}
     }}
 }}
 
@@ -684,7 +693,7 @@ function exitStudyMode() {{
 function startDistrictQuiz() {{
     currentQuiz = 'district';
     quizStartTime = Date.now();
-    setBasemapVisible(false); // Для районов скрываем подложку
+    setBasemapVisible(false);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -704,7 +713,7 @@ function startDistrictQuiz() {{
 function startNeighborQuiz() {{
     currentQuiz = 'neighbor';
     quizStartTime = Date.now();
-    setBasemapVisible(false); // Для соседей скрываем подложку
+    setBasemapVisible(false);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -724,7 +733,7 @@ function startNeighborQuiz() {{
 function startCenterQuiz() {{
     currentQuiz = 'center';
     quizStartTime = Date.now();
-    setBasemapVisible(true); // Для центров подложка ВКЛЮЧЕНА
+    setBasemapVisible(true);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -748,7 +757,7 @@ function startRiverQuiz() {{
     }}
     currentQuiz = 'river';
     quizStartTime = Date.now();
-    setBasemapVisible(true); // Для рек подложка ВКЛЮЧЕНА
+    setBasemapVisible(true);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -1247,7 +1256,6 @@ function highlightDistrictOnMapByName(districtName) {{
                 fillOpacity: 0.5,
                 dashArray: null
             }});
-            // Зум с отдалением: максимальный зум ограничен 9, чтобы район был виден в контексте области
             map.fitBounds(targetLayer.getBounds(), {{ maxZoom: 9, padding: [50, 50] }});
         }} catch(e) {{}}
     }}
@@ -1807,6 +1815,7 @@ function updateStudentHeader() {{
 }}
 
 window.addEventListener('load', function() {{
+    resetMapView();
     setTimeout(setupDistrictClickListeners, 400);
     updateStudentHeader();
     if (!localStorage.getItem('rostovMapHideWelcome')) {{
@@ -1819,7 +1828,7 @@ window.addEventListener('load', function() {{
 
         quiz_html = '''
         <div class="top-nav-buttons" id="top-nav-panel">
-            <button class="nav-top-btn" onclick="resetMapView()" title="Показать всю область">
+            <button class="nav-top-btn" onclick="resetMapView()" style="background: linear-gradient(135deg, #EFF6FF, #DBEAFE); border-color: #93C5FD; color: #1D4ED8;" title="Показать всю область">
                 <span>🌍 Вся область</span>
             </button>
             <button class="nav-top-btn admin-btn" onclick="window.open('/admin', '_blank')" title="Панель преподавателя">
@@ -1856,7 +1865,7 @@ window.addEventListener('load', function() {{
                     Обучающий режим
                 </div>
                 <div class="study-pick-grid">
-                    <button onclick="startStudyMode('districts')" class="btn btn-study-action">🗺️️ Районы</button>
+                    <button onclick="startStudyMode('districts')" class="btn btn-study-action">🗺️ Районы</button>
                     <button onclick="startStudyMode('rivers')" class="btn btn-study-action">🌊 Реки</button>
                     <button onclick="startStudyMode('centers')" class="btn btn-study-action">📍 Центры</button>
                 </div>
@@ -2044,7 +2053,7 @@ window.addEventListener('load', function() {{
                         <div class="feature-icon" style="background: #E0F2FE; color: #0284C7;">🌊</div>
                         <div class="feature-content">
                             <h4>Гидрография</h4>
-                            <p>Викторина по главных водным артериям региона. Карта фокусируется на русле реки и предлагает варианты ответа.</p>
+                            <p>Викторина по главным водным артериям региона. Карта фокусируется на русле реки и предлагает варианты ответа.</p>
                         </div>
                     </div>
                     <div class="welcome-feature">
