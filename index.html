@@ -1,0 +1,1444 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoAtlas — Учебно-картографический комплекс</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3B82F6;
+            --primary-dark: #1D4ED8;
+            --primary-gradient: linear-gradient(135deg, #2563EB 0%, #4F46E5 100%);
+            --teacher-gradient: linear-gradient(135deg, #059669 0%, #0D9488 100%);
+            --student-gradient: linear-gradient(135deg, #2563EB 0%, #4338CA 100%);
+            --indigo-hero: linear-gradient(135deg, #0F172A 0%, #1E1B4B 45%, #312E81 100%);
+            --surface: #FFFFFF;
+            --background: #F8FAFC;
+            --border: #E2E8F0;
+            --border-hover: #CBD5E1;
+            --text-main: #0F172A;
+            --text-muted: #64748B;
+            --text-light: #94A3B8;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 20px -2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 16px 36px -4px rgba(15, 23, 42, 0.12);
+            --shadow-primary: 0 10px 25px -3px rgba(37, 99, 235, 0.28);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* НАВИГАЦИОННЫЙ HEADER */
+        .top-navbar {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .nav-inner {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .brand-block {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .brand-logo {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-gradient);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            box-shadow: var(--shadow-primary);
+            flex-shrink: 0;
+        }
+
+        .brand-title {
+            font-size: 19px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-tag {
+            font-size: 11px;
+            font-weight: 700;
+            background: #EEF2FF;
+            color: #4F46E5;
+            padding: 2px 8px;
+            border-radius: 20px;
+            border: 1px solid #C7D2FE;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+            font-family: inherit;
+        }
+
+        .nav-btn-teacher {
+            background: #F0FDF4;
+            color: #166534;
+            border: 1px solid #BBF7D0;
+            box-shadow: 0 2px 8px rgba(22, 101, 52, 0.08);
+        }
+
+        .nav-btn-teacher:hover {
+            background: #DCFCE7;
+            color: #14532D;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(22, 101, 52, 0.15);
+        }
+
+        .nav-btn-student {
+            background: var(--student-gradient);
+            color: #FFFFFF;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28);
+        }
+
+        .nav-btn-student:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.38);
+        }
+
+        /* БЕЙДЖ АВТОРИЗОВАННОГО СТУДЕНТА В HEADER */
+        .student-badge {
+            background: #FFFFFF;
+            border: 1px solid #BAE6FD;
+            border-radius: 12px;
+            padding: 4px 12px 4px 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 14px rgba(3, 105, 161, 0.12);
+        }
+
+        .badge-avatar {
+            width: 30px;
+            height: 30px;
+            background: #E0F2FE;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        .badge-info {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+        }
+
+        .badge-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #0369A1;
+            line-height: 1.2;
+            max-width: 140px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .badge-group {
+            font-size: 10.5px;
+            color: #64748B;
+            font-weight: 500;
+        }
+
+        .badge-logout {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #94A3B8;
+            cursor: pointer;
+            margin-left: 2px;
+            line-height: 1;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: all 0.15s ease;
+        }
+
+        .badge-logout:hover {
+            color: #EF4444;
+            background: #FEE2E2;
+        }
+
+        /* HERO ЗАГОЛОВОК */
+        .hero-header {
+            text-align: center;
+            padding: 48px 20px 24px 20px;
+            max-width: 860px;
+            margin: 0 auto;
+        }
+
+        .academic-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #EFF6FF;
+            color: #1D4ED8;
+            border: 1px solid #BFDBFE;
+            padding: 5px 14px;
+            border-radius: 30px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            margin-bottom: 18px;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+        }
+
+        .hero-header h1 {
+            margin: 0 0 14px 0;
+            font-size: 40px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            line-height: 1.15;
+            color: #0F172A;
+        }
+
+        .hero-header h1 span {
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-header p {
+            margin: 0 auto;
+            font-size: 16px;
+            color: var(--text-muted);
+            line-height: 1.6;
+            max-width: 680px;
+        }
+
+        /* БЛОК АНИМИРОВАННОЙ СТАТИСТИКИ */
+        .stats-wrapper {
+            max-width: 1040px;
+            width: 100%;
+            margin: 28px auto 38px auto;
+            padding: 0 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 18px;
+            background: #FFFFFF;
+            padding: 22px 28px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-md);
+        }
+
+        .stat-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 6px 12px;
+            position: relative;
+        }
+
+        .stat-card:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            right: -9px;
+            top: 15%;
+            height: 70%;
+            width: 1px;
+            background: #E2E8F0;
+        }
+
+        .stat-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .stat-icon-blue { background: #EFF6FF; border: 1px solid #BFDBFE; color: #1D4ED8; }
+        .stat-icon-cyan { background: #ECFEFF; border: 1px solid #A5F3FC; color: #0891B2; }
+        .stat-icon-purple { background: #F5F3FF; border: 1px solid #DDD6FE; color: #7C3AED; }
+
+        .stat-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-value {
+            font-size: 30px;
+            font-weight: 800;
+            color: #0F172A;
+            line-height: 1;
+            margin-bottom: 4px;
+            letter-spacing: -0.5px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .stat-plus {
+            color: #3B82F6;
+            font-weight: 800;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #334155;
+            margin-bottom: 2px;
+        }
+
+        .stat-subtext {
+            font-size: 11px;
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        /* ОСНОВНОЙ КОНТЕЙНЕР */
+        .container {
+            max-width: 1040px;
+            width: 100%;
+            padding: 0 20px 48px 20px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .section-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        /* МАКРОКАРТА: РОССИЯ */
+        .hero-card {
+            background: var(--indigo-hero);
+            border-radius: 24px;
+            padding: 34px 44px;
+            text-decoration: none;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            box-shadow: 0 20px 40px -10px rgba(30, 27, 75, 0.4);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            margin-bottom: 42px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .hero-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -30%;
+            width: 100%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .hero-card::after {
+            content: '🇷🇺';
+            position: absolute;
+            right: 180px;
+            bottom: -35px;
+            font-size: 170px;
+            opacity: 0.08;
+            transform: rotate(-12deg);
+            pointer-events: none;
+        }
+
+        .hero-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 28px 50px -12px rgba(30, 27, 75, 0.55);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .hero-info {
+            position: relative;
+            z-index: 1;
+            max-width: 580px;
+        }
+
+        .hero-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11.5px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            color: #E0E7FF;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .hero-info h2 {
+            margin: 0 0 10px 0;
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #FFFFFF;
+        }
+
+        .hero-info p {
+            margin: 0 0 18px 0;
+            font-size: 14.5px;
+            color: #C7D2FE;
+            line-height: 1.55;
+        }
+
+        .hero-features {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .feature-chip {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 11.5px;
+            color: #E2E8F0;
+            font-weight: 600;
+        }
+
+        .hero-btn {
+            background: #FFFFFF;
+            color: #1E1B4B;
+            padding: 14px 28px;
+            border-radius: 14px;
+            font-weight: 800;
+            font-size: 15px;
+            flex-shrink: 0;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .hero-card:hover .hero-btn {
+            background: #EEF2FF;
+            color: #312E81;
+            transform: scale(1.03);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        /* ПОИСК И СЕТКА РЕГИОНОВ */
+        .regions-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 22px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .search-box {
+            position: relative;
+            width: 100%;
+            max-width: 360px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 18px 12px 42px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+            transition: all 0.2s ease;
+            background: #FFFFFF;
+            box-shadow: var(--shadow-sm);
+            font-family: inherit;
+        }
+
+        .search-box input:focus {
+            border-color: #3B82F6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-light);
+            font-size: 17px;
+            pointer-events: none;
+        }
+
+        .regions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+            gap: 20px;
+        }
+
+        .region-card {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 22px;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: var(--shadow-sm);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .region-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: transparent;
+            transition: background 0.2s ease;
+        }
+
+        .region-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-lg);
+            border-color: #93C5FD;
+        }
+
+        .region-card:hover::before {
+            background: var(--primary);
+        }
+
+        .region-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .region-info {
+            flex: 1;
+        }
+
+        .region-info h3 {
+            margin: 0 0 4px 0;
+            font-size: 17px;
+            font-weight: 700;
+            color: #0F172A;
+            letter-spacing: -0.2px;
+        }
+
+        .region-info p {
+            margin: 0 0 10px 0;
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .region-meta {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .meta-pill {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: #F1F5F9;
+            color: #475569;
+        }
+
+        .region-arrow {
+            color: #94A3B8;
+            font-size: 18px;
+            transition: transform 0.2s ease, color 0.2s ease;
+            margin-top: 2px;
+        }
+
+        .region-card:hover .region-arrow {
+            color: var(--primary);
+            transform: translateX(3px);
+        }
+
+        .region-card-soon {
+            opacity: 0.75;
+            background: #FAFAFA;
+            border-style: dashed;
+            cursor: pointer;
+        }
+
+        .region-card-soon:hover {
+            opacity: 1;
+            border-color: #CBD5E1;
+            transform: translateY(-2px);
+        }
+
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--text-muted);
+            background: white;
+            border-radius: 16px;
+            border: 1px dashed var(--border);
+            display: none;
+        }
+
+        /* АКАДЕМИЧЕСКИЙ FOOTER */
+        .footer {
+            margin-top: auto;
+            background: #FFFFFF;
+            border-top: 1px solid var(--border);
+            padding: 44px 20px 36px 20px;
+            color: var(--text-muted);
+        }
+
+        .footer-inner {
+            max-width: 1040px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 24px;
+        }
+
+        .footer-academic {
+            max-width: 620px;
+        }
+
+        .footer-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #1D4ED8;
+            background: #EFF6FF;
+            padding: 3px 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border: 1px solid #BFDBFE;
+        }
+
+        .footer-academic h4 {
+            margin: 0 0 6px 0;
+            font-size: 15px;
+            font-weight: 700;
+            color: #0F172A;
+        }
+
+        .footer-academic p {
+            margin: 0;
+            font-size: 13px;
+            color: #475569;
+            line-height: 1.55;
+        }
+
+        .footer-actions {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        /* GITHUB BUTTON */
+        .github-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #0F172A;
+            color: #FFFFFF;
+            padding: 10px 18px;
+            border-radius: 12px;
+            font-size: 13.5px;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .github-btn:hover {
+            background: #1E293B;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.3);
+            color: #FFFFFF;
+        }
+
+        .github-icon {
+            width: 19px;
+            height: 19px;
+            fill: currentColor;
+            flex-shrink: 0;
+        }
+
+        .github-tag {
+            background: rgba(255, 255, 255, 0.15);
+            font-size: 10.5px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.3px;
+            color: #E2E8F0;
+        }
+
+        .footer-bottom {
+            max-width: 1040px;
+            margin: 28px auto 0 auto;
+            padding-top: 20px;
+            border-top: 1px solid #F1F5F9;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-light);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        /* МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ СТУДЕНТА ЮФУ */
+        .welcome-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(6px);
+            z-index: 20000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            transition: opacity 0.25s ease;
+        }
+
+        .auth-card {
+            background: #FFFFFF;
+            border-radius: 20px;
+            max-width: 440px;
+            width: 100%;
+            padding: 28px 30px;
+            box-shadow: 0 25px 60px rgba(15, 23, 42, 0.3);
+            box-sizing: border-box;
+            animation: authModalIn 0.25s ease-out;
+            position: relative;
+            border: 1px solid var(--border);
+        }
+
+        @keyframes authModalIn {
+            from { opacity: 0; transform: scale(0.95) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .auth-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid #E2E8F0;
+            padding-bottom: 14px;
+            margin-bottom: 16px;
+        }
+
+        .auth-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 800;
+            color: #0F172A;
+            letter-spacing: -0.3px;
+        }
+
+        .close-card-btn {
+            background: #F1F5F9;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            font-size: 18px;
+            line-height: 1;
+            color: #64748B;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+        }
+
+        .close-card-btn:hover {
+            background: #E2E8F0;
+            color: #0F172A;
+        }
+
+        .auth-error {
+            background: #FEE2E2;
+            color: #B91C1C;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 12.5px;
+            margin-bottom: 14px;
+            border: 1px solid #FCA5A5;
+            font-weight: 500;
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: #475569;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 11px 14px;
+            border-radius: 10px;
+            border: 1.5px solid #CBD5E1;
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .auth-input:focus {
+            border-color: #2563EB;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+
+        .code-input {
+            text-align: center;
+            letter-spacing: 8px;
+            font-size: 22px;
+            font-weight: 800;
+            color: #2563EB;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .auth-submit-btn {
+            background: var(--primary-gradient);
+            color: white;
+            border: none;
+            padding: 13px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28);
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .auth-submit-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.38);
+        }
+
+        /* АДАПТИВНОСТЬ */
+        @media (max-width: 768px) {
+            .hero-header h1 {
+                font-size: 30px;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 14px;
+                padding: 18px;
+            }
+            .stat-card:not(:last-child)::after {
+                display: none;
+            }
+            .hero-card {
+                flex-direction: column;
+                text-align: center;
+                padding: 26px 20px;
+                gap: 20px;
+            }
+            .hero-features {
+                justify-content: center;
+            }
+            .hero-card::after {
+                display: none;
+            }
+            .nav-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .nav-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+            .nav-btn {
+                flex: 1;
+                justify-content: center;
+            }
+            .search-box {
+                max-width: 100%;
+            }
+            .footer-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ВЕРХНЯЯ НАВИГАЦИОННАЯ ПАНЕЛЬ -->
+    <header class="top-navbar">
+        <div class="nav-inner">
+            <a href="index.html" class="brand-block">
+                <div class="brand-logo">🌐</div>
+                <div>
+                    <div class="brand-title">
+                        GeoAtlas
+                        <span class="brand-tag">Edu v2.4</span>
+                    </div>
+                </div>
+            </a>
+            
+            <div class="nav-actions">
+                <button type="button" onclick="window.open('/admin', '_blank')" class="nav-btn nav-btn-teacher" title="Личный кабинет педагога и аналитика успеваемости">
+                    <span>👨‍🏫 Кабинет преподавателя</span>
+                </button>
+                <button type="button" id="auth-top-btn" onclick="openAuthModal()" class="nav-btn nav-btn-student" title="Авторизация студента по корпоративной почте ЮФУ">
+                    <span>🎓 Вход для студентов</span>
+                </button>
+                <div id="student-profile-badge" class="student-badge" style="display: none;">
+                    <div class="badge-avatar">🎓</div>
+                    <div class="badge-info">
+                        <span id="student-badge-name" class="badge-name">Студент</span>
+                        <span id="student-badge-group" class="badge-group">Группа</span>
+                    </div>
+                    <button onclick="logoutStudent()" class="badge-logout" title="Выйти из аккаунта">&times;</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- HERO ЗАГОЛОВОК -->
+    <div class="hero-header">
+        <div class="academic-badge">
+            <span>🎓</span> ЮФУ • Институт наук о Земле
+        </div>
+        <h1>Учебно-картографический<br>комплекс <span>GeoAtlas</span></h1>
+        <p>
+            Интерактивная геоинформационная среда для комплексного изучения административно-территориального деления, гидрографической сети и демографического анализа Российской Федерации
+        </p>
+    </div>
+
+    <!-- АНИМИРОВАННЫЙ БЛОК СТАТИСТИКИ -->
+    <section class="stats-wrapper" aria-label="Статистика платформы">
+        <div class="stats-grid">
+            
+            <div class="stat-card">
+                <div class="stat-icon stat-icon-blue">🗺️</div>
+                <div class="stat-info">
+                    <div class="stat-value">
+                        <span class="counter" data-target="85">0</span><span class="stat-plus">+</span>
+                    </div>
+                    <div class="stat-label">Субъектов РФ</div>
+                    <div class="stat-subtext">Регионы и города фед. значения</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon stat-icon-cyan">🌊</div>
+                <div class="stat-info">
+                    <div class="stat-value">
+                        <span class="counter" data-target="100">0</span><span class="stat-plus">+</span>
+                    </div>
+                    <div class="stat-label">Водных артерий</div>
+                    <div class="stat-subtext">Главные реки, озёра и водотоки</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon stat-icon-purple">⚡</div>
+                <div class="stat-info">
+                    <div class="stat-value">
+                        <span class="counter" data-target="1000">0</span><span class="stat-plus">+</span>
+                    </div>
+                    <div class="stat-label">Тестовых комбинаций</div>
+                    <div class="stat-subtext">Интерактивные quiz-режимы</div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ОСНОВНОЙ КОНТЕНТ: КАРТЫ -->
+    <main class="container">
+        
+        <!-- МАКРОУРОВЕНЬ: ВСЯ СТРАНА -->
+        <div class="section-header">
+            <div class="section-tag">🇷🇺 Федеральный масштаб</div>
+        </div>
+
+        <a href="russia_quiz_map.html" class="hero-card" title="Открыть карту Российской Федерации">
+            <div class="hero-info">
+                <div class="hero-pill">✨ Базовый общероссийский курс</div>
+                <h2>Российская Федерация</h2>
+                <p>
+                    Интерактивное картографирование 85+ субъектов РФ, административные центры, гидрография равнинных и горных бассейнов, а также аналитический Choropleth-слой численности населения.
+                </p>
+                <div class="hero-features">
+                    <span class="feature-chip">📊 Choropleth-аналитика</span>
+                    <span class="feature-chip">📈 Chart.js графики</span>
+                    <span class="feature-chip">🛰️ Спутник Esri / Тёмная тема</span>
+                    <span class="feature-chip">🎯 4 режима тестирования</span>
+                </div>
+            </div>
+            <div class="hero-btn">
+                <span>Перейти к карте</span>
+                <span>→</span>
+            </div>
+        </a>
+
+        <!-- МИКРОУРОВЕНЬ: РЕГИОНЫ -->
+        <div class="regions-header">
+            <div class="section-tag">📍 Региональная детализация</div>
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="Поиск региона или района..." autocomplete="off">
+            </div>
+        </div>
+
+        <div class="regions-grid" id="regionsGrid">
+            
+            <!-- РОСТОВСКАЯ ОБЛАСТЬ -->
+            <a href="rostov_quiz_map.html" class="region-card" data-name="ростовская область ростов дон" data-tags="ростовская юфо районы">
+                <div class="region-icon" style="background: #F0FDF4; color: #16A34A; border: 1px solid #DCFCE7;">🌻</div>
+                <div class="region-info">
+                    <h3>Ростовская область</h3>
+                    <p>55 районов и городских округов, гидрографическая сеть Дона и Маныча.</p>
+                    <div class="region-meta">
+                        <span class="meta-pill">55 районов</span>
+                        <span class="meta-pill">ЮФО</span>
+                        <span class="meta-pill">Choropleth</span>
+                    </div>
+                </div>
+                <div class="region-arrow">→</div>
+            </a>
+
+            <!-- КРАСНОДАРСКИЙ КРАЙ -->
+            <a href="krasnodar_quiz_map.html" class="region-card" data-name="краснодарский край кубань краснодар" data-tags="краснодарский кубань сочи новороссийск">
+                <div class="region-icon" style="background: #FFF7ED; color: #EA580C; border: 1px solid #FFEDD5;">🍇</div>
+                <div class="region-info">
+                    <h3>Краснодарский край</h3>
+                    <p>44 муниципальных района и курортных округа, речная сеть Кубани.</p>
+                    <div class="region-meta">
+                        <span class="meta-pill">44 округа</span>
+                        <span class="meta-pill">Кубань</span>
+                        <span class="meta-pill">Черноморье</span>
+                    </div>
+                </div>
+                <div class="region-arrow">→</div>
+            </a>
+
+            <!-- КАРТОЧКА-ЗАГЛУШКА ДЛЯ БУДУЩИХ РЕГИОНОВ -->
+            <div class="region-card region-card-soon" onclick="showFeatureNotice('region')" data-name="московская область подмосковье москва ставропольский крым" data-tags="новые регионы">
+                <div class="region-icon" style="background: #F8FAFC; color: #94A3B8; border: 1px solid #E2E8F0;">➕</div>
+                <div class="region-info">
+                    <h3 style="color: #64748B;">Подключение новых регионов</h3>
+                    <p>Модульная архитектура движка позволяет подключить любой регион РФ по SHP-файлам.</p>
+                    <div class="region-meta">
+                        <span class="meta-pill">GADM / OSM</span>
+                        <span class="meta-pill">Скоро</span>
+                    </div>
+                </div>
+                <div class="region-arrow" style="opacity: 0.5;">+</div>
+            </div>
+
+            <!-- ПУСТОЙ РЕЗУЛЬТАТ ПОИСКА -->
+            <div class="empty-state" id="emptyState">
+                <div style="font-size: 32px; margin-bottom: 8px;">🔍</div>
+                <strong style="display: block; font-size: 16px; margin-bottom: 4px; color: #1E293B;">Регион не найден</strong>
+                <span>Попробуйте изменить поисковый запрос (например: «Ростов» или «Кубань»)</span>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- АКАДЕМИЧЕСКИЙ ПОДВАЛ (FOOTER) -->
+    <footer class="footer">
+        <div class="footer-inner">
+            <div class="footer-academic">
+                <div class="footer-badge">
+                    <span>🏛️</span> Выпускная квалификационная работа (ВКР)
+                </div>
+                <h4>Южный федеральный университет • Институт наук о Земле</h4>
+                <p>
+                    Проект разработан в рамках квалификационной работы по направлению "Педагогическое образование с двумя профилями подготовки: география и экономика". Автор: Литвинов Е. К., Институт наук о Земле ЮФУ.
+                </p>
+            </div>
+
+            <div class="footer-actions">
+                <a href="https://github.com/kazuzjkee/GeoAtlas" target="_blank" rel="noopener noreferrer" class="github-btn" title="Перейти к репозиторию проекта на GitHub">
+                    <svg class="github-icon" viewBox="0 0 24 24">
+                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                    </svg>
+                    <span>kazuzjkee/GeoAtlas</span>
+                    <span class="github-tag">Open Source</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <div>© 2026 GeoAtlas. Все права защищены. Разработано в Институте наук о Земле ЮФУ.</div>
+            <div style="display: flex; gap: 14px;">
+                <span>Leaflet.js + Chart.js</span>
+                <span>•</span>
+                <span>GeoPandas Engine</span>
+                <span>•</span>
+                <span>EPSG:4326 / EPSG:6933</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ СТУДЕНТА ЮФУ -->
+    <div id="auth-modal" class="welcome-overlay" style="display: none;">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div>
+                    <h3>Вход в профиль студента</h3>
+                    <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748B;">Корпоративная почта ЮФУ (@sfedu.ru)</p>
+                </div>
+                <button onclick="closeAuthModal()" class="close-card-btn" title="Закрыть">&times;</button>
+            </div>
+
+            <div id="auth-error" class="auth-error" style="display: none;"></div>
+
+            <div id="auth-step-1">
+                <div class="form-group">
+                    <label>Корпоративная почта ЮФУ:</label>
+                    <input type="email" id="auth-email" placeholder="ivanov@sfedu.ru" class="auth-input" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label>ФИО студента:</label>
+                    <input type="text" id="auth-name" placeholder="Иванов Иван Иванович" class="auth-input" autocomplete="name">
+                </div>
+                <div class="form-group">
+                    <label>Академическая группа / Направление:</label>
+                    <input type="text" id="auth-group" placeholder="Геофак, 4 курс" class="auth-input">
+                </div>
+                <button type="button" onclick="requestSfeduCode()" class="auth-submit-btn" style="width: 100%; margin-top: 10px;">
+                    Получить код подтверждения
+                </button>
+            </div>
+
+            <div id="auth-step-2" style="display: none;">
+                <p style="font-size: 13.5px; color: #475569; margin: 0 0 14px 0; line-height: 1.5;">
+                    Код верификации отправлен на адрес: <br><strong id="auth-target-email" style="color: #0F172A;"></strong>
+                </p>
+                <div class="form-group">
+                    <label>6-значный проверочный код:</label>
+                    <input type="text" id="auth-code-input" maxlength="6" placeholder="000000" class="auth-input code-input" autocomplete="one-time-code">
+                </div>
+                <button type="button" onclick="verifySfeduCode()" class="auth-submit-btn" style="width: 100%; margin-top: 10px;">
+                    Подтвердить и войти
+                </button>
+                <button type="button" onclick="resetAuthForms()" style="background: none; border: none; color: #64748B; font-size: 12.5px; margin-top: 12px; width: 100%; cursor: pointer; text-decoration: underline;">
+                    ← Ввести другие данные
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS СКРИПТЫ: АВТОРИЗАЦИЯ, СЧЕТЧИКИ, ПОИСК И УВЕДОМЛЕНИЯ -->
+    <script>
+        // --- 1. АВТОРИЗАЦИЯ СТУДЕНТА (ГЛОБАЛЬНАЯ СЕССИЯ localStorage) ---
+        function openAuthModal() {
+            const modal = document.getElementById('auth-modal');
+            if (modal) modal.style.display = 'flex';
+            resetAuthForms();
+        }
+
+        function closeAuthModal() {
+            const modal = document.getElementById('auth-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function resetAuthForms() {
+            const step1 = document.getElementById('auth-step-1');
+            const step2 = document.getElementById('auth-step-2');
+            const errBox = document.getElementById('auth-error');
+            const codeInput = document.getElementById('auth-code-input');
+
+            if (step1) step1.style.display = 'block';
+            if (step2) step2.style.display = 'none';
+            if (errBox) errBox.style.display = 'none';
+            if (codeInput) codeInput.value = '';
+        }
+
+        function showAuthError(msg) {
+            const errBox = document.getElementById('auth-error');
+            if (errBox) {
+                errBox.textContent = msg;
+                errBox.style.display = 'block';
+            }
+        }
+
+        async function requestSfeduCode() {
+            const email = document.getElementById('auth-email').value.trim();
+            const name = document.getElementById('auth-name').value.trim();
+            const group = document.getElementById('auth-group').value.trim();
+
+            if (!email || !name || !group) {
+                showAuthError('Пожалуйста, заполните все поля формы');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/auth/send-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, full_name: name, group_num: group })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Ошибка отправки кода');
+
+                document.getElementById('auth-step-1').style.display = 'none';
+                document.getElementById('auth-step-2').style.display = 'block';
+                document.getElementById('auth-target-email').textContent = email;
+                document.getElementById('auth-error').style.display = 'none';
+
+                if (data.dev_code) {
+                    alert(`🔑 Код подтверждения: ${data.dev_code}`);
+                }
+            } catch(e) {
+                showAuthError(e.message || 'Ошибка соединения с сервером');
+            }
+        }
+
+        async function verifySfeduCode() {
+            const email = document.getElementById('auth-email').value.trim();
+            const code = document.getElementById('auth-code-input').value.trim();
+
+            if (!code || code.length !== 6) {
+                showAuthError('Введите 6-значный проверочный код');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/auth/verify-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, code })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Неверный код');
+
+                // Сохраняем сессию в localStorage для синхронизации со всеми картами
+                localStorage.setItem('sfeduStudent', JSON.stringify(data.user));
+                updateStudentHeader();
+                closeAuthModal();
+            } catch(e) {
+                showAuthError(e.message || 'Неверный или просроченный проверочный код');
+            }
+        }
+
+        function logoutStudent() {
+            if (confirm('Выйти из студенческого профиля?')) {
+                localStorage.removeItem('sfeduStudent');
+                updateStudentHeader();
+            }
+        }
+
+        function getCurrentStudentInfo() {
+            try {
+                const raw = localStorage.getItem('sfeduStudent');
+                return raw ? JSON.parse(raw) : null;
+            } catch(e) {
+                return null;
+            }
+        }
+
+        function updateStudentHeader() {
+            const student = getCurrentStudentInfo();
+            const authBtn = document.getElementById('auth-top-btn');
+            const profileBadge = document.getElementById('student-profile-badge');
+
+            if (student) {
+                if (authBtn) authBtn.style.display = 'none';
+                if (profileBadge) {
+                    profileBadge.style.display = 'flex';
+                    const nameEl = document.getElementById('student-badge-name');
+                    const groupEl = document.getElementById('student-badge-group');
+                    if (nameEl) nameEl.textContent = student.name;
+                    if (groupEl) groupEl.textContent = student.group;
+                }
+            } else {
+                if (authBtn) authBtn.style.display = 'inline-flex';
+                if (profileBadge) profileBadge.style.display = 'none';
+            }
+        }
+
+        // --- 2. АНИМАЦИЯ СЧЕТЧИКОВ СТАТИСТИКИ ПРИ ЗАГРУЗКЕ ---
+        function animateCounters() {
+            const counters = document.querySelectorAll('.counter');
+            const duration = 1600;
+
+            counters.forEach(counter => {
+                const target = parseInt(counter.getAttribute('data-target'), 10);
+                if (isNaN(target)) return;
+
+                const startTime = performance.now();
+
+                function update(currentTime) {
+                    const elapsed = currentTime - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const easeProgress = 1 - Math.pow(1 - progress, 3);
+                    const currentVal = Math.floor(easeProgress * target);
+
+                    counter.textContent = currentVal.toLocaleString('ru-RU');
+
+                    if (progress < 1) {
+                        requestAnimationFrame(update);
+                    } else {
+                        counter.textContent = target.toLocaleString('ru-RU');
+                    }
+                }
+
+                requestAnimationFrame(update);
+            });
+        }
+
+        // --- 3. ЖИВОЙ ПОИСК РЕГИОНОВ ---
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', function(e) {
+                const term = e.target.value.toLowerCase().trim();
+                const cards = document.querySelectorAll('.region-card');
+                let hasVisible = false;
+
+                cards.forEach(card => {
+                    const name = (card.getAttribute('data-name') || '').toLowerCase();
+                    const tags = (card.getAttribute('data-tags') || '').toLowerCase();
+                    const text = card.innerText.toLowerCase();
+
+                    if (!term || name.includes(term) || tags.includes(term) || text.includes(term)) {
+                        card.style.display = 'flex';
+                        hasVisible = true;
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+
+                const emptyState = document.getElementById('emptyState');
+                if (emptyState) {
+                    emptyState.style.display = hasVisible ? 'none' : 'block';
+                }
+            });
+        }
+
+        // --- 4. ИНФОРМАЦИОННЫЕ УВЕДОМЛЕНИЯ ПОРТАЛА ---
+        function showFeatureNotice(type) {
+            if (type === 'teacher') {
+                alert("👨‍🏫 Кабинет преподавателя / Репетитора\\n\\nРаздел находится в активной разработке. В следующем релизе здесь будет доступно:\\n• Формирование индивидуальных проверочных тестов;\\n• Аналитика успеваемости студентов и классов;\\n• Журнал попыток и контроль времени решения.");
+            } else if (type === 'region') {
+                alert("➕ Подключение новых субъектов РФ\\n\\nАрхитектура InteractiveAtlas позволяет подключить любой регион России при наличии SHP-файлов границ районов и речной сети.");
+            }
+        }
+
+        // Инициализация при загрузке страницы
+        window.addEventListener('DOMContentLoaded', () => {
+            updateStudentHeader();
+            setTimeout(animateCounters, 150);
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,3583 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_804b4e905c828d0f8546b9999b0457e2 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+    
+                    <style>
+                        .foliumtooltip {
+                            background: white; border: 1px solid #CBD5E1; padding: 4px 8px; font-weight: 700; font-size: 12px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+                        }
+                       .foliumtooltip table{
+                            margin: auto;
+                        }
+                        .foliumtooltip tr{
+                            text-align: left;
+                        }
+                        .foliumtooltip th{
+                            padding: 2px; padding-right: 8px;
+                        }
+                    </style>
+            
+    
+                    <style>
+                        .foliumtooltip {
+                            background: white; border: 1px solid #CBD5E1; padding: 6px 10px; font-weight: 700; font-size: 12px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+                        }
+                       .foliumtooltip table{
+                            margin: auto;
+                        }
+                        .foliumtooltip tr{
+                            text-align: left;
+                        }
+                        .foliumtooltip th{
+                            padding: 2px; padding-right: 8px;
+                        }
+                    </style>
+            
+    
+                    <style>
+                        .foliumtooltip {
+                            background: white; border: 1px solid #CBD5E1; padding: 6px 10px; font-weight: 700; font-size: 12px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+                        }
+                       .foliumtooltip table{
+                            margin: auto;
+                        }
+                        .foliumtooltip tr{
+                            text-align: left;
+                        }
+                        .foliumtooltip th{
+                            padding: 2px; padding-right: 8px;
+                        }
+                    </style>
+            
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.fullscreen@3.0.0/Control.FullScreen.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.fullscreen@3.0.0/Control.FullScreen.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+        <style>
+        path:focus,
+        path:focus-visible,
+        svg:focus,
+        .leaflet-container :focus,
+        .leaflet-interactive:focus,
+        .leaflet-pane path:focus {
+            outline: none !important;
+        }
+
+        .leaflet-control-attribution {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            width: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+        }
+
+        .my-attribution {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 4px 10px;
+            font-size: 11px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #64748B;
+            z-index: 10000;
+            border-top-left-radius: 6px;
+            box-shadow: 0 -1px 4px rgba(0,0,0,0.06);
+            pointer-events: auto;
+        }
+        .my-attribution a {
+            color: #2563EB;
+            text-decoration: none;
+        }
+        .my-attribution a:hover {
+            text-decoration: underline;
+        }
+
+        .leaflet-control-layers {
+            border-radius: 10px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+            border: 1px solid rgba(0,0,0,0.08) !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+            font-size: 12.5px !important;
+            color: #334155 !important;
+        }
+
+        .leaflet-control-layers::before {
+            content: "Слои карты";
+            display: block;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: #1E293B;
+            font-size: 13px;
+            border-bottom: 1px solid #E2E8F0;
+            padding-bottom: 4px;
+        }
+
+        .leaflet-control-layers-base label {
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            margin-bottom: 3px !important;
+            cursor: pointer !important;
+            font-size: 11.5px !important;
+        }
+
+        .leaflet-control-layers-separator {
+            border-top: 1px solid #E2E8F0 !important;
+            margin: 6px 0 !important;
+        }
+
+        .chart-tab-group {
+            display: inline-flex;
+            gap: 2px;
+            background: #E2E8F0;
+            padding: 2px;
+            border-radius: 6px;
+        }
+
+        .chart-tab {
+            border: none;
+            background: transparent;
+            font-size: 9.5px;
+            font-weight: 700;
+            color: #475569;
+            padding: 2px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .chart-tab.active {
+            background: #ffffff;
+            color: #0F172A;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        </style>
+        </head>
+<body>
+    
+    <script>
+const REGION_BOUNDS = [[42.624736786000085, 44.583942413000045], [43.57490158100006, 45.31081008900014]];
+const EMBEDDED_DISTRICTS = [{"name": "Малгобекский район"}, {"name": "Назрановский район"}, {"name": "Сунженский район"}];
+const EMBEDDED_CENTERS = [{"name": "Назрань", "status": "центр", "lat": 43.2330031, "lon": 44.7830015}];
+const EMBEDDED_NEIGHBORS = [{"name": "Малгобекский район", "center": "Административный центр", "area": 614, "population": 15350, "grp": 13.0, "neighbors": ["Назрановский район", "Сунженский район"]}, {"name": "Назрановский район", "center": "Назрань", "area": 545, "population": 13625, "grp": 11.6, "neighbors": ["Сунженский район", "Малгобекский район"]}, {"name": "Сунженский район", "center": "Административный центр", "area": 2066, "population": 51650, "grp": 43.9, "neighbors": ["Назрановский район", "Малгобекский район"]}];
+const EMBEDDED_RIVERS = [];
+
+let currentQuiz = null;
+let currentQuestion = 0;
+let score = 0;
+let maxPossibleScore = 0;
+let totalQuestions = 10;
+let quizData = [];
+let selectedOption = null;
+let clickMarker = null;
+let resultMarker = null;
+let resultLine = null;
+let popupsDisabled = false;
+let highlightedDistrictLayer = null;
+let highlightedRiverLayers = [];
+
+let timerEnabled = false;
+let questionTimer = null;
+const QUESTION_TIME_LIMIT = 20;
+let timeLeft = QUESTION_TIME_LIMIT;
+let quizStartTime = 0;
+
+let studyCategory = 'districts';
+let studyQueue = [];
+let studyIndex = 0;
+let studyCenterMarker = null;
+
+function getMapObject() {
+    if (window._leaflet_map) return window._leaflet_map;
+    for (let key in window) {
+        if (window[key] && window[key]._layers && typeof window[key].eachLayer === 'function') {
+            window._leaflet_map = window[key];
+            return window._leaflet_map;
+        }
+    }
+    return null;
+}
+
+function setBasemapVisible(isVisible) {
+    const tilePane = document.querySelector('.leaflet-tile-pane');
+    if (tilePane) {
+        tilePane.style.visibility = isVisible ? 'visible' : 'hidden';
+    }
+}
+
+function togglePanelCollapse() {
+    const panel = document.getElementById('quiz-controls');
+    const btn = document.getElementById('panel-collapse-btn');
+    if (panel) {
+        panel.classList.toggle('collapsed');
+        document.body.classList.toggle('ui-collapsed');
+        if (panel.classList.contains('collapsed')) {
+            if (btn) btn.innerHTML = '▲ Развернуть панель атласа';
+        } else {
+            if (btn) btn.innerHTML = '▼ Свернуть панель к карте';
+        }
+    }
+}
+
+function clearMarkers() {
+    if (clickMarker) { try { clickMarker.remove(); } catch(e) {} clickMarker = null; }
+    if (resultMarker) { try { resultMarker.remove(); } catch(e) {} resultMarker = null; }
+    if (resultLine) { try { resultLine.remove(); } catch(e) {} resultLine = null; }
+    if (typeof studyCenterMarker !== 'undefined' && studyCenterMarker) { 
+        try { studyCenterMarker.remove(); } catch(e) {} 
+        studyCenterMarker = null; 
+    }
+}
+
+function resetActiveHighlight(hideRiverCompletely = false) {
+    if (highlightedDistrictLayer) {
+        try {
+            highlightedDistrictLayer.setStyle({
+                color: '#2E8B57',
+                weight: 2,
+                fillColor: '#90EE90',
+                fillOpacity: 0.25,
+                dashArray: '5, 5'
+            });
+        } catch(e) {}
+        highlightedDistrictLayer = null;
+    }
+
+    if (highlightedRiverLayers && highlightedRiverLayers.length > 0) {
+        highlightedRiverLayers.forEach(layer => {
+            try {
+                if (hideRiverCompletely) {
+                    layer.setStyle({ color: 'transparent', weight: 0, opacity: 0 });
+                } else {
+                    layer.setStyle({ color: '#0284C7', weight: 2.5, opacity: 0.9 });
+                }
+            } catch(e) {}
+        });
+        highlightedRiverLayers = [];
+    }
+}
+
+function restoreAllRiverStyles() {
+    const map = getMapObject();
+    if (!map) return;
+    map.eachLayer(function(layer) {
+        if (layer.feature && layer.feature.geometry && (layer.feature.geometry.type === 'LineString' || layer.feature.geometry.type === 'MultiLineString')) {
+            try { layer.setStyle({ color: '#0284C7', weight: 2.5, opacity: 0.9 }); } catch(e) {}
+        }
+    });
+}
+
+function resetMapView() {
+    const map = getMapObject();
+    if (map) {
+        try { map.fitBounds(REGION_BOUNDS, {padding: [15, 15]}); } catch(e) {}
+    }
+}
+
+function setQuizLayers(quizMode) {
+    try {
+        const layers = document.querySelectorAll('.leaflet-control-layers-overlays label');
+        layers.forEach(label => {
+            const text = label.textContent.trim();
+            const input = label.querySelector('input[type="checkbox"]');
+            if (!input) return;
+
+            // Аналитические слои (Население, ВРП) отключаем на время викторин
+            if (text.includes('Население') || text.includes('Choropleth') || text.includes('Экономика') || text.includes('ВРП')) {
+                if (quizMode !== 'normal') {
+                    if (input.checked) input.click();
+                }
+                return;
+            }
+
+            if (quizMode === 'center') {
+                if (text.includes('Реки') || text.includes('Водоемы')) { if (input.checked) input.click(); }
+                if (text.includes('Районы') || text.includes('Райцентры') || text.includes('Территории') || text.includes('Центры')) { if (!input.checked) input.click(); }
+            } else if (quizMode === 'district' || quizMode === 'neighbor' || quizMode === 'study_districts') {
+                if (text.includes('Реки') || text.includes('Водоемы')) { if (input.checked) input.click(); }
+                if (text.includes('Районы') || text.includes('Райцентры') || text.includes('Территории') || text.includes('Центры')) { if (!input.checked) input.click(); }
+            } else if (quizMode === 'river' || quizMode === 'study_rivers') {
+                if (text.includes('Районы') || text.includes('Райцентры') || text.includes('Территории') || text.includes('Центры')) { if (!input.checked) input.click(); }
+                if (text.includes('Реки') || text.includes('Водоемы')) { if (!input.checked) input.click(); }
+            } else if (quizMode === 'study_centers') {
+                if (text.includes('Реки') || text.includes('Водоемы')) { if (input.checked) input.click(); }
+                if (text.includes('Райцентры') || text.includes('Районы') || text.includes('Территории') || text.includes('Центры')) { if (!input.checked) input.click(); }
+            } else {
+                if (!input.checked) input.click();
+            }
+        });
+    } catch(e) {}
+}
+
+function restoreAllLayers() {
+    setQuizLayers('normal');
+    restoreAllRiverStyles();
+}
+
+function disablePopups() {
+    if (popupsDisabled) return;
+    const style = document.createElement('style');
+    style.id = 'disable-popups-style';
+    style.textContent = '.leaflet-popup, .leaflet-tooltip { display: none !important; }';
+    document.head.appendChild(style);
+    popupsDisabled = true;
+}
+
+function enablePopups() {
+    const style = document.getElementById('disable-popups-style');
+    if (style) style.remove();
+    popupsDisabled = false;
+}
+
+function toggleTimer() {
+    const checkbox = document.getElementById('timer-toggle');
+    if (checkbox) timerEnabled = checkbox.checked;
+}
+
+function startTimer() {
+    stopTimer();
+    const tb = document.getElementById('timer-bar-container');
+    if (!timerEnabled) {
+        if (tb) tb.style.display = 'none';
+        return;
+    }
+    if (tb) tb.style.display = 'block';
+    timeLeft = QUESTION_TIME_LIMIT;
+    updateTimerDisplay();
+
+    questionTimer = setInterval(() => {
+        timeLeft--;
+        updateTimerDisplay();
+        if (timeLeft <= 0) {
+            stopTimer();
+            handleTimeout();
+        }
+    }, 1000);
+}
+
+function stopTimer() {
+    if (questionTimer) {
+        clearInterval(questionTimer);
+        questionTimer = null;
+    }
+}
+
+function updateTimerDisplay() {
+    const timerText = document.getElementById('timer-text');
+    const timerBar = document.getElementById('timer-bar');
+    if (timerText) timerText.textContent = `${timeLeft}с`;
+    if (timerBar) {
+        const percent = Math.max(0, (timeLeft / QUESTION_TIME_LIMIT) * 100);
+        timerBar.style.width = `${percent}%`;
+        timerBar.style.background = percent > 50 ? '#10B981' : percent > 25 ? '#F59E0B' : '#EF4444';
+    }
+}
+
+function handleTimeout() {
+    if (currentQuestion >= quizData.length) return;
+    const question = quizData[currentQuestion];
+    showFeedback('Время вышло!', 'error');
+
+    if (question.type === 'district' || question.type === 'neighbor' || question.type === 'river') {
+        document.querySelectorAll('.quiz-option').forEach(opt => {
+            if (opt.textContent === question.correctAnswer) {
+                opt.classList.add('correct');
+            }
+            opt.disabled = true;
+        });
+    } else if (question.type === 'center') {
+        if (window._clickBlocker) {
+            const map = getMapObject();
+            try { map.removeLayer(window._clickBlocker); } catch(e) {}
+            window._clickBlocker = null;
+        }
+    }
+
+    setTimeout(() => {
+        currentQuestion++;
+        showQuestion();
+    }, 1800);
+}
+
+/* ==================== ОБУЧАЮЩИЙ РЕЖИМ ==================== */
+function startStudyMode(category = 'districts') {
+    studyCategory = category;
+    currentQuiz = 'study';
+    setBasemapVisible(true);
+    closeInfoCard();
+    clearMarkers();
+    resetActiveHighlight();
+    disablePopups();
+
+    document.getElementById('normal-mode').style.display = 'none';
+    document.getElementById('quiz-mode').style.display = 'none';
+    document.getElementById('results-mode').style.display = 'none';
+    document.getElementById('study-mode').style.display = 'block';
+
+    updateStudyTabButtons();
+
+    if (category === 'districts') {
+        setQuizLayers('study_districts');
+        studyQueue = [...EMBEDDED_NEIGHBORS];
+    } else if (category === 'rivers') {
+        setQuizLayers('study_rivers');
+        restoreAllRiverStyles();
+        studyQueue = [...EMBEDDED_RIVERS];
+    } else if (category === 'centers') {
+        setQuizLayers('study_centers');
+        studyQueue = [...EMBEDDED_CENTERS];
+    }
+
+    shuffleArray(studyQueue);
+    studyIndex = 0;
+    renderStudyItem();
+}
+
+function updateStudyTabButtons() {
+    const btns = ['districts', 'rivers', 'centers'];
+    btns.forEach(b => {
+        const el = document.getElementById(`study-tab-${b}`);
+        if (el) {
+            if (b === studyCategory) el.classList.add('active');
+            else el.classList.remove('active');
+        }
+    });
+}
+
+function switchStudyCategory(category) {
+    startStudyMode(category);
+}
+
+function renderStudyItem() {
+    if (!studyQueue || studyQueue.length === 0) return;
+    if (studyIndex < 0) studyIndex = 0;
+    if (studyIndex >= studyQueue.length) studyIndex = studyQueue.length - 1;
+
+    clearMarkers();
+    resetActiveHighlight(studyCategory === 'rivers');
+
+    const item = studyQueue[studyIndex];
+    const counterEl = document.getElementById('study-counter-val');
+    const contentEl = document.getElementById('study-content-box');
+    if (counterEl) counterEl.textContent = `${studyIndex + 1} / ${studyQueue.length}`;
+
+    if (!contentEl) return;
+
+    if (studyCategory === 'districts') {
+        const neighborsHtml = item.neighbors && item.neighbors.length > 0
+            ? item.neighbors.map(n => `<span class="neighbor-tag" onclick="jumpToStudyItem('${n}')">${n}</span>`).join('')
+            : '<span style="color: #94A3B8; font-size: 11px;">Нет смежных границ</span>';
+
+        const popFormatted = item.population ? `${Number(item.population).toLocaleString('ru-RU')} чел.` : 'Уточняется';
+
+        contentEl.innerHTML = `
+            <h3 class="study-title">${item.name}</h3>
+            <div class="info-row"><span>Центр:</span><strong>${item.center || '—'}</strong></div>
+            <div class="info-row"><span>Население:</span><strong>~${popFormatted}</strong></div>
+            <div class="info-row"><span>Площадь:</span><strong>~${item.area} км²</strong></div>
+            <div style="margin-top: 8px;">
+                <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит:</span>
+                <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${neighborsHtml}</div>
+            </div>
+        `;
+        highlightDistrictOnMapByName(item.name);
+
+    } else if (studyCategory === 'rivers') {
+        contentEl.innerHTML = `
+            <h3 class="study-title">Река ${item.name}</h3>
+            <div class="info-row"><span>Тип:</span><strong>Водный объект / Водоток</strong></div>
+            <div class="info-row"><span>Протяженность:</span><strong>~${item.length} км</strong></div>
+            <div class="hint-small" style="margin-top: 8px;">Русло выделено красной линией на карте</div>
+        `;
+        highlightRiverOnMapByName(item.name);
+
+    } else if (studyCategory === 'centers') {
+        contentEl.innerHTML = `
+            <h3 class="study-title">${item.name}</h3>
+            <div class="info-row"><span>Статус:</span><strong>${item.status || 'центр'}</strong></div>
+            <div class="info-row"><span>Координаты:</span><strong>${item.lat.toFixed(3)}°, ${item.lon.toFixed(3)}°</strong></div>
+            <div class="hint-small" style="margin-top: 8px;">Объект отмечен пульсирующим маркером</div>
+        `;
+        const map = getMapObject();
+        if (map) {
+            map.setView([item.lat, item.lon], 11);
+            studyCenterMarker = L.circleMarker([item.lat, item.lon], {
+                radius: 12,
+                color: '#EF4444',
+                fillColor: '#F59E0B',
+                fillOpacity: 0.9,
+                weight: 3
+            }).addTo(map);
+        }
+    }
+}
+
+function nextStudyItem() {
+    if (studyIndex < studyQueue.length - 1) {
+        studyIndex++;
+        renderStudyItem();
+    } else {
+        alert('🎉 Вы просмотрели все объекты в этой категории!');
+    }
+}
+
+function prevStudyItem() {
+    if (studyIndex > 0) {
+        studyIndex--;
+        renderStudyItem();
+    }
+}
+
+function randomStudyItem() {
+    studyIndex = Math.floor(Math.random() * studyQueue.length);
+    renderStudyItem();
+}
+
+function jumpToStudyItem(name) {
+    const foundIdx = studyQueue.findIndex(d => d.name === name);
+    if (foundIdx !== -1) {
+        studyIndex = foundIdx;
+        renderStudyItem();
+    }
+}
+
+function exitStudyMode() {
+    setBasemapVisible(true);
+    clearMarkers();
+    resetActiveHighlight(false);
+    restoreAllLayers();
+    enablePopups();
+    resetMapView();
+    currentQuiz = null;
+
+    const sm = document.getElementById('study-mode');
+    const nm = document.getElementById('normal-mode');
+    if (sm) sm.style.display = 'none';
+    if (nm) nm.style.display = 'block';
+    setTimeout(setupDistrictClickListeners, 300);
+}
+
+/* ==================== ВИКТОРИНЫ ==================== */
+function startDistrictQuiz() {
+    if (!EMBEDDED_DISTRICTS || EMBEDDED_DISTRICTS.length < 2) {
+        alert('Для запуска викторины по силуэтам требуется как минимум 2 территории в атласе.');
+        return;
+    }
+    currentQuiz = 'district';
+    quizStartTime = Date.now();
+    setBasemapVisible(false);
+    closeInfoCard();
+    clearMarkers();
+    resetActiveHighlight();
+    disablePopups();
+    setQuizLayers('district');
+
+    document.getElementById('normal-mode').style.display = 'none';
+    document.getElementById('study-mode').style.display = 'none';
+    document.getElementById('quiz-mode').style.display = 'block';
+    document.getElementById('results-mode').style.display = 'none';
+
+    document.getElementById('quiz-title').textContent = 'Узнать территорию по силуэту';
+    document.getElementById('hint-button').style.display = 'block';
+    loadDistrictQuiz();
+}
+
+function startNeighborQuiz() {
+    if (!EMBEDDED_NEIGHBORS || EMBEDDED_NEIGHBORS.filter(d => d.neighbors && d.neighbors.length >= 1).length === 0) {
+        alert('Недостаточно данных о смежности территорий (соседях) для запуска викторины.');
+        return;
+    }
+    currentQuiz = 'neighbor';
+    quizStartTime = Date.now();
+    setBasemapVisible(false);
+    closeInfoCard();
+    clearMarkers();
+    resetActiveHighlight();
+    disablePopups();
+    setQuizLayers('neighbor');
+
+    document.getElementById('normal-mode').style.display = 'none';
+    document.getElementById('study-mode').style.display = 'none';
+    document.getElementById('quiz-mode').style.display = 'block';
+    document.getElementById('results-mode').style.display = 'none';
+
+    document.getElementById('quiz-title').textContent = 'Топология и соседи (тест)';
+    document.getElementById('hint-button').style.display = 'none';
+    loadNeighborQuiz();
+}
+
+function startCenterQuiz() {
+    if (!EMBEDDED_CENTERS || EMBEDDED_CENTERS.length === 0) {
+        alert('Недостаточно данных об административных центрах для запуска викторины.');
+        return;
+    }
+    currentQuiz = 'center';
+    quizStartTime = Date.now();
+    setBasemapVisible(true);
+    closeInfoCard();
+    clearMarkers();
+    resetActiveHighlight();
+    disablePopups();
+    setQuizLayers('center');
+
+    document.getElementById('normal-mode').style.display = 'none';
+    document.getElementById('study-mode').style.display = 'none';
+    document.getElementById('quiz-mode').style.display = 'block';
+    document.getElementById('results-mode').style.display = 'none';
+
+    document.getElementById('quiz-title').textContent = 'Найти центр на карте';
+    document.getElementById('hint-button').style.display = 'block';
+    loadCenterQuiz();
+}
+
+function startRiverQuiz() {
+    if (!EMBEDDED_RIVERS || EMBEDDED_RIVERS.length < 1) {
+        alert('В данном регионе нет рек в базе данных гидрографии');
+        return;
+    }
+    currentQuiz = 'river';
+    quizStartTime = Date.now();
+    setBasemapVisible(true);
+    closeInfoCard();
+    clearMarkers();
+    resetActiveHighlight();
+    restoreAllRiverStyles();
+    disablePopups();
+    setQuizLayers('river');
+
+    document.getElementById('normal-mode').style.display = 'none';
+    document.getElementById('study-mode').style.display = 'none';
+    document.getElementById('quiz-mode').style.display = 'block';
+    document.getElementById('results-mode').style.display = 'none';
+
+    document.getElementById('quiz-title').textContent = 'Определить реку по руслу';
+    document.getElementById('hint-button').style.display = 'block';
+    loadRiverQuiz();
+}
+
+function loadDistrictQuiz() {
+    maxPossibleScore = totalQuestions;
+    generateDistrictQuestions(EMBEDDED_DISTRICTS);
+}
+
+function generateDistrictQuestions(data) {
+    quizData = [];
+    const validData = data.filter(d => d.name && d.name.trim() !== '');
+    if (!validData || validData.length === 0) return;
+    for (let i = 0; i < totalQuestions; i++) {
+        const correct = validData[Math.floor(Math.random() * validData.length)];
+        const options = [correct.name];
+        while (options.length < 4 && options.length < validData.length) {
+            const wrong = validData[Math.floor(Math.random() * validData.length)];
+            if (!options.includes(wrong.name)) {
+                options.push(wrong.name);
+            }
+        }
+        shuffleArray(options);
+        quizData.push({
+            type: 'district',
+            correctAnswer: correct.name,
+            options: options,
+            hint: `Площадь: ~${Math.round(Math.random() * 2000 + 500)} км²`,
+            districtName: correct.name
+        });
+    }
+    showQuestion();
+}
+
+function loadCenterQuiz() {
+    maxPossibleScore = totalQuestions * 3;
+    generateCenterQuestions(EMBEDDED_CENTERS);
+}
+
+function generateCenterQuestions(data) {
+    quizData = [];
+    const validData = data.filter(d => d.name && d.name.trim() !== '');
+    if (!validData || validData.length === 0) return;
+    for (let i = 0; i < totalQuestions; i++) {
+        const correct = validData[Math.floor(Math.random() * validData.length)];
+        quizData.push({
+            type: 'center',
+            correctAnswer: correct.name,
+            correctLat: correct.lat,
+            correctLon: correct.lon,
+            hint: `Статус поселения: ${correct.status || 'центр'}`,
+            centerName: correct.name
+        });
+    }
+    showQuestion();
+}
+
+function loadNeighborQuiz() {
+    maxPossibleScore = totalQuestions;
+    generateNeighborQuestions(EMBEDDED_NEIGHBORS);
+}
+
+function generateNeighborQuestions(data) {
+    quizData = [];
+    const validPool = data.filter(d => d.name && d.name.trim() !== '' && d.neighbors && d.neighbors.length >= 1);
+    const allNames = validPool.map(d => d.name);
+
+    if (validPool.length === 0) {
+        alert('Недостаточно данных о топологии');
+        exitQuizDirectly();
+        return;
+    }
+
+    for (let i = 0; i < totalQuestions; i++) {
+        const current = validPool[Math.floor(Math.random() * validPool.length)];
+        const neighbors = [...current.neighbors];
+        shuffleArray(neighbors);
+        
+        let options = [];
+        if (neighbors.length >= 3) {
+            options = neighbors.slice(0, 3);
+        } else {
+            options = [...neighbors];
+            while (options.length < 3) {
+                const dummyNeighbor = allNames[Math.floor(Math.random() * allNames.length)];
+                if (!options.includes(dummyNeighbor) && dummyNeighbor !== current.name) {
+                    options.push(dummyNeighbor);
+                }
+            }
+        }
+
+        const nonNeighbors = allNames.filter(name => name !== current.name && !current.neighbors.includes(name));
+        const wrongNeighbor = nonNeighbors.length > 0 
+            ? nonNeighbors[Math.floor(Math.random() * nonNeighbors.length)] 
+            : allNames[0];
+
+        options.push(wrongNeighbor);
+        shuffleArray(options);
+
+        quizData.push({
+            type: 'neighbor',
+            districtName: current.name,
+            correctAnswer: wrongNeighbor,
+            options: options
+        });
+    }
+    showQuestion();
+}
+
+function loadRiverQuiz() {
+    maxPossibleScore = totalQuestions;
+    generateRiverQuestions(EMBEDDED_RIVERS);
+}
+
+function generateRiverQuestions(data) {
+    quizData = [];
+    const validData = data.filter(d => d.name && d.name.trim() !== '');
+    if (!validData || validData.length === 0) return;
+    const questionsCount = Math.min(totalQuestions, validData.length);
+
+    for (let i = 0; i < questionsCount; i++) {
+        const correct = validData[i % validData.length];
+        const options = [correct.name];
+        while (options.length < 4 && options.length < validData.length) {
+            const wrong = validData[Math.floor(Math.random() * validData.length)];
+            if (!options.includes(wrong.name)) {
+                options.push(wrong.name);
+            }
+        }
+        shuffleArray(options);
+        quizData.push({
+            type: 'river',
+            correctAnswer: correct.name,
+            options: options,
+            riverName: correct.name,
+            hint: `Длина русла: ~${correct.length} км`
+        });
+    }
+    shuffleArray(quizData);
+    showQuestion();
+}
+
+function showQuestion() {
+    if (currentQuestion >= quizData.length) {
+        stopTimer();
+        showResults();
+        return;
+    }
+
+    clearMarkers();
+    resetActiveHighlight(currentQuiz === 'river');
+
+    const oldFeedback = document.getElementById('feedback');
+    if (oldFeedback) oldFeedback.remove();
+
+    const oldBtn = document.getElementById('confirm-button');
+    if (oldBtn) oldBtn.remove();
+
+    const question = quizData[currentQuestion];
+    document.getElementById('current-question').textContent = currentQuestion + 1;
+    document.getElementById('total-questions').textContent = quizData.length;
+    const qTextEl = document.getElementById('question-text');
+    const optionsContainer = document.getElementById('options-container');
+
+    if (optionsContainer) optionsContainer.innerHTML = '';
+
+    if (question.type === 'district') {
+        qTextEl.textContent = 'Угадайте территорию по силуэту:';
+        question.options.forEach(option => {
+            const button = document.createElement('button');
+            button.className = 'quiz-option';
+            button.textContent = option;
+            button.onclick = () => selectOption(button, option, question.correctAnswer);
+            optionsContainer.appendChild(button);
+        });
+        highlightDistrictOnMapByName(question.districtName);
+
+    } else if (question.type === 'neighbor') {
+        qTextEl.textContent = `С какой территорией НЕ граничит ${question.districtName}?`;
+        question.options.forEach(option => {
+            const button = document.createElement('button');
+            button.className = 'quiz-option';
+            button.textContent = option;
+            button.onclick = () => selectOption(button, option, question.correctAnswer);
+            optionsContainer.appendChild(button);
+        });
+        highlightDistrictOnMapByName(question.districtName);
+
+    } else if (question.type === 'river') {
+        qTextEl.textContent = 'Какая река подсвечена на карте?';
+        question.options.forEach(option => {
+            const button = document.createElement('button');
+            button.className = 'quiz-option';
+            button.textContent = option;
+            button.onclick = () => selectOption(button, option, question.correctAnswer);
+            optionsContainer.appendChild(button);
+        });
+        highlightRiverOnMapByName(question.riverName);
+
+    } else if (question.type === 'center') {
+        qTextEl.textContent = `Найдите на карте: ${question.correctAnswer}`;
+        if (optionsContainer) {
+            optionsContainer.innerHTML = '<div class="center-quiz-instruction">Кликните на карту в точке нахождения объекта<br><span>до 15 км: +3 очка | до 40 км: +2 | до 100 км: +1</span></div>';
+        }
+        window.currentQuestionData = question;
+        setupMapClickListener(question);
+    }
+
+    const hintC = document.getElementById('hint-container');
+    if (hintC) hintC.style.display = 'none';
+    selectedOption = null;
+    startTimer();
+}
+
+function selectOption(button, selected, correct) {
+    document.querySelectorAll('.quiz-option').forEach(opt => {
+        opt.classList.remove('selected');
+    });
+    button.classList.add('selected');
+    selectedOption = selected;
+    showConfirmButton();
+}
+
+function showConfirmButton() {
+    const optionsContainer = document.getElementById('options-container');
+    if (!optionsContainer) return;
+    const oldButton = document.getElementById('confirm-button');
+    if (oldButton) oldButton.remove();
+
+    const confirmButton = document.createElement('button');
+    confirmButton.textContent = '✓ Подтвердить ответ';
+    confirmButton.className = 'btn-confirm';
+    confirmButton.onclick = checkAnswer;
+    confirmButton.id = 'confirm-button';
+    optionsContainer.appendChild(confirmButton);
+}
+
+function checkAnswer() {
+    if (!selectedOption && currentQuiz !== 'center') {
+        alert('Пожалуйста, выберите вариант ответа!');
+        return;
+    }
+    stopTimer();
+    const question = quizData[currentQuestion];
+    const isCorrect = selectedOption === question.correctAnswer;
+    
+    document.querySelectorAll('.quiz-option').forEach(opt => {
+        if (opt.textContent === question.correctAnswer) {
+            opt.classList.add('correct');
+        }
+        if (opt.textContent === selectedOption && !isCorrect) {
+            opt.classList.add('incorrect');
+        }
+        opt.disabled = true;
+    });
+
+    const oldButton = document.getElementById('confirm-button');
+    if (oldButton) oldButton.remove();
+
+    if (isCorrect) {
+        score++;
+        showFeedback('Правильно!', 'success');
+    } else {
+        showFeedback(`Неправильно! Ответ: ${question.correctAnswer}`, 'error');
+    }
+    updateScore();
+    setTimeout(() => {
+        currentQuestion++;
+        showQuestion();
+    }, 1800);
+}
+
+function setupMapClickListener(question) {
+    const map = getMapObject();
+    if (!map) return;
+
+    if (window._clickBlocker) {
+        try { map.removeLayer(window._clickBlocker); } catch(e) {}
+        window._clickBlocker = null;
+    }
+
+    window._clickBlocker = L.rectangle(
+        [[-90, -180], [90, 180]],
+        { color: 'transparent', fillColor: 'transparent', fillOpacity: 0, weight: 0, interactive: true }
+    ).addTo(map);
+
+    window._clickHandler = function(e) {
+        handleMapClick(e.latlng.lat, e.latlng.lng, question);
+    };
+
+    window._clickBlocker.on('click', window._clickHandler);
+}
+
+function handleMapClick(lat, lon, question) {
+    stopTimer();
+    const correctLat = question.correctLat;
+    const correctLon = question.correctLon;
+
+    const distance = calculateDistance(lat, lon, correctLat, correctLon);
+    let pointsAwarded = 0;
+    let message = '';
+    let badgeType = 'error';
+
+    if (distance <= 15) {
+        pointsAwarded = 3;
+        message = `Идеально! (${distance.toFixed(0)} км) +3 очка!`;
+        badgeType = 'success';
+    } else if (distance <= 40) {
+        pointsAwarded = 2;
+        message = `Хорошо! (${distance.toFixed(0)} км) +2 очка!`;
+        badgeType = 'success';
+    } else if (distance <= 100) {
+        pointsAwarded = 1;
+        message = `Близко (${distance.toFixed(0)} км) +1 очко!`;
+        badgeType = 'success';
+    } else {
+        pointsAwarded = 0;
+        message = `Мимо! (${distance.toFixed(0)} км от цели)`;
+        badgeType = 'error';
+    }
+
+    score += pointsAwarded;
+    clearMarkers();
+
+    const map = getMapObject();
+    if (window._clickBlocker) {
+        try {
+            if (window._clickHandler) {
+                window._clickBlocker.off('click', window._clickHandler);
+            }
+            map.removeLayer(window._clickBlocker);
+        } catch(e) {}
+        window._clickBlocker = null;
+        window._clickHandler = null;
+    }
+
+    const markerColor = pointsAwarded > 0 ? '#10B981' : '#EF4444';
+
+    clickMarker = L.circleMarker([lat, lon], {
+        radius: 9,
+        color: markerColor,
+        fillColor: markerColor,
+        fillOpacity: 0.8,
+        weight: 2
+    }).addTo(map);
+
+    resultMarker = L.circleMarker([correctLat, correctLon], {
+        radius: 8,
+        color: '#2563EB',
+        fillColor: '#2563EB',
+        fillOpacity: 0.5,
+        weight: 2,
+        dashArray: '4, 4'
+    }).addTo(map);
+
+    resultLine = L.polyline([[lat, lon], [correctLat, correctLon]], {
+        color: markerColor,
+        weight: 2.5,
+        opacity: 0.8,
+        dashArray: '5, 8'
+    }).addTo(map);
+
+    map.fitBounds([
+        [Math.min(lat, correctLat) - 0.5, Math.min(lon, correctLon) - 0.5],
+        [Math.max(lat, correctLat) + 0.5, Math.max(lon, correctLon) + 0.5]
+    ]);
+
+    showFeedback(message, badgeType);
+    updateScore();
+
+    setTimeout(() => {
+        currentQuestion++;
+        showQuestion();
+    }, 2600);
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+function showFeedback(message, type) {
+    const container = document.getElementById('options-container');
+    if (!container) return;
+    const oldFeedback = document.getElementById('feedback');
+    if (oldFeedback) oldFeedback.remove();
+
+    const feedback = document.createElement('div');
+    feedback.className = `feedback-box ${type}`;
+    feedback.textContent = message;
+    feedback.id = 'feedback';
+    container.appendChild(feedback);
+}
+
+function showHint() {
+    const question = quizData[currentQuestion];
+    if (question && question.hint) {
+        const ht = document.getElementById('hint-text');
+        const hc = document.getElementById('hint-container');
+        if (ht) ht.textContent = question.hint;
+        if (hc) ht.style.display = 'block';
+    }
+}
+
+function updateScore() {
+    const scoreEl = document.getElementById('score');
+    const accEl = document.getElementById('accuracy');
+    if (scoreEl) scoreEl.textContent = score;
+    const currentMax = currentQuiz === 'center' ? (currentQuestion + 1) * 3 : (currentQuestion + 1);
+    const accuracy = currentMax > 0 ? Math.round((score / currentMax) * 100) : 0;
+    if (accEl) accEl.textContent = `Эффективность: ${accuracy}%`;
+}
+
+function normalizeDistrictName(str) {
+    if (!str) return '';
+    let s = str.toString().toLowerCase().trim();
+    let isDistrict = s.includes('район') || s.includes('р-н');
+    let isCity = s.includes('город') || s.includes('округ') || s.includes('г.');
+
+    let clean = s.replace('городской округ', '')
+                 .replace('район', '')
+                 .replace('р-н', '')
+                 .replace('г.', '')
+                 .replace(/[^a-zа-яё0-9]/gi, '')
+                 .trim();
+
+    if (isDistrict) return clean + '_raion';
+    if (isCity) return clean + '_city';
+    return clean;
+}
+
+function highlightDistrictOnMapByName(districtName) {
+    const map = getMapObject();
+    if (!map) return;
+
+    resetActiveHighlight();
+    const targetNorm = normalizeDistrictName(districtName);
+    const targetSimple = districtName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+
+    let targetLayer = null;
+
+    map.eachLayer(function(layer) {
+        if (layer.feature && layer.feature.properties && !targetLayer) {
+            const props = layer.feature.properties;
+            
+            // СТРОГИЙ ФИЛЬТР: Если это не территория (нет нашей метки), пропускаем!
+            if (props.is_district_layer !== 1) return;
+
+            const pName = props.display_name || props.NAME_1 || props.NAME_RU || props.NAME || '';
+            if (normalizeDistrictName(pName) === targetNorm) {
+                targetLayer = layer;
+            }
+        }
+    });
+
+    // Запасной поиск по частичному совпадению
+    if (!targetLayer) {
+        map.eachLayer(function(layer) {
+            if (layer.feature && layer.feature.properties && !targetLayer) {
+                const props = layer.feature.properties;
+                
+                if (props.is_district_layer !== 1) return;
+
+                const pName = (props.display_name || props.NAME_1 || props.NAME_RU || props.NAME || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+                if (pName === targetSimple || pName.includes(targetSimple) || targetSimple.includes(pName)) {
+                    targetLayer = layer;
+                }
+            }
+        });
+    }
+
+    if (targetLayer) {
+        highlightedDistrictLayer = targetLayer;
+        try {
+            targetLayer.setStyle({
+                color: '#F59E0B',
+                weight: 4,
+                fillColor: '#F59E0B',
+                fillOpacity: 0.5,
+                dashArray: null
+            });
+            map.fitBounds(targetLayer.getBounds(), { maxZoom: 9, padding: [50, 50] });
+        } catch(e) {}
+    }
+}
+
+function highlightRiverOnMapByName(riverName) {
+    const map = getMapObject();
+    if (!map) return;
+
+    resetActiveHighlight(true);
+    const target = riverName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+
+    let targetGroup = L.featureGroup();
+    highlightedRiverLayers = [];
+
+    map.eachLayer(function(layer) {
+        if (layer.feature && layer.feature.geometry) {
+            const gType = layer.feature.geometry.type || '';
+            if (gType.includes('LineString')) {
+                const props = layer.feature.properties || {};
+                const pName = (props.clean_name || props.display_name || props.name || props.NAME_RU || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+                if (pName && pName === target) {
+                    highlightedRiverLayers.push(layer);
+                    try {
+                        layer.setStyle({
+                            color: '#EF4444',
+                            weight: 5,
+                            opacity: 1.0
+                        });
+                        targetGroup.addLayer(layer);
+                    } catch(e) {}
+                }
+            }
+        }
+    });
+
+    if (highlightedRiverLayers.length > 0) {
+        try {
+            map.fitBounds(targetGroup.getBounds(), {padding: [40, 40]});
+        } catch(e) {}
+    }
+}
+
+function formatShortChartName(name, fallback = '') {
+    if (!name) return fallback;
+    let s = name.toString()
+                .replace(/^городской округ\s+/i, '')
+                .replace(/^город\s+/i, '')
+                .replace(/^г\.\s*/i, '')
+                .replace(/^Республика\s+/i, '')
+                .replace(/\s+район$/i, '')
+                .replace(/\s+область$/i, ' обл.')
+                .replace(/\s+край$/i, ' кр.')
+                .replace(/\s+АОк$/i, ' АО')
+                .replace(/\s+АОб$/i, ' АО')
+                .replace(/\|.*$/i, '')
+                .trim();
+    if (!s) s = name.toString().trim();
+    if (s.length > 14) {
+        return s.slice(0, 13).trim() + '…';
+    }
+    return s;
+}
+
+function findNeighborData(neighborName) {
+    if (!neighborName) return null;
+    const targetNorm = normalizeDistrictName(neighborName);
+    const targetSimple = neighborName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+    let found = EMBEDDED_NEIGHBORS.find(d => normalizeDistrictName(d.name) === targetNorm);
+    if (!found) {
+        found = EMBEDDED_NEIGHBORS.find(d => {
+            let s = d.name.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+            return s === targetSimple || s.includes(targetSimple) || targetSimple.includes(s);
+        });
+    }
+    return found;
+}
+
+window._currentDistrictForChart = null;
+window._currentChartMetric = 'pop';
+window._districtChartInstance = null;
+
+function renderDistrictMetricChart(metric) {
+    if (metric) window._currentChartMetric = metric;
+    const district = window._currentDistrictForChart;
+    if (!district) return;
+
+    const btnPop = document.getElementById('btn-chart-pop');
+    const btnGrp = document.getElementById('btn-chart-grp');
+    const btnArea = document.getElementById('btn-chart-area');
+    if (btnPop && btnArea) {
+        btnPop.classList.remove('active');
+        if (btnGrp) btnGrp.classList.remove('active');
+        btnArea.classList.remove('active');
+
+        if (window._currentChartMetric === 'pop') {
+            btnPop.classList.add('active');
+        } else if (window._currentChartMetric === 'grp') {
+            if (btnGrp) btnGrp.classList.add('active');
+        } else {
+            btnArea.classList.add('active');
+        }
+    }
+
+    // 1. Расчет среднего значения по карте
+    let totalPop = 0, countPop = 0, totalArea = 0, countArea = 0, totalGrp = 0, countGrp = 0;
+    EMBEDDED_NEIGHBORS.forEach(d => {
+        if (d.population && d.population > 0) { totalPop += d.population; countPop++; }
+        if (d.area && d.area > 0) { totalArea += d.area; countArea++; }
+        if (d.grp && d.grp > 0) { totalGrp += d.grp; countGrp++; }
+    });
+    const avgPop = countPop > 0 ? Math.round(totalPop / countPop) : 0;
+    const avgArea = countArea > 0 ? Math.round(totalArea / countArea) : 0;
+    const avgGrp = countGrp > 0 ? parseFloat((totalGrp / countGrp).toFixed(1)) : 0;
+
+    // 2. Поиск крупнейшего соседа для текущего выбранного региона
+    let topNeighbor = null;
+    let maxNeighborVal = -1;
+    if (district.neighbors && Array.isArray(district.neighbors)) {
+        district.neighbors.forEach(nName => {
+            const nData = findNeighborData(nName);
+            if (nData) {
+                let rawVal = 0;
+                if (window._currentChartMetric === 'pop') {
+                    rawVal = (nData.population || 0);
+                } else if (window._currentChartMetric === 'grp') {
+                    rawVal = (nData.grp || 0);
+                } else {
+                    rawVal = (nData.area || 0);
+                }
+                if (rawVal > maxNeighborVal) {
+                    maxNeighborVal = rawVal;
+                    topNeighbor = nData;
+                }
+            }
+        });
+    }
+
+    // 3. Поиск абсолютного лидера среди всех объектов на карте
+    let leader = null;
+    let maxLeaderVal = -1;
+    EMBEDDED_NEIGHBORS.forEach(d => {
+        let rawVal = 0;
+        if (window._currentChartMetric === 'pop') {
+            rawVal = (d.population || 0);
+        } else if (window._currentChartMetric === 'grp') {
+            rawVal = (d.grp || 0);
+        } else {
+            rawVal = (d.area || 0);
+        }
+        if (rawVal > maxLeaderVal) {
+            maxLeaderVal = rawVal;
+            leader = d;
+        }
+    });
+
+    const canvas = document.getElementById('district-chart');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    if (window._districtChartInstance) {
+        try { window._districtChartInstance.destroy(); } catch(e) {}
+        window._districtChartInstance = null;
+    }
+
+    // Значения и единицы измерения для 4 колонок
+    let currentVal = 0, avgVal = 0, neighborVal = 0, leaderVal = 0;
+    let unit = '', label = '';
+
+    if (window._currentChartMetric === 'pop') {
+        currentVal = district.population ? Math.round(district.population / 1000) : 0;
+        avgVal = Math.round(avgPop / 1000);
+        neighborVal = (topNeighbor && maxNeighborVal > 0) ? Math.round(maxNeighborVal / 1000) : 0;
+        leaderVal = (leader && maxLeaderVal > 0) ? Math.round(maxLeaderVal / 1000) : 0;
+        unit = ' тыс. чел.';
+        label = 'Население (тыс. чел.)';
+    } else if (window._currentChartMetric === 'grp') {
+        currentVal = district.grp ? parseFloat(district.grp.toFixed(1)) : 0;
+        avgVal = avgGrp;
+        neighborVal = (topNeighbor && maxNeighborVal > 0) ? parseFloat(maxNeighborVal.toFixed(1)) : 0;
+        leaderVal = (leader && maxLeaderVal > 0) ? parseFloat(maxLeaderVal.toFixed(1)) : 0;
+        unit = ' млрд ₽';
+        label = 'ВРП (млрд руб.)';
+    } else {
+        currentVal = district.area || 0;
+        avgVal = avgArea;
+        neighborVal = (topNeighbor && maxNeighborVal > 0) ? Math.round(maxNeighborVal) : 0;
+        leaderVal = (leader && maxLeaderVal > 0) ? Math.round(maxLeaderVal) : 0;
+        unit = ' км²';
+        label = 'Площадь (км²)';
+    }
+
+    // Динамические подписи для 4 колонок (сокращенные до 12-14 символов с троеточием)
+    const labelSelected = formatShortChartName(district.name, 'Выбран');
+    const labelAvg = 'В среднем';
+    const labelNeighbor = topNeighbor ? formatShortChartName(topNeighbor.name, 'Сосед') : 'Нет соседа';
+    const labelLeader = leader ? formatShortChartName(leader.name, 'Лидер') : 'Лидер';
+
+    // Цветовая дифференциация 4 колонок:
+    // 1. Выбранный: #3B82F6 (синий)
+    // 2. Среднее:   #CBD5E1 (серый)
+    // 3. Сосед:     #F59E0B (оранжевый)
+    // 4. Лидер:     #8B5CF6 (фиолетовый)
+    const bgColors = ['#3B82F6', '#CBD5E1', '#F59E0B', '#8B5CF6'];
+    const borderColors = ['#2563EB', '#94A3B8', '#D97706', '#7C3AED'];
+
+    const statBox = document.getElementById('district-chart-stat');
+    if (statBox && avgVal > 0 && currentVal > 0) {
+        const diff = Math.round(((currentVal - avgVal) / avgVal) * 100);
+        let diffHtml = diff > 0
+            ? `<span style="color: #059669; font-weight: 700;">▲ На ${diff}% выше среднего</span>`
+            : diff < 0
+                ? `<span style="color: #D97706; font-weight: 700;">▼ На ${Math.abs(diff)}% ниже среднего</span>`
+                : `<span style="color: #475569; font-weight: 600;">Соответствует среднему</span>`;
+
+        let extraNote = '';
+        if (leader && currentVal >= leaderVal && leaderVal > 0) {
+            extraNote = ` &bull; <span style="color: #8B5CF6; font-weight: 700;">🏆 Лидер карты</span>`;
+        } else if (topNeighbor && currentVal > neighborVal && neighborVal > 0) {
+            extraNote = ` &bull; <span style="color: #2563EB; font-weight: 600;">Выше соседей</span>`;
+        }
+        statBox.innerHTML = diffHtml + extraNote;
+    } else if (statBox) {
+        statBox.innerHTML = '';
+    }
+
+    window._districtChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: [labelSelected, labelAvg, labelNeighbor, labelLeader],
+            datasets: [{
+                label: label,
+                data: [currentVal, avgVal, neighborVal, leaderVal],
+                backgroundColor: bgColors,
+                borderColor: borderColors,
+                borderWidth: 1.5,
+                borderRadius: 5,
+                barThickness: 18,
+                maxBarThickness: 22
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 300 },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: function(items) {
+                            if (!items || !items.length) return '';
+                            const idx = items[0].dataIndex;
+                            if (idx === 0) return '📍 Выбран: ' + district.name;
+                            if (idx === 1) return '📊 Среднее по региону';
+                            if (idx === 2) return '👥 Крупнейший сосед: ' + (topNeighbor ? topNeighbor.name : '—');
+                            if (idx === 3) return '🏆 Абсолютный лидер: ' + (leader ? leader.name : '—');
+                            return '';
+                        },
+                        label: function(ctx) {
+                            return ' ' + ctx.raw.toLocaleString('ru-RU') + unit;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        font: { size: 9 },
+                        color: '#64748B'
+                    },
+                    grid: { color: '#F1F5F9' }
+                },
+                x: {
+                    ticks: {
+                        font: { size: 9, weight: '600' },
+                        color: '#334155',
+                        maxRotation: 28,
+                        minRotation: 0,
+                        autoSkip: false
+                    },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+}
+
+function showDistrictInfoCard(districtName) {
+    const targetNorm = normalizeDistrictName(districtName);
+    const targetSimple = districtName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+
+    let district = EMBEDDED_NEIGHBORS.find(d => normalizeDistrictName(d.name) === targetNorm);
+    if (!district) {
+        district = EMBEDDED_NEIGHBORS.find(d => {
+            let s = d.name.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+            return s === targetSimple || s.includes(targetSimple) || targetSimple.includes(s);
+        });
+    }
+
+    if (!district) return;
+
+    const card = document.getElementById('district-info-card');
+    if (!card) return;
+
+    highlightDistrictOnMapByName(district.name);
+    window._currentDistrictForChart = district;
+
+    const neighborsHtml = district.neighbors && district.neighbors.length > 0 
+        ? district.neighbors.map(n => `<span class="neighbor-tag" onclick="showDistrictInfoCard('${n}')">${n}</span>`).join('')
+        : '<em>Нет смежных границ</em>';
+
+    const popFormatted = district.population 
+        ? `${Number(district.population).toLocaleString('ru-RU')} чел.` 
+        : 'Нет данных';
+
+    const grpFormatted = (district.grp !== undefined && district.grp !== null && district.grp > 0)
+        ? `${Number(district.grp).toLocaleString('ru-RU')} млрд ₽`
+        : 'Нет данных';
+
+    card.innerHTML = `
+        <div class="info-card-header">
+            <strong>${district.name}</strong>
+            <button onclick="closeInfoCard()" class="close-card-btn">&times;</button>
+        </div>
+        <div class="info-card-body">
+            <div class="info-row"><span>Центр:</span><strong>${district.center}</strong></div>
+            <div class="info-row"><span>Население:</span><strong>~${popFormatted}</strong></div>
+            <div class="info-row"><span>ВРП:</span><strong>~${grpFormatted}</strong></div>
+            <div class="info-row"><span>Площадь:</span><strong>~${district.area} км²</strong></div>
+            <div style="margin-top: 8px;">
+                <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит с:</span>
+                <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${neighborsHtml}</div>
+            </div>
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #CBD5E1;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 10.5px; font-weight: 700; color: #475569; text-transform: uppercase;">📊 Анализ территории:</span>
+                    <div class="chart-tab-group">
+                        <button type="button" id="btn-chart-pop" onclick="renderDistrictMetricChart('pop')" class="chart-tab active">👥 Жители</button>
+                        <button type="button" id="btn-chart-grp" onclick="renderDistrictMetricChart('grp')" class="chart-tab">💰 ВРП</button>
+                        <button type="button" id="btn-chart-area" onclick="renderDistrictMetricChart('area')" class="chart-tab">📐 Площадь</button>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 9px; color: #64748B; margin-bottom: 4px; padding: 0 4px;">
+                    <span><span style="display:inline-block;width:7px;height:7px;background:#3B82F6;border-radius:2px;margin-right:3px;"></span>Выбран</span>
+                    <span><span style="display:inline-block;width:7px;height:7px;background:#CBD5E1;border-radius:2px;margin-right:3px;"></span>Среднее</span>
+                    <span><span style="display:inline-block;width:7px;height:7px;background:#F59E0B;border-radius:2px;margin-right:3px;"></span>Сосед</span>
+                    <span><span style="display:inline-block;width:7px;height:7px;background:#8B5CF6;border-radius:2px;margin-right:3px;"></span>Лидер</span>
+                </div>
+                <div style="position: relative; height: 145px; width: 100%;">
+                    <canvas id="district-chart"></canvas>
+                </div>
+                <div id="district-chart-stat" style="margin-top: 5px; font-size: 10.5px; text-align: center; color: #64748B;">
+                </div>
+            </div>
+        </div>
+    `;
+    card.style.display = 'block';
+    setTimeout(() => renderDistrictMetricChart('pop'), 40);
+}
+
+function closeInfoCard() {
+    const card = document.getElementById('district-info-card');
+    if (card) card.style.display = 'none';
+    if (window._districtChartInstance) {
+        try { window._districtChartInstance.destroy(); } catch(e) {}
+        window._districtChartInstance = null;
+    }
+    window._currentDistrictForChart = null;
+    resetActiveHighlight();
+}
+
+function setupDistrictClickListeners() {
+    const map = getMapObject();
+    if (!map) {
+        setTimeout(setupDistrictClickListeners, 400);
+        return;
+    }
+
+    map.eachLayer(function(layer) {
+        if (layer.feature && layer.feature.properties) {
+            const props = layer.feature.properties;
+            const name = props.display_name || props.NAME_1 || props.NAME_RU || props.NAME || props.REGION_NAM || props.NM_RU;
+            if (name && (layer.feature.geometry.type.includes('Polygon'))) {
+                layer.off('click');
+                layer.on('click', function(e) {
+                    if (currentQuiz === null) {
+                        showDistrictInfoCard(name);
+                    }
+                });
+            }
+        }
+    });
+}
+
+function exitQuiz() {
+    if (confirm('Завершить викторину?')) {
+        exitQuizDirectly();
+    }
+}
+
+function exitQuizDirectly() {
+    stopTimer();
+    setBasemapVisible(true);
+    const map = getMapObject();
+    if (map && window._clickBlocker) {
+        try {
+            if (window._clickHandler) {
+                window._clickBlocker.off('click', window._clickHandler);
+            }
+            map.removeLayer(window._clickBlocker);
+        } catch(e) {}
+        window._clickBlocker = null;
+        window._clickHandler = null;
+    }
+    clearMarkers();
+    enablePopups();
+    resetActiveHighlight(false);
+    restoreAllLayers();
+    resetMapView();
+
+    currentQuiz = null;
+    resetQuiz();
+    setTimeout(setupDistrictClickListeners, 300);
+
+    document.getElementById('quiz-mode').style.display = 'none';
+    document.getElementById('results-mode').style.display = 'none';
+    document.getElementById('study-mode').style.display = 'none';
+    document.getElementById('normal-mode').style.display = 'block';
+}
+
+function showResults() {
+    clearMarkers();
+    setBasemapVisible(true);
+    resetActiveHighlight(true);
+    resetMapView();
+    restoreAllLayers();
+    enablePopups();
+
+    currentQuiz = null;
+    setTimeout(setupDistrictClickListeners, 500);
+
+    document.getElementById('quiz-mode').style.display = 'none';
+    document.getElementById('normal-mode').style.display = 'none';
+    document.getElementById('study-mode').style.display = 'none';
+    document.getElementById('results-mode').style.display = 'block';
+
+    const accuracy = maxPossibleScore > 0 ? Math.round((score / maxPossibleScore) * 100) : 0;
+    let message = '', emoji = '';
+    if (accuracy >= 85) { message = 'Превосходно!'; emoji = '🏆'; }
+    else if (accuracy >= 65) { message = 'Хорошо!'; emoji = '👍'; }
+    else if (accuracy >= 45) { message = 'Удовлетворительно.'; emoji = '📚'; }
+    else { message = 'Попробуйте ещё раз!'; emoji = '💪'; }
+
+    const studentInfo = getCurrentStudentInfo();
+    const studentLine = studentInfo ? `<p style="margin: 4px 0; font-size: 13px; color: #0284C7;">Студент: <strong>${studentInfo.name}</strong> (${studentInfo.group})</p>` : '';
+
+    const rc = document.getElementById('results-content');
+    if (rc) {
+        rc.innerHTML = `
+            <div style="font-size: 42px; margin: 10px 0;">${emoji}</div>
+            ${studentLine}
+            <h3 style="margin: 6px 0; color: #1E293B;">${score} из ${maxPossibleScore} баллов</h3>
+            <p style="margin: 4px 0; font-size: 13px; color: #475569;">Результативность: <strong>${accuracy}%</strong></p>
+            <p style="margin-top: 6px; font-size: 12px; color: #64748B;">${message}</p>
+        `;
+    }
+    saveResult(accuracy);
+}
+
+function closeResultsAndReturnToMenu() {
+    document.getElementById('results-mode').style.display = 'none';
+    document.getElementById('normal-mode').style.display = 'block';
+    resetQuiz();
+}
+
+function saveResult(accuracy) {
+    const student = getCurrentStudentInfo();
+    let timeSec = Math.round((Date.now() - (quizStartTime || Date.now())) / 1000);
+    let timeStr = `${Math.floor(timeSec / 60)} мин. ${timeSec % 60} сек.`;
+
+    const results = JSON.parse(localStorage.getItem('rostovQuizResults') || '[]');
+    results.push({
+        date: new Date().toLocaleString(),
+        student: student ? student.name : 'Анонимно',
+        group: student ? student.group : '-',
+        type: currentQuiz,
+        score: score,
+        maxScore: maxPossibleScore,
+        accuracy: accuracy,
+        time_spent: timeStr
+    });
+    localStorage.setItem('rostovQuizResults', JSON.stringify(results));
+
+    if (student) {
+        fetch('/api/results/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: student.email,
+                name: student.name,
+                group: student.group,
+                quiz_type: currentQuiz,
+                score: score,
+                max_score: maxPossibleScore,
+                accuracy: accuracy,
+                time_spent: timeStr
+            })
+        }).catch(e => {});
+    }
+}
+
+let globalLeaderboardCache = [];
+let currentLbTab = 'global';
+let currentLbFilter = 'all';
+
+function showLeaderboard() {
+    fetch('/api/results/leaderboard')
+    .then(res => res.json())
+    .then(data => {
+        globalLeaderboardCache = data;
+        renderLeaderboardModal();
+    }).catch(e => alert('Не удалось загрузить таблицу лидеров с сервера'));
+}
+
+function switchLbTab(tab) {
+    currentLbTab = tab;
+    updateLbView();
+}
+
+function switchLbFilter(filter) {
+    currentLbFilter = filter;
+    updateLbView();
+}
+
+function renderLeaderboardModal() {
+    let existing = document.getElementById('leaderboard-modal-container');
+    if (existing) existing.remove();
+
+    let html = `
+    <div class="welcome-overlay" id="leaderboard-modal-container">
+        <div class="welcome-card leaderboard-modal-card" style="text-align: center; max-width: 700px;">
+            <h3>🏆 Центр успеваемости и лидеров</h3>
+            
+            <div class="lb-main-tabs">
+                <button onclick="switchLbTab('global')" id="lb-tab-global" class="lb-tab-btn ${currentLbTab==='global'?'active':''}">🌍 Глобальный топ</button>
+                <button onclick="switchLbTab('profile')" id="lb-tab-profile" class="lb-tab-btn ${currentLbTab==='profile'?'active':''}">👤 Мой профиль и история</button>
+            </div>
+
+            <div id="lb-content-area" class="lb-content-fade">
+                ${getLbContentHtml()}
+            </div>
+
+            <button onclick="closeLeaderboardModal()" class="btn-start" style="margin-top: 16px;">Закрыть</button>
+        </div>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function updateLbView() {
+    let area = document.getElementById('lb-content-area');
+    if (!area) return;
+
+    let btnGlobal = document.getElementById('lb-tab-global');
+    let btnProfile = document.getElementById('lb-tab-profile');
+    if (btnGlobal && btnProfile) {
+        if (currentLbTab === 'global') {
+            btnGlobal.classList.add('active');
+            btnProfile.classList.remove('active');
+        } else {
+            btnProfile.classList.add('active');
+            btnGlobal.classList.remove('active');
+        }
+    }
+
+    area.classList.add('fade-anim');
+    setTimeout(() => {
+        area.innerHTML = getLbContentHtml();
+        area.classList.remove('fade-anim');
+    }, 150);
+}
+
+function getLbContentHtml() {
+    let filtersHtml = `
+    <div class="lb-filters">
+        <button onclick="switchLbFilter('all')" class="lb-filter-chip ${currentLbFilter==='all'?'active':''}">Все тесты</button>
+        <button onclick="switchLbFilter('district')" class="lb-filter-chip ${currentLbFilter==='district'?'active':''}">Территории</button>
+        <button onclick="switchLbFilter('neighbor')" class="lb-filter-chip ${currentLbFilter==='neighbor'?'active':''}">Соседи</button>
+        <button onclick="switchLbFilter('river')" class="lb-filter-chip ${currentLbFilter==='river'?'active':''}">Реки</button>
+        <button onclick="switchLbFilter('center')" class="lb-filter-chip ${currentLbFilter==='center'?'active':''}">Центры</button>
+    </div>`;
+
+    if (currentLbTab === 'global') {
+        let data = globalLeaderboardCache;
+        if (currentLbFilter !== 'all') {
+            data = data.filter(r => r.quiz_type === currentLbFilter);
+        }
+
+        if (!data || data.length === 0) {
+            return filtersHtml + '<p style="color: #64748B; font-size: 13px; margin: 25px 0;">Пока нет результатов в этой категории.</p>';
+        }
+
+        let tableHtml = filtersHtml + '<div class="lb-table-wrap"><table class="lb-styled-table"><tr><th>№</th><th>Студент</th><th>Группа</th><th>Тест</th><th>Баллы</th><th>%</th><th>Время</th></tr>';
+        data.forEach((r, index) => {
+            tableHtml += `<tr><td>${index+1}</td><td>${r.name}</td><td>${r.group}</td><td>${r.quiz_type}</td><td><b>${r.score}/${r.max_score}</b></td><td>${r.accuracy}%</td><td>${r.time_spent}</td></tr>`;
+        });
+        tableHtml += '</table></div>';
+        return tableHtml;
+    } else {
+        let student = getCurrentStudentInfo();
+        if (!student) {
+            return `
+            <div style="padding: 30px 10px; text-align: center;">
+                <p style="color: #64748B; font-size: 13.5px; margin-bottom: 15px;">Чтобы просматривать личную статистику и историю, авторизуйтесь через корпоративную почту.</p>
+                <button onclick="goToMainAuth()" class="btn-start">Войти через Главное меню</button>
+            </div>`;
+        }
+
+        let allResults = JSON.parse(localStorage.getItem('rostovQuizResults') || '[]');
+        let myResults = allResults.filter(r => student && r.student === student.name);
+
+        if (currentLbFilter !== 'all') {
+            myResults = myResults.filter(r => r.type === currentLbFilter);
+        }
+
+        if (myResults.length === 0) {
+            return filtersHtml + `
+            <div style="padding: 25px 10px; text-align: center;">
+                <p style="font-weight: 700; color: #0369A1; font-size: 14px;">Привет, ${student.name} (${student.group})!</p>
+                <p style="color: #64748B; font-size: 13px; margin-top: 8px;">У вас пока нет сохраненных результатов в выбранной категории.</p>
+            </div>`;
+        }
+
+        let bestResult = [...myResults].sort((a,b) => b.accuracy - a.accuracy || b.score - a.score)[0];
+        let lastResults = [...myResults].reverse();
+
+        let profileHtml = filtersHtml + `
+        <div style="text-align: left; margin-bottom: 12px; background: #F0FDF4; border: 1px solid #BBF7D0; padding: 10px 14px; border-radius: 12px;">
+            <p style="margin: 0; font-size: 12.5px; color: #166534; font-weight: 700;">👤 Студент: ${student.name}</p>
+            <p style="margin: 2px 0 0 0; font-size: 11.5px; color: #15803D;">Группа: ${student.group}</p>
+        </div>
+
+        <div style="margin-bottom: 12px; text-align: left;">
+            <h4 style="margin: 0 0 5px 0; font-size: 12.5px; color: #1E293B;">⭐ Лучший результат:</h4>
+            <div style="background: #FFFBEB; border: 1px solid #FDE68A; padding: 8px 12px; border-radius: 9px; font-size: 11.5px; color: #92400E; display: flex; justify-content: space-between; align-items: center;">
+                <span>Тест: <b>${bestResult.type}</b> | Баллы: <b>${bestResult.score}/${bestResult.maxScore}</b> (${bestResult.accuracy}%)</span>
+                <span>⏱ ${bestResult.time_spent}</span>
+            </div>
+        </div>
+
+        <div style="text-align: left;">
+            <h4 style="margin: 0 0 5px 0; font-size: 12.5px; color: #1E293B;">📜 История прохождений:</h4>
+            <div class="lb-table-wrap">
+                <table class="lb-styled-table">
+                    <tr><th>Дата</th><th>Тест</th><th>Баллы</th><th>%</th><th>Время</th></tr>`;
+        
+        lastResults.forEach(r => {
+            profileHtml += `<tr><td>${r.date}</td><td>${r.type}</td><td><b>${r.score}/${r.maxScore}</b></td><td>${r.accuracy}%</td><td>${r.time_spent}</td></tr>`;
+        });
+
+        profileHtml += `</table></div></div>`;
+        return profileHtml;
+    }
+}
+
+function closeLeaderboardModal() {
+    let el = document.getElementById('leaderboard-modal-container');
+    if (el) el.remove();
+}
+
+function resetQuiz() {
+    stopTimer();
+    currentQuestion = 0;
+    score = 0;
+    maxPossibleScore = 0;
+    quizData = [];
+    selectedOption = null;
+    updateScore();
+    clearMarkers();
+}
+
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+}
+
+function closeWelcomeModal() {
+    const modal = document.getElementById('welcome-modal');
+    if (modal) {
+        modal.classList.add('fade-out');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 250);
+    }
+    const dontShow = document.getElementById('dont-show-welcome');
+    if (dontShow && dontShow.checked) {
+        localStorage.setItem('rostovMapHideWelcome', 'true');
+    }
+}
+
+function openWelcomeModal() {
+    const modal = document.getElementById('welcome-modal');
+    if (modal) {
+        modal.classList.remove('fade-out');
+        modal.style.display = 'flex';
+    }
+}
+
+function goToMainAuth() {
+    window.location.href = 'index.html';
+}
+
+function logoutStudent() {
+    if (confirm('Выйти из профиля студента?')) {
+        localStorage.removeItem('sfeduStudent');
+        updateStudentHeader();
+    }
+}
+
+function getCurrentStudentInfo() {
+    try {
+        const raw = localStorage.getItem('sfeduStudent');
+        return raw ? JSON.parse(raw) : null;
+    } catch(e) {
+        return null;
+    }
+}
+
+function updateStudentHeader() {
+    const student = getCurrentStudentInfo();
+    const authBtn = document.getElementById('auth-top-btn');
+    const profileBox = document.getElementById('student-profile-badge');
+
+    if (student) {
+        if (authBtn) authBtn.style.display = 'none';
+        if (profileBox) {
+            profileBox.style.display = 'flex';
+            document.getElementById('student-badge-name').textContent = student.name;
+            document.getElementById('student-badge-group').textContent = `${student.group}`;
+        }
+    } else {
+        if (authBtn) authBtn.style.display = 'flex';
+        if (profileBox) profileBox.style.display = 'none';
+    }
+}
+
+/* ИНИЦИАЛИЗАЦИЯ И ПРОВЕРКА ТЕМЫ */
+window.addEventListener('load', function() {
+    resetMapView();
+    setTimeout(setupDistrictClickListeners, 400);
+    updateStudentHeader();
+
+    if (!localStorage.getItem('rostovMapHideWelcome')) {
+        setTimeout(openWelcomeModal, 400);
+    }
+});
+</script>
+    
+        <div class="top-nav-buttons" id="top-nav-panel">
+            <button class="nav-top-btn" onclick="resetMapView()" style="background: linear-gradient(135deg, #EFF6FF, #DBEAFE); border-color: #93C5FD; color: #1D4ED8;" title="Показать всю карту">
+                <span>🌍 Вся карта</span>
+            </button>
+            <button class="nav-top-btn admin-btn" onclick="window.open('/admin', '_blank')" title="Панель преподавателя">
+                <span>📊 Преподавателю</span>
+            </button>
+            <button id="auth-top-btn" class="nav-top-btn auth-btn" onclick="goToMainAuth()" title="Авторизация через главное меню">
+                <span>🎓 Войти через Главное меню</span>
+            </button>
+            <div id="student-profile-badge" class="student-badge" style="display: none;">
+                <div class="badge-avatar">🎓</div>
+                <div class="badge-info">
+                    <span id="student-badge-name" class="badge-name">Студент</span>
+                    <span id="student-badge-group" class="badge-group">Группа</span>
+                </div>
+                <button onclick="logoutStudent()" class="badge-logout" title="Выйти">&times;</button>
+            </div>
+            <button class="nav-top-btn leaderboard-top-btn" onclick="showLeaderboard()" title="Глобальная таблица лидеров и профиль">🏆 Топ лидеров</button>
+            <button class="help-circle-btn" onclick="openWelcomeModal()" title="О проекте и справка">?</button>
+        </div>
+
+        <div id="quiz-controls" class="app-card">
+            <button id="panel-collapse-btn" class="mobile-collapse-trigger" onclick="togglePanelCollapse()">
+                ▼ Свернуть панель к карте
+            </button>
+
+            <div class="panel-header">
+                <h3>Учебно-картографический атлас</h3>
+            </div>
+
+            <!-- ГЛАВНОЕ МЕНЮ -->
+            <div id="normal-mode">
+                <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; margin: 0 0 6px 0; text-align: center;">
+                    Обучающий режим
+                </div>
+                <div class="study-pick-grid">
+                    <button onclick="startStudyMode('districts')" class="btn btn-study-action">🗺️ Территории</button>
+                    <button onclick="startStudyMode('rivers')" class="btn btn-study-action">🌊 Реки</button>
+                    <button onclick="startStudyMode('centers')" class="btn btn-study-action">📍 Центры</button>
+                </div>
+
+                <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; margin: 12px 0 6px 0; text-align: center;">
+                    Проверка знаний (Викторины)
+                </div>
+
+                <button onclick="startDistrictQuiz()" class="btn btn-district">
+                    Узнать территорию по силуэту
+                </button>
+
+                <button onclick="startNeighborQuiz()" class="btn btn-neighbor">
+                    Топология и соседи (тест)
+                </button>
+
+                <button onclick="startRiverQuiz()" class="btn btn-river">
+                    Определить реку по руслу
+                </button>
+
+                <button onclick="startCenterQuiz()" class="btn btn-center">
+                    Найти центр на карте
+                </button>
+
+                <div class="timer-setting-box">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="timer-toggle" onchange="toggleTimer()">
+                        <span>Включить таймер (20с на ответ)</span>
+                    </label>
+                </div>
+
+                <div id="district-info-card" class="district-info-box">
+                </div>
+
+                <div class="hint-small">
+                    Кликните на любой район на карте для вывода гео-справки
+                </div>
+            </div>
+
+            <!-- РЕЖИМ ОБУЧЕНИЯ (МУЛЬТИКАТЕГОРИИ) -->
+            <div id="study-mode" style="display: none;">
+                <div class="study-category-bar">
+                    <button id="study-tab-districts" onclick="switchStudyCategory('districts')" class="study-cat-tab">🗺️ Территории</button>
+                    <button id="study-tab-rivers" onclick="switchStudyCategory('rivers')" class="study-cat-tab">🌊 Реки</button>
+                    <button id="study-tab-centers" onclick="switchStudyCategory('centers')" class="study-cat-tab">📍 Центры</button>
+                </div>
+
+                <div class="study-status-header">
+                    <h4>Режим изучения</h4>
+                    <span id="study-counter-val">1 / 55</span>
+                </div>
+
+                <div id="study-content-box" class="study-card-body">
+                </div>
+
+                <div class="study-nav-grid">
+                    <button onclick="prevStudyItem()" class="btn btn-secondary">← Назад</button>
+                    <button onclick="nextStudyItem()" class="btn btn-primary">Вперед →</button>
+                </div>
+                <button onclick="randomStudyItem()" class="btn btn-secondary" style="margin-top: 6px;">
+                    🎲 Случайный объект
+                </button>
+                <button onclick="exitStudyMode()" class="btn btn-danger" style="margin-top: 8px;">
+                    Выйти в меню
+                </button>
+            </div>
+
+            <!-- РЕЖИМ ТЕСТИРОВАНИЯ (QUIZ) -->
+            <div id="quiz-mode" style="display: none;">
+                <div class="quiz-status-header">
+                    <h4 id="quiz-title">Викторина</h4>
+                    <div id="quiz-progress">Вопрос: <span id="current-question">1</span>/<span id="total-questions">10</span></div>
+                </div>
+
+                <div id="timer-bar-container" style="display: none; margin-bottom: 10px;">
+                    <div class="timer-flex">
+                        <span>Время:</span>
+                        <span id="timer-text">20с</span>
+                    </div>
+                    <div class="timer-track">
+                        <div id="timer-bar"></div>
+                    </div>
+                </div>
+
+                <div id="question-container">
+                    <p id="question-text" class="question-text">Загрузка вопроса...</p>
+
+                    <div id="options-container">
+                    </div>
+
+                    <div id="hint-container" class="hint-container">
+                        <strong>Подсказка:</strong> <span id="hint-text"></span>
+                    </div>
+                </div>
+
+                <div class="score-card">
+                    <div>Баллы: <span id="score">0</span></div>
+                    <div class="score-sub" id="accuracy">Эффективность: 0%</div>
+                </div>
+
+                <button onclick="exitQuiz()" class="btn btn-danger">
+                    Завершить викторину
+                </button>
+
+                <button onclick="showHint()" id="hint-button" class="btn btn-warning" style="display: none; margin-top: 6px;">
+                    Подсказка
+                </button>
+            </div>
+
+            <!-- ЭКРАН РЕЗУЛЬТАТОВ -->
+            <div id="results-mode" style="display: none; text-align: center;">
+                <h4 style="color: #10B981; margin: 0 0 10px 0; font-size: 15px;">Результаты теста</h4>
+                <div id="results-content">
+                </div>
+                <button onclick="closeResultsAndReturnToMenu()" class="btn btn-primary" style="margin-top: 12px;">
+                    В главное меню
+                </button>
+            </div>
+        </div>
+
+        <div id="welcome-modal" class="welcome-overlay" style="display: none;">
+            <div class="welcome-card">
+                <div class="welcome-badge">Географический атлас</div>
+                <h2 class="welcome-title">Интерактивный атлас: Республика Ингушетия</h2>
+                <p class="welcome-subtitle">Интерактивный картографический комплекс и система тестирования пространственных знаний</p>
+                
+                <div class="welcome-grid">
+                    <div class="welcome-feature">
+                        <div class="feature-icon" style="background: #E8F5E9; color: #2E7D32;">🎓</div>
+                        <div class="feature-content">
+                            <h4>Режим обучения</h4>
+                            <p>Пошаговое изучение номенклатуры области: территорий, русел рек и административных центров с автофокусом карты.</p>
+                        </div>
+                    </div>
+                    <div class="welcome-feature">
+                        <div class="feature-icon" style="background: #E0F2FE; color: #0284C7;">🌊</div>
+                        <div class="feature-content">
+                            <h4>Гидрография</h4>
+                            <p>Викторина по главным водным артериям региона. Карта фокусируется на русле реки и предлагает варианты ответа.</p>
+                        </div>
+                    </div>
+                    <div class="welcome-feature">
+                        <div class="feature-icon" style="background: #E0F7FA; color: #00796B;">🧩</div>
+                        <div class="feature-content">
+                            <h4>Топология и границы</h4>
+                            <p>Проверка знания смежности территорий («Районы-соседи») и узнавания силуэтов муниципальных образований.</p>
+                        </div>
+                    </div>
+                    <div class="welcome-feature">
+                        <div class="feature-icon" style="background: #EFF6FF; color: #1D4ED8;">🎯</div>
+                        <div class="feature-content">
+                            <h4>Поиск центров с точностью</h4>
+                            <p>Проверка топографической ориентации. Укажите кликом центр на карте и получите баллы в зависимости от погрешности.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="welcome-footer">
+                    <label class="welcome-checkbox">
+                        <input type="checkbox" id="dont-show-welcome">
+                        <span>Больше не показывать при входе</span>
+                    </label>
+                    <button onclick="closeWelcomeModal()" class="btn-start">Начать работу с картой</button>
+                </div>
+            </div>
+        </div>
+
+        <style>
+        .leaflet-tooltip {
+            background-color: #ffffff !important;
+            border: 1px solid #CBD5E1 !important;
+            border-radius: 6px !important;
+            padding: 4px 8px !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+            white-space: nowrap !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+            font-size: 12px !important;
+            font-weight: 700 !important;
+            color: #1E293B !important;
+            line-height: 1.2 !important;
+        }
+
+        .leaflet-tooltip table {
+            margin: 0 !important;
+            border-collapse: collapse !important;
+        }
+        .leaflet-tooltip table th {
+            display: none !important;
+        }
+        .leaflet-tooltip table td {
+            padding: 0 !important;
+            margin: 0 !important;
+            text-align: center !important;
+        }
+
+        .top-nav-buttons {
+            position: fixed;
+            top: 14px;
+            right: 330px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+
+        .nav-top-btn {
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 20px;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #1E293B;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+            transition: all 0.2s ease;
+        }
+        .nav-top-btn:hover {
+            transform: translateY(-1px);
+            background: #ffffff;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+        }
+
+        .admin-btn {
+            background: linear-gradient(135deg, #F0FDF4, #DCFCE7);
+            border-color: #86EFAC;
+            color: #166534;
+        }
+
+        .leaderboard-top-btn {
+            background: linear-gradient(135deg, #FFF7ED, #FFEDD5);
+            border-color: #FDBA74;
+            color: #C2410C;
+        }
+
+        .student-badge {
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            border: 1px solid #BAE6FD;
+            border-radius: 20px;
+            padding: 4px 10px 4px 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+        }
+        .badge-avatar {
+            width: 26px;
+            height: 26px;
+            background: #E0F2FE;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+        }
+        .badge-info { display: flex; flex-direction: column; text-align: left; }
+        .badge-name { font-size: 11.5px; font-weight: 700; color: #0369A1; line-height: 1.2; }
+        .badge-group { font-size: 10px; color: #64748B; }
+        .badge-logout {
+            background: none;
+            border: none;
+            font-size: 16px;
+            color: #94A3B8;
+            cursor: pointer;
+            margin-left: 4px;
+            line-height: 1;
+        }
+        .badge-logout:hover { color: #EF4444; }
+
+        .help-circle-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: #334155;
+            font-size: 17px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .help-circle-btn:hover {
+            transform: scale(1.05);
+            background: white;
+            color: #10B981;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+        }
+
+        .lb-main-tabs {
+            display: flex;
+            background: #F1F5F9;
+            padding: 4px;
+            border-radius: 12px;
+            margin-bottom: 14px;
+            gap: 4px;
+        }
+        .lb-tab-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 8px 12px;
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #64748B;
+            border-radius: 9px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .lb-tab-btn.active {
+            background: #ffffff;
+            color: #0F172A;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .lb-content-fade {
+            transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .fade-anim {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+
+        .lb-filters {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .lb-filter-chip {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            padding: 5px 12px;
+            border-radius: 16px;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #475569;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .lb-filter-chip:hover { background: #F1F5F9; }
+        .lb-filter-chip.active {
+            background: #10B981;
+            color: white;
+            border-color: #10B981;
+        }
+
+        .lb-table-wrap {
+            max-height: 300px;
+            overflow-y: auto;
+            border-radius: 10px;
+            border: 1px solid #E2E8F0;
+        }
+        .lb-styled-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            text-align: center;
+        }
+        .lb-styled-table th {
+            background: #F8FAFC;
+            color: #475569;
+            padding: 8px 6px;
+            border-bottom: 1px solid #E2E8F0;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .lb-styled-table td {
+            padding: 7px 6px;
+            border-bottom: 1px solid #F1F5F9;
+            color: #334155;
+        }
+        .lb-styled-table tr:hover { background: #F8FAFC; }
+
+        .auth-card {
+            background: #ffffff;
+            border-radius: 18px;
+            max-width: 440px;
+            width: 100%;
+            padding: 24px 26px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            box-sizing: border-box;
+            animation: welcomeIn 0.25s ease-out;
+        }
+
+        .auth-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #E2E8F0;
+            padding-bottom: 12px;
+            margin-bottom: 14px;
+        }
+        .auth-header h3 { margin: 0; font-size: 15px; color: #0F172A; }
+
+        .auth-error {
+            background: #FEE2E2;
+            color: #B91C1C;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #FCA5A5;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+            text-align: left;
+        }
+        .form-group label {
+            display: block;
+            font-size: 11.5px;
+            color: #475569;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .auth-input {
+            width: 100%;
+            padding: 9px 12px;
+            border-radius: 8px;
+            border: 1.5px solid #CBD5E1;
+            font-size: 13px;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .auth-input:focus { border-color: #0284C7; }
+        .code-input {
+            text-align: center;
+            letter-spacing: 6px;
+            font-size: 20px;
+            font-weight: 800;
+            color: #0284C7;
+        }
+
+        .welcome-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(4px);
+            z-index: 20000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            transition: opacity 0.25s ease;
+        }
+        .welcome-overlay.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .welcome-card {
+            background: #ffffff;
+            border-radius: 18px;
+            max-width: 640px;
+            width: 100%;
+            padding: 28px 32px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            position: relative;
+            animation: welcomeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+
+        @keyframes welcomeIn {
+            from { opacity: 0; transform: scale(0.96) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .welcome-badge {
+            display: inline-block;
+            background: #DCFCE7;
+            color: #15803D;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .welcome-title {
+            margin: 0 0 6px 0;
+            font-size: 24px;
+            color: #0F172A;
+            font-weight: 800;
+            letter-spacing: -0.4px;
+        }
+
+        .welcome-subtitle {
+            margin: 0 0 22px 0;
+            font-size: 13.5px;
+            color: #64748B;
+            line-height: 1.45;
+        }
+
+        .welcome-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .welcome-feature {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 12px 14px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .feature-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            flex-shrink: 0;
+        }
+
+        .feature-content h4 {
+            margin: 0 0 3px 0;
+            font-size: 13px;
+            color: #1E293B;
+            font-weight: 700;
+        }
+
+        .feature-content p {
+            margin: 0;
+            font-size: 11.5px;
+            color: #64748B;
+            line-height: 1.35;
+        }
+
+        .welcome-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 16px;
+            border-top: 1px solid #E2E8F0;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .welcome-checkbox {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            color: #64748B;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .welcome-checkbox input {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #10B981, #059669);
+            color: white;
+            border: none;
+            padding: 10px 22px;
+            border-radius: 10px;
+            font-size: 13.5px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            transition: all 0.2s ease;
+        }
+        .btn-start:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+
+        .app-card {
+            position: fixed;
+            top: 14px;
+            right: 14px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(8px);
+            padding: 16px;
+            border-radius: 14px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            width: 300px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            max-height: calc(100vh - 28px);
+            overflow-y: auto;
+            box-sizing: border-box;
+            transition: max-height 0.25s cubic-bezier(0.16, 1, 0.3, 1), padding 0.25s ease;
+        }
+
+        .panel-header h3 {
+            margin: 0 0 12px 0;
+            color: #1E293B;
+            text-align: center;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            border: none;
+            padding: 9px 12px;
+            margin-bottom: 7px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+            color: white;
+            box-sizing: border-box;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+
+        .study-pick-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+
+        .btn-study-action {
+            background: linear-gradient(135deg, #6366F1, #4F46E5);
+            font-weight: 700;
+            font-size: 11.5px;
+            padding: 9px 4px;
+            margin-bottom: 0;
+            box-shadow: 0 3px 8px rgba(99, 102, 241, 0.25);
+            text-align: center;
+        }
+        .btn-study-action:hover {
+            background: linear-gradient(135deg, #4F46E5, #4338CA);
+        }
+
+        .study-category-bar {
+            display: flex;
+            background: #F1F5F9;
+            padding: 3px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            gap: 4px;
+        }
+        .study-cat-tab {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 6px 2px;
+            border-radius: 7px;
+            color: #64748B;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .study-cat-tab.active {
+            background: white;
+            color: #4F46E5;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+
+        .btn-district { background: linear-gradient(135deg, #10B981, #059669); }
+        .btn-neighbor { background: linear-gradient(135deg, #0D9488, #0F766E); }
+        .btn-river { background: linear-gradient(135deg, #0EA5E9, #0284C7); }
+        .btn-center { background: linear-gradient(135deg, #3B82F6, #2563EB); }
+        .btn-primary { background: #10B981; }
+        .btn-secondary { background: #64748B; }
+        .btn-warning { background: #F59E0B; }
+        .btn-danger { background: #EF4444; }
+
+        .btn-confirm {
+            display: block;
+            width: 100%;
+            border: none;
+            padding: 10px 14px;
+            margin-top: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #2563EB, #1D4ED8);
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+        .btn-confirm:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+            background: linear-gradient(135deg, #1D4ED8, #1E40AF);
+        }
+
+        .study-status-header {
+            background: linear-gradient(135deg, #6366F1, #4F46E5);
+            color: white;
+            padding: 9px 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .study-status-header h4 { margin: 0; font-size: 13px; font-weight: 700; }
+        #study-counter-val { font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.25); padding: 2px 7px; border-radius: 6px; }
+
+        .study-card-body {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .study-title {
+            margin: 0 0 10px 0;
+            font-size: 15px;
+            color: #1E293B;
+            font-weight: 800;
+            text-align: center;
+            border-bottom: 1.5px solid #CBD5E1;
+            padding-bottom: 6px;
+        }
+        .study-nav-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+
+        .timer-setting-box {
+            margin: 8px 0;
+            padding: 8px 10px;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            cursor: pointer;
+            color: #334155;
+            user-select: none;
+        }
+
+        .checkbox-container input {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .hint-small {
+            margin-top: 8px;
+            padding: 8px;
+            background: #F1F5F9;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #64748B;
+            text-align: center;
+            line-height: 1.3;
+        }
+
+        .district-info-box {
+            display: none;
+            margin-top: 10px;
+            padding: 12px;
+            background: #F0FDF4;
+            border: 1px solid #BBF7D0;
+            border-radius: 10px;
+        }
+
+        .info-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1.5px solid #86EFAC;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+        }
+
+        .info-card-header strong {
+            color: #166534;
+            font-size: 13.5px;
+        }
+
+        .close-card-btn {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #94A3B8;
+            line-height: 1;
+            padding: 0;
+        }
+        .close-card-btn:hover { color: #334155; }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 4px;
+            color: #334155;
+        }
+        .info-row span { color: #64748B; }
+
+        .neighbor-tag {
+            display: inline-block;
+            background: #DCFCE7;
+            color: #15803D;
+            padding: 3px 7px;
+            border-radius: 5px;
+            font-size: 11px;
+            margin: 2px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .neighbor-tag:hover { background: #BBF7D0; }
+
+        .quiz-status-header {
+            background: linear-gradient(135deg, #10B981, #059669);
+            color: white;
+            padding: 9px 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .quiz-status-header h4 { margin: 0; font-size: 13px; font-weight: 700; }
+        #quiz-progress { font-size: 11.5px; opacity: 0.9; margin-top: 2px; }
+
+        .timer-flex {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11.5px;
+            color: #475569;
+            margin-bottom: 4px;
+        }
+        .timer-track {
+            width: 100%;
+            height: 6px;
+            background: #E2E8F0;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        #timer-bar {
+            width: 100%;
+            height: 100%;
+            background: #10B981;
+            transition: width 1s linear, background 0.3s;
+        }
+
+        .question-text {
+            font-size: 13px;
+            font-weight: 700;
+            color: #1E293B;
+            margin: 0 0 10px 0;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        .quiz-option {
+            display: block;
+            width: 100%;
+            padding: 9px 12px;
+            margin: 5px 0;
+            background: #F8FAFC;
+            border: 1.5px solid #E2E8F0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12.5px;
+            color: #334155;
+            text-align: left;
+            transition: all 0.15s ease;
+            box-sizing: border-box;
+        }
+        .quiz-option:hover {
+            background: #F1F5F9;
+            border-color: #CBD5E1;
+        }
+        .quiz-option.selected {
+            border-color: #3B82F6 !important;
+            background: #EFF6FF !important;
+            color: #1D4ED8 !important;
+            font-weight: 600;
+        }
+        .quiz-option.correct {
+            background: #DCFCE7 !important;
+            border-color: #86EFAC !important;
+            color: #15803D !important;
+            font-weight: 600;
+        }
+        .quiz-option.incorrect {
+            background: #FEE2E2 !important;
+            border-color: #FCA5A5 !important;
+            color: #B91C1C !important;
+        }
+
+        .center-quiz-instruction {
+            padding: 10px;
+            background: #F8FAFC;
+            border: 1px dashed #CBD5E1;
+            border-radius: 8px;
+            color: #475569;
+            text-align: center;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .center-quiz-instruction span {
+            font-size: 11px;
+            color: #64748B;
+            display: block;
+            margin-top: 4px;
+        }
+
+        .feedback-box {
+            padding: 9px 12px;
+            border-radius: 7px;
+            margin-top: 10px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 12.5px;
+        }
+        .feedback-box.success { background: #DCFCE7; color: #15803D; border: 1px solid #86EFAC; }
+        .feedback-box.error { background: #FEE2E2; color: #B91C1C; border: 1px solid #FCA5A5; }
+
+        .hint-container {
+            background: #FEF3C7;
+            border: 1px solid #FDE68A;
+            border-radius: 7px;
+            padding: 8px 10px;
+            margin-top: 8px;
+            font-size: 11.5px;
+            color: #92400E;
+            line-height: 1.3;
+        }
+
+        .score-card {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+            font-weight: 700;
+            font-size: 13px;
+            color: #1E293B;
+        }
+        .score-sub { font-size: 11px; color: #64748B; font-weight: 500; margin-top: 2px; }
+
+        .mobile-collapse-trigger {
+            display: none;
+            width: 100%;
+            background: #F1F5F9;
+            border: 1px solid #CBD5E1;
+            padding: 7px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #334155;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-collapse-trigger {
+                display: block;
+            }
+
+            .top-nav-buttons {
+                top: 8px;
+                left: 8px;
+                right: 8px;
+                justify-content: flex-end;
+                gap: 5px;
+            }
+            .nav-top-btn, .help-circle-btn {
+                padding: 6px 9px;
+                font-size: 11px;
+                height: 32px;
+            }
+            .help-circle-btn {
+                width: 32px;
+                font-size: 14px;
+            }
+
+            .app-card {
+                position: fixed;
+                top: auto;
+                bottom: 0;
+                right: 0;
+                left: 0;
+                width: 100%;
+                border-radius: 18px 18px 0 0;
+                max-height: 48vh;
+                padding: 12px 14px;
+                z-index: 1001;
+                box-shadow: 0 -4px 22px rgba(0,0,0,0.18);
+            }
+
+            .app-card.collapsed {
+                max-height: 46px;
+                overflow: hidden;
+                padding-top: 7px;
+                background: rgba(255, 255, 255, 0.95);
+            }
+            .app-card.collapsed > *:not(.mobile-collapse-trigger) {
+                display: none !important;
+            }
+
+            body.ui-collapsed #top-nav-panel {
+                opacity: 0 !important;
+                pointer-events: none !important;
+                transform: translateY(-20px);
+            }
+            body.ui-collapsed .leaflet-control-layers {
+                opacity: 0 !important;
+                pointer-events: none !important;
+            }
+
+            .leaflet-bottom.leaflet-left {
+                bottom: 50vh !important;
+                margin-left: 6px !important;
+            }
+            .leaflet-control-layers {
+                border-radius: 8px !important;
+                background: rgba(255, 255, 255, 0.95) !important;
+                transition: opacity 0.25s ease;
+            }
+
+            div[style*="top: 14px; left: 60px;"] {
+                display: none !important;
+            }
+        }
+        </style>
+        
+    
+        <div style="
+            position: fixed;
+            top: 14px; left: 60px;
+            width: 220px;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0,0,0,0.08);
+            z-index: 9999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 13px;
+            padding: 14px;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            color: #334155;
+        ">
+            <h4 style="margin: 0 0 10px 0; color: #1E293B; font-size: 14px; font-weight: 700;">Легенда карты</h4>
+            <div style="display: flex; align-items: center; margin-bottom: 6px;">
+                <i class="fa fa-star" style="color: #FF9800; font-size: 12px; margin-right: 8px;"></i>
+                <span>Центры</span>
+            </div>
+            <div style="display: flex; align-items: center; margin-bottom: 6px;">
+                <div style="width: 18px; height: 3px; background: #2E8B57; margin-right: 8px; border-radius: 2px;"></div>
+                <span>Границы</span>
+            </div>
+            <div style="display: flex; align-items: center; margin-bottom: 6px;">
+                <div style="width: 18px; height: 3px; background: #0284C7; margin-right: 8px; border-radius: 2px;"></div>
+                <span>Реки</span>
+            </div>
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                <div style="width: 18px; height: 14px; background: #38BDF8; border: 1px solid #0284C7; margin-right: 8px; opacity: 0.8; border-radius: 2px;"></div>
+                <span>Водоемы</span>
+            </div>
+            <div id="choropleth-legend-block" style="display: none; border-top: 1px solid #E2E8F0; padding-top: 8px; margin-top: 6px;">
+                <div style="font-size: 11.5px; font-weight: 700; color: #1E293B; margin-bottom: 5px; display: flex; align-items: center; justify-content: space-between;">
+                    <span>📊 Население районов</span>
+                </div>
+                <div style="display: flex; height: 11px; border-radius: 4px; overflow: hidden; margin-bottom: 4px; border: 1px solid #CBD5E1;">
+                    <div style="flex: 1; background: #FFFFCC;" title="Мин."></div>
+                    <div style="flex: 1; background: #FED976;"></div>
+                    <div style="flex: 1; background: #FEB24C;"></div>
+                    <div style="flex: 1; background: #FD8D3C;"></div>
+                    <div style="flex: 1; background: #E31A1C;"></div>
+                    <div style="flex: 1; background: #800026;" title="Макс."></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 9.5px; color: #64748B;">
+                    <span>Меньше</span>
+                    <span>Больше</span>
+                </div>
+            </div>
+            <div id="economy-legend-block" style="display: none; border-top: 1px solid #E2E8F0; padding-top: 8px; margin-top: 6px;">
+                <div style="font-size: 11.5px; font-weight: 700; color: #1E293B; margin-bottom: 5px; display: flex; align-items: center; justify-content: space-between;">
+                    <span>💰 ВРП (Экономика)</span>
+                </div>
+                <div style="display: flex; height: 11px; border-radius: 4px; overflow: hidden; margin-bottom: 4px; border: 1px solid #CBD5E1;">
+                    <div style="flex: 1; background: #EDF8E9;" title="Мин."></div>
+                    <div style="flex: 1; background: #BAE4B3;"></div>
+                    <div style="flex: 1; background: #74C476;"></div>
+                    <div style="flex: 1; background: #31A354;"></div>
+                    <div style="flex: 1; background: #006D2C;"></div>
+                    <div style="flex: 1; background: #005A32;" title="Макс."></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 9.5px; color: #64748B;">
+                    <span>Меньше</span>
+                    <span>Больше</span>
+                </div>
+            </div>
+            <div style="border-top: 1px solid #E2E8F0; padding-top: 8px; font-size: 11px; color: #94A3B8; text-align: center;">
+                Интерактивный атлас: Республика Ингушетия
+            </div>
+        </div>
+
+        <script>
+        (function() {
+            function syncChoroplethLegend() {
+                const labels = document.querySelectorAll('.leaflet-control-layers-overlays label');
+                let isPopChecked = false;
+                let isEconChecked = false;
+                labels.forEach(label => {
+                    const inp = label.querySelector('input[type="checkbox"]');
+                    if (label.textContent.includes('Население') || label.textContent.includes('Choropleth')) {
+                        if (inp && inp.checked) isPopChecked = true;
+                    }
+                    if (label.textContent.includes('Экономика') || label.textContent.includes('ВРП')) {
+                        if (inp && inp.checked) isEconChecked = true;
+                    }
+                });
+                const popBlock = document.getElementById('choropleth-legend-block');
+                if (popBlock) {
+                    popBlock.style.display = isPopChecked ? 'block' : 'none';
+                }
+                const econBlock = document.getElementById('economy-legend-block');
+                if (econBlock) {
+                    econBlock.style.display = isEconChecked ? 'block' : 'none';
+                }
+            }
+
+            window.addEventListener('load', function() {
+                const ctrl = document.querySelector('.leaflet-control-layers');
+                if (ctrl) {
+                    ctrl.addEventListener('change', syncChoroplethLegend);
+                }
+                syncChoroplethLegend();
+            });
+        })();
+        </script>
+        
+    
+            <div class="folium-map" id="map_804b4e905c828d0f8546b9999b0457e2" ></div>
+        
+
+        <div class="my-attribution">
+            © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors, © <a href="https://carto.com/attributions" target="_blank">CARTO</a>
+        </div>
+        </body>
+<script>
+    
+    
+            var map_804b4e905c828d0f8546b9999b0457e2 = L.map(
+                "map_804b4e905c828d0f8546b9999b0457e2",
+                {
+                    center: [43.099819183500074, 44.947376251000094],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 9,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+            L.control.scale().addTo(map_804b4e905c828d0f8546b9999b0457e2);
+
+            
+
+        
+    
+            map_804b4e905c828d0f8546b9999b0457e2.fitBounds(
+                [[42.624736786000085, 44.583942413000045], [43.57490158100006, 45.31081008900014]],
+                {}
+            );
+        
+    
+            var tile_layer_7138f54224def06eb5b5abd7e7f4f9e7 = L.tileLayer(
+                "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_3wsm_1_6bdccfe40c07a69c4fce7b68",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "\u00a9 OpenStreetMap contributors, \u00a9 CARTO",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_7138f54224def06eb5b5abd7e7f4f9e7.addTo(map_804b4e905c828d0f8546b9999b0457e2);
+        
+    
+            var tile_layer_913629d9f720ce2283576da0ff28144a = L.tileLayer(
+                "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "Tiles \u0026copy; Esri \u0026mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            var tile_layer_143a05d4fdb4a91e71940d1893a0cb00 = L.tileLayer(
+                "https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3wsm_1_6bdccfe40c07a69c4fce7b68",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "\u00a9 OpenStreetMap contributors, \u00a9 CARTO",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+        function geo_json_9fd96dc253e60cfdcd92c034de7eddf7_styler(feature) {
+            switch(feature.id) {
+                default:
+                    return {"color": "#2E8B57", "dashArray": "5, 5", "fillColor": "#90EE90", "fillOpacity": 0.25, "weight": 2};
+            }
+        }
+
+        function geo_json_9fd96dc253e60cfdcd92c034de7eddf7_onEachFeature(feature, layer) {
+
+            layer.on({
+            });
+        };
+        var geo_json_9fd96dc253e60cfdcd92c034de7eddf7 = L.geoJson(null, {
+                onEachFeature: geo_json_9fd96dc253e60cfdcd92c034de7eddf7_onEachFeature,
+            
+                style: geo_json_9fd96dc253e60cfdcd92c034de7eddf7_styler,
+            ...{
+  "interactive": true,
+}
+        });
+
+        function geo_json_9fd96dc253e60cfdcd92c034de7eddf7_add (data) {
+            geo_json_9fd96dc253e60cfdcd92c034de7eddf7
+                .addData(data);
+        }
+            geo_json_9fd96dc253e60cfdcd92c034de7eddf7_add({"bbox": [44.583942413000045, 42.624736786000085, 45.31081008900014, 43.57490158100006], "features": [{"bbox": [44.583942413000045, 43.28902053900015, 45.00806045500019, 43.57490158100006], "geometry": {"coordinates": [[[44.92815780500007, 43.53591918900014], [44.94995117200017, 43.51895904600008], [44.96030425900011, 43.511825562000126], [44.9807853690001, 43.508590698000035], [45.00806045500019, 43.510517121000134], [44.971145630000194, 43.47594451900005], [44.96308517400007, 43.43718719500015], [44.950527191000106, 43.405456543000184], [44.93111038100011, 43.380882264000036], [44.91377258300014, 43.36663818400007], [44.893665314000145, 43.36075592100019], [44.86959457400013, 43.35614395200008], [44.844852447000164, 43.35449218700012], [44.823432923000155, 43.34702301000016], [44.79476165700004, 43.33025360200003], [44.77194976800001, 43.31184005800003], [44.76038742100019, 43.296577454000044], [44.74911117500011, 43.28902053900015], [44.736228944000175, 43.29004287700013], [44.71964263900014, 43.29556274400011], [44.70375824000007, 43.30654525799997], [44.69351577800012, 43.31861495900006], [44.6826019290001, 43.33213043200004], [44.67502594100017, 43.34187698400018], [44.66140365500013, 43.34613418599997], [44.63563156000015, 43.35425567600015], [44.61210250800008, 43.36209487900015], [44.59593963500009, 43.37579727100001], [44.583942413000045, 43.398376466000116], [44.59435272300004, 43.424774171000195], [44.60224151600005, 43.45574951200007], [44.59740829399999, 43.47784423800016], [44.596286774000134, 43.50758743400013], [44.59792709300001, 43.52709961000005], [44.61225509700017, 43.53494262800007], [44.645069122000166, 43.54139328000019], [44.6737594600001, 43.53688430900007], [44.710220338000056, 43.53836822599999], [44.72732162400018, 43.525157929000045], [44.72349929800009, 43.501739502000135], [44.73504638600019, 43.48347473100017], [44.758167266999976, 43.47588348300019], [44.790744781, 43.476562500000114], [44.81823348900019, 43.48669052200006], [44.826026917000036, 43.50740051300005], [44.826797484999986, 43.53094863900009], [44.81655120800019, 43.55810928400001], [44.82924652000003, 43.57490158100006], [44.85094070400004, 43.57374954200003], [44.87655258200016, 43.572834016000115], [44.886047364000035, 43.56037902800006], [44.892753601000095, 43.54350662200011], [44.90917205800008, 43.53322219800003], [44.92815780500007, 43.53591918900014]]], "type": "Polygon"}, "id": "452", "properties": {"CC_2": "R42010", "COUNTRY": "Russia", "ENGTYPE_2": "District", "GID_0": "RUS", "GID_1": "RUS.17_1", "GID_2": "RUS.17.1_1", "HASC_2": "RU.IN.MR", "NAME_1": "Ingush", "NAME_2": "Malgobekskiy rayon", "NL_NAME_1": "\u0420\u0435\u0441\u043f\u0443\u0301\u0431\u043b\u0438\u043a\u0430 \u0418\u043d\u0433\u0443\u0448\u0435\u0301\u0442\u0438\u044f", "NL_NAME_2": "\u041c\u0430\u043b\u0433\u043e\u0431\u0435\u043a\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "TYPE_2": "Raion", "VARNAME_2": "NA", "display_name": "\u041c\u0430\u043b\u0433\u043e\u0431\u0435\u043a\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "is_district_layer": 1}, "type": "Feature"}, {"bbox": [44.64410018900003, 43.058734894000054, 45.02289962700013, 43.36663818400007], "geometry": {"coordinates": [[[44.66140365500013, 43.34613418599997], [44.67502594100017, 43.34187698400018], [44.6826019290001, 43.33213043200004], [44.69351577800012, 43.31861495900006], [44.70375824000007, 43.30654525799997], [44.71964263900014, 43.29556274400011], [44.736228944000175, 43.29004287700013], [44.74911117500011, 43.28902053900015], [44.76038742100019, 43.296577454000044], [44.77194976800001, 43.31184005800003], [44.79476165700004, 43.33025360200003], [44.823432923000155, 43.34702301000016], [44.844852447000164, 43.35449218700012], [44.86959457400013, 43.35614395200008], [44.893665314000145, 43.36075592100019], [44.91377258300014, 43.36663818400007], [44.89371490400015, 43.32220459000018], [44.89224243200016, 43.287567139000146], [44.89192962700014, 43.26544189500004], [44.893302917000085, 43.24816894500009], [44.92646026600005, 43.23064422600004], [44.94669342100019, 43.23449325700011], [44.96798324600019, 43.23565673900009], [44.985973359000184, 43.229236603000004], [45.005920409, 43.21541214000007], [45.02289962700013, 43.20220947400014], [45.01919937100007, 43.18039703400012], [44.996467591, 43.149883270000146], [44.97497940100004, 43.12488937300009], [44.95468902600015, 43.100543975000164], [44.93271255600007, 43.079338074000134], [44.90766143700006, 43.058734894000054], [44.88585662800011, 43.07247161900017], [44.86230468700012, 43.08531570400004], [44.83623504600007, 43.10547637900004], [44.81568527200011, 43.1108398450001], [44.79178237999997, 43.11996841500007], [44.775020599000186, 43.13366699200009], [44.76374816900011, 43.15997696000005], [44.75040054300007, 43.178794862000075], [44.73080062900016, 43.18197631800007], [44.70351409900002, 43.18249511800019], [44.677162171000134, 43.17300796600017], [44.64410018900003, 43.182109832000094], [44.66234970200014, 43.20425796500007], [44.66197967500017, 43.22841644200008], [44.664173125000104, 43.25668334900007], [44.6574172980001, 43.289669037000124], [44.65645599300001, 43.319557190000126], [44.66140365500013, 43.34613418599997]]], "type": "Polygon"}, "id": "453", "properties": {"CC_2": "R42010", "COUNTRY": "Russia", "ENGTYPE_2": "District", "GID_0": "RUS", "GID_1": "RUS.17_1", "GID_2": "RUS.17.2_1", "HASC_2": "RU.IN.NR", "NAME_1": "Ingush", "NAME_2": "Nazranovskiy rayon", "NL_NAME_1": "\u0420\u0435\u0441\u043f\u0443\u0301\u0431\u043b\u0438\u043a\u0430 \u0418\u043d\u0433\u0443\u0448\u0435\u0301\u0442\u0438\u044f", "NL_NAME_2": "\u041d\u0430\u0437\u0440\u0430\u043d\u043e\u0432\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "TYPE_2": "Raion", "VARNAME_2": "NA", "display_name": "\u041d\u0430\u0437\u0440\u0430\u043d\u043e\u0432\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "is_district_layer": 1}, "type": "Feature"}, {"bbox": [44.67448806800013, 42.624736786000085, 45.31081008900014, 43.510517121000134], "geometry": {"coordinates": [[[45.0888748160001, 42.695873260000155], [45.082946778000064, 42.69460678100012], [45.04552841200007, 42.69852829000013], [45.035068512000066, 42.70124435400015], [44.99999999900007, 42.72679901200013], [44.99571228100007, 42.72992324799998], [44.971057893000136, 42.74457550000017], [44.95503997800006, 42.74853134200009], [44.92753219600007, 42.75268936200001], [44.91097641000016, 42.75210189800009], [44.906066895000095, 42.75192642200017], [44.89170837500012, 42.74988937400019], [44.878253937000125, 42.74692154000013], [44.869071961000145, 42.74158477700007], [44.860134125000116, 42.73418045000017], [44.851135254000155, 42.72494507000005], [44.83206939700011, 42.701683045000095], [44.81792450000012, 42.66688537700003], [44.80377578700012, 42.64165878200009], [44.79820251500013, 42.63172149600018], [44.78342819300019, 42.62532806399997], [44.77751922600004, 42.624736786000085], [44.7679367070001, 42.62558364900008], [44.75845718300019, 42.62985992400013], [44.75298690699998, 42.63338470400009], [44.74649047800011, 42.64402771000016], [44.73438644500004, 42.69260406400002], [44.72741317800012, 42.72059631400009], [44.72076797500017, 42.72665405200007], [44.71286392200011, 42.732276916000046], [44.70682525600017, 42.738101959000176], [44.697326661000034, 42.74237442100019], [44.687183381000125, 42.74596786500018], [44.67710876400008, 42.747947693000185], [44.67937469500009, 42.75283813400006], [44.67448806800013, 42.79051208500016], [44.68863296600006, 42.833896638000056], [44.714462279000145, 42.85615158100018], [44.73836517400014, 42.84936142000015], [44.724578858000086, 42.83371353200005], [44.731685639000034, 42.81901550300012], [44.750961303999986, 42.80580902100019], [44.79410552900009, 42.789524078000056], [44.851608276000036, 42.788829803000056], [44.880001069000116, 42.79542923000014], [44.91403198300014, 42.81735229500015], [44.92008972200017, 42.836887360000105], [44.94644546500007, 42.85648727400013], [44.980396271000075, 42.88537597700008], [44.974933625000176, 42.90773391800013], [44.963863373000095, 42.93601226800013], [44.94179153400006, 42.956306458000086], [44.94245529200009, 42.96797180300007], [44.94633102400013, 42.99430084200009], [44.939445496000076, 43.02011489900019], [44.929515839000146, 43.04457092200016], [44.90766143700006, 43.058734894000054], [44.93271255600007, 43.079338074000134], [44.95468902600015, 43.100543975000164], [44.97497940100004, 43.12488937300009], [44.996467591, 43.149883270000146], [45.01919937100007, 43.18039703400012], [45.02289962700013, 43.20220947400014], [45.005920409, 43.21541214000007], [44.985973359000184, 43.229236603000004], [44.96798324600019, 43.23565673900009], [44.94669342100019, 43.23449325700011], [44.92646026600005, 43.23064422600004], [44.893302917000085, 43.24816894500009], [44.89192962700014, 43.26544189500004], [44.89224243200016, 43.287567139000146], [44.89371490400015, 43.32220459000018], [44.91377258300014, 43.36663818400007], [44.93111038100011, 43.380882264000036], [44.950527191000106, 43.405456543000184], [44.96308517400007, 43.43718719500015], [44.971145630000194, 43.47594451900005], [45.00806045500019, 43.510517121000134], [45.03976440500003, 43.504478455000026], [45.061775207000096, 43.494781494000165], [45.09531402599998, 43.4732856760001], [45.134498597000004, 43.45140457100018], [45.16412353499999, 43.440933228000006], [45.196567534999986, 43.4374580380001], [45.218349456000055, 43.437812804000146], [45.19731903000013, 43.409404755000025], [45.19604873600014, 43.38275527900004], [45.195579529000156, 43.359928132000164], [45.19784546000017, 43.34759902900015], [45.215854644000046, 43.325931549000074], [45.25113296500018, 43.320610047000116], [45.2772750850001, 43.32445907500011], [45.29563903800016, 43.31937408400006], [45.31081008900014, 43.30858993600009], [45.30857467599998, 43.27468109200004], [45.3019332880001, 43.235301972000116], [45.30439758300014, 43.204540253000175], [45.30168533300008, 43.18769454900007], [45.28742981000016, 43.17310714800004], [45.25728607300016, 43.14416122400013], [45.23068618900004, 43.115238191], [45.202224731, 43.07858276400003], [45.18202590900012, 43.047199250000176], [45.16761779800004, 43.003364564000094], [45.164619446000074, 42.97655487000014], [45.15805435300018, 42.959629059000065], [45.17029952900015, 42.93893051200013], [45.19654846200012, 42.92470932100008], [45.21262359500014, 42.909942626000145], [45.207954406000056, 42.89029312100013], [45.19095993000013, 42.86701202400019], [45.16406631500007, 42.842899322000164], [45.14733123800016, 42.82627487300016], [45.148700715000075, 42.80519867000004], [45.154243468999994, 42.787807465000014], [45.15911102300004, 42.76164627200001], [45.132682799000065, 42.733848572000056], [45.10008621200012, 42.70910644500003], [45.0888748160001, 42.695873260000155]]], "type": "Polygon"}, "id": "454", "properties": {"CC_2": "R42010", "COUNTRY": "Russia", "ENGTYPE_2": "District", "GID_0": "RUS", "GID_1": "RUS.17_1", "GID_2": "RUS.17.3_1", "HASC_2": "RU.IN.SU", "NAME_1": "Ingush", "NAME_2": "Sunzhenskiy rayon", "NL_NAME_1": "\u0420\u0435\u0441\u043f\u0443\u0301\u0431\u043b\u0438\u043a\u0430 \u0418\u043d\u0433\u0443\u0448\u0435\u0301\u0442\u0438\u044f", "NL_NAME_2": "\u0421\u0443\u043d\u0436\u0435\u043d\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "TYPE_2": "Raion", "VARNAME_2": "NA", "display_name": "\u0421\u0443\u043d\u0436\u0435\u043d\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "is_district_layer": 1}, "type": "Feature"}], "type": "FeatureCollection"});
+
+        
+    
+    geo_json_9fd96dc253e60cfdcd92c034de7eddf7.bindTooltip(
+    function(layer){
+    let div = L.DomUtil.create('div');
+    
+    let handleObject = feature => {
+        if (feature === null) {
+            return '';
+        } else if (typeof(feature)=='object') {
+            return JSON.stringify(feature);
+        } else {
+            return feature;
+        }
+    }
+    let fields = ["display_name"];
+    let aliases = [""];
+    let table = '<table>' +
+        String(
+        fields.map(
+        (v,i)=>
+        `<tr>
+            <th>${aliases[i]}</th>
+            
+            <td>${handleObject(layer.feature.properties[v])}</td>
+        </tr>`).join(''))
+    +'</table>';
+    div.innerHTML=table;
+    
+    return div
+    }
+    ,{
+  "sticky": true,
+  "className": "foliumtooltip",
+});
+                     
+    
+            geo_json_9fd96dc253e60cfdcd92c034de7eddf7.addTo(map_804b4e905c828d0f8546b9999b0457e2);
+        
+    
+        function geo_json_dce48da5752ceae4420d56d504e19c69_styler(feature) {
+            switch(feature.id) {
+                case "452": 
+                    return {"color": "#475569", "dashArray": null, "fillColor": "#FEB24C", "fillOpacity": 0.72, "weight": 1.5};
+                case "453": 
+                    return {"color": "#475569", "dashArray": null, "fillColor": "#FFFFCC", "fillOpacity": 0.72, "weight": 1.5};
+                default:
+                    return {"color": "#475569", "dashArray": null, "fillColor": "#E31A1C", "fillOpacity": 0.72, "weight": 1.5};
+            }
+        }
+        function geo_json_dce48da5752ceae4420d56d504e19c69_highlighter(feature) {
+            switch(feature.id) {
+                default:
+                    return {"color": "#0F172A", "fillOpacity": 0.9, "weight": 3};
+            }
+        }
+
+        function geo_json_dce48da5752ceae4420d56d504e19c69_onEachFeature(feature, layer) {
+
+            layer.on({
+                mouseout: function(e) {
+                    if(typeof e.target.setStyle === "function"){
+                            geo_json_dce48da5752ceae4420d56d504e19c69.resetStyle(e.target);
+                    }
+                },
+                mouseover: function(e) {
+                    if(typeof e.target.setStyle === "function"){
+                        const highlightStyle = geo_json_dce48da5752ceae4420d56d504e19c69_highlighter(e.target.feature)
+                        e.target.setStyle(highlightStyle);
+                    }
+                },
+            });
+        };
+        var geo_json_dce48da5752ceae4420d56d504e19c69 = L.geoJson(null, {
+                onEachFeature: geo_json_dce48da5752ceae4420d56d504e19c69_onEachFeature,
+            
+                style: geo_json_dce48da5752ceae4420d56d504e19c69_styler,
+            ...{
+  "interactive": true,
+}
+        });
+
+        function geo_json_dce48da5752ceae4420d56d504e19c69_add (data) {
+            geo_json_dce48da5752ceae4420d56d504e19c69
+                .addData(data);
+        }
+            geo_json_dce48da5752ceae4420d56d504e19c69_add({"bbox": [44.583942413000045, 42.624736786000085, 45.31081008900014, 43.57490158100006], "features": [{"bbox": [44.583942413000045, 43.28902053900015, 45.00806045500019, 43.57490158100006], "geometry": {"coordinates": [[[44.92815780500007, 43.53591918900014], [44.94995117200017, 43.51895904600008], [44.96030425900011, 43.511825562000126], [44.9807853690001, 43.508590698000035], [45.00806045500019, 43.510517121000134], [44.971145630000194, 43.47594451900005], [44.96308517400007, 43.43718719500015], [44.950527191000106, 43.405456543000184], [44.93111038100011, 43.380882264000036], [44.91377258300014, 43.36663818400007], [44.893665314000145, 43.36075592100019], [44.86959457400013, 43.35614395200008], [44.844852447000164, 43.35449218700012], [44.823432923000155, 43.34702301000016], [44.79476165700004, 43.33025360200003], [44.77194976800001, 43.31184005800003], [44.76038742100019, 43.296577454000044], [44.74911117500011, 43.28902053900015], [44.736228944000175, 43.29004287700013], [44.71964263900014, 43.29556274400011], [44.70375824000007, 43.30654525799997], [44.69351577800012, 43.31861495900006], [44.6826019290001, 43.33213043200004], [44.67502594100017, 43.34187698400018], [44.66140365500013, 43.34613418599997], [44.63563156000015, 43.35425567600015], [44.61210250800008, 43.36209487900015], [44.59593963500009, 43.37579727100001], [44.583942413000045, 43.398376466000116], [44.59435272300004, 43.424774171000195], [44.60224151600005, 43.45574951200007], [44.59740829399999, 43.47784423800016], [44.596286774000134, 43.50758743400013], [44.59792709300001, 43.52709961000005], [44.61225509700017, 43.53494262800007], [44.645069122000166, 43.54139328000019], [44.6737594600001, 43.53688430900007], [44.710220338000056, 43.53836822599999], [44.72732162400018, 43.525157929000045], [44.72349929800009, 43.501739502000135], [44.73504638600019, 43.48347473100017], [44.758167266999976, 43.47588348300019], [44.790744781, 43.476562500000114], [44.81823348900019, 43.48669052200006], [44.826026917000036, 43.50740051300005], [44.826797484999986, 43.53094863900009], [44.81655120800019, 43.55810928400001], [44.82924652000003, 43.57490158100006], [44.85094070400004, 43.57374954200003], [44.87655258200016, 43.572834016000115], [44.886047364000035, 43.56037902800006], [44.892753601000095, 43.54350662200011], [44.90917205800008, 43.53322219800003], [44.92815780500007, 43.53591918900014]]], "type": "Polygon"}, "id": "452", "properties": {"CC_2": "R42010", "COUNTRY": "Russia", "ENGTYPE_2": "District", "GID_0": "RUS", "GID_1": "RUS.17_1", "GID_2": "RUS.17.1_1", "HASC_2": "RU.IN.MR", "NAME_1": "Ingush", "NAME_2": "Malgobekskiy rayon", "NL_NAME_1": "\u0420\u0435\u0441\u043f\u0443\u0301\u0431\u043b\u0438\u043a\u0430 \u0418\u043d\u0433\u0443\u0448\u0435\u0301\u0442\u0438\u044f", "NL_NAME_2": "\u041c\u0430\u043b\u0433\u043e\u0431\u0435\u043a\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "TYPE_2": "Raion", "VARNAME_2": "NA", "display_name": "\u041c\u0430\u043b\u0433\u043e\u0431\u0435\u043a\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "is_choropleth": 1, "is_district_layer": 0, "pop_display": "15 350 \u0447\u0435\u043b.", "population": 15350}, "type": "Feature"}, {"bbox": [44.64410018900003, 43.058734894000054, 45.02289962700013, 43.36663818400007], "geometry": {"coordinates": [[[44.66140365500013, 43.34613418599997], [44.67502594100017, 43.34187698400018], [44.6826019290001, 43.33213043200004], [44.69351577800012, 43.31861495900006], [44.70375824000007, 43.30654525799997], [44.71964263900014, 43.29556274400011], [44.736228944000175, 43.29004287700013], [44.74911117500011, 43.28902053900015], [44.76038742100019, 43.296577454000044], [44.77194976800001, 43.31184005800003], [44.79476165700004, 43.33025360200003], [44.823432923000155, 43.34702301000016], [44.844852447000164, 43.35449218700012], [44.86959457400013, 43.35614395200008], [44.893665314000145, 43.36075592100019], [44.91377258300014, 43.36663818400007], [44.89371490400015, 43.32220459000018], [44.89224243200016, 43.287567139000146], [44.89192962700014, 43.26544189500004], [44.893302917000085, 43.24816894500009], [44.92646026600005, 43.23064422600004], [44.94669342100019, 43.23449325700011], [44.96798324600019, 43.23565673900009], [44.985973359000184, 43.229236603000004], [45.005920409, 43.21541214000007], [45.02289962700013, 43.20220947400014], [45.01919937100007, 43.18039703400012], [44.996467591, 43.149883270000146], [44.97497940100004, 43.12488937300009], [44.95468902600015, 43.100543975000164], [44.93271255600007, 43.079338074000134], [44.90766143700006, 43.058734894000054], [44.88585662800011, 43.07247161900017], [44.86230468700012, 43.08531570400004], [44.83623504600007, 43.10547637900004], [44.81568527200011, 43.1108398450001], [44.79178237999997, 43.11996841500007], [44.775020599000186, 43.13366699200009], [44.76374816900011, 43.15997696000005], [44.75040054300007, 43.178794862000075], [44.73080062900016, 43.18197631800007], [44.70351409900002, 43.18249511800019], [44.677162171000134, 43.17300796600017], [44.64410018900003, 43.182109832000094], [44.66234970200014, 43.20425796500007], [44.66197967500017, 43.22841644200008], [44.664173125000104, 43.25668334900007], [44.6574172980001, 43.289669037000124], [44.65645599300001, 43.319557190000126], [44.66140365500013, 43.34613418599997]]], "type": "Polygon"}, "id": "453", "properties": {"CC_2": "R42010", "COUNTRY": "Russia", "ENGTYPE_2": "District", "GID_0": "RUS", "GID_1": "RUS.17_1", "GID_2": "RUS.17.2_1", "HASC_2": "RU.IN.NR", "NAME_1": "Ingush", "NAME_2": "Nazranovskiy rayon", "NL_NAME_1": "\u0420\u0435\u0441\u043f\u0443\u0301\u0431\u043b\u0438\u043a\u0430 \u0418\u043d\u0433\u0443\u0448\u0435\u0301\u0442\u0438\u044f", "NL_NAME_2": "\u041d\u0430\u0437\u0440\u0430\u043d\u043e\u0432\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "TYPE_2": "Raion", "VARNAME_2": "NA", "display_name": "\u041d\u0430\u0437\u0440\u0430\u043d\u043e\u0432\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "is_choropleth": 1, "is_district_layer": 0, "pop_display": "13 625 \u0447\u0435\u043b.", "population": 13625}, "type": "Feature"}, {"bbox": [44.67448806800013, 42.624736786000085, 45.31081008900014, 43.510517121000134], "geometry": {"coordinates": [[[45.0888748160001, 42.695873260000155], [45.082946778000064, 42.69460678100012], [45.04552841200007, 42.69852829000013], [45.035068512000066, 42.70124435400015], [44.99999999900007, 42.72679901200013], [44.99571228100007, 42.72992324799998], [44.971057893000136, 42.74457550000017], [44.95503997800006, 42.74853134200009], [44.92753219600007, 42.75268936200001], [44.91097641000016, 42.75210189800009], [44.906066895000095, 42.75192642200017], [44.89170837500012, 42.74988937400019], [44.878253937000125, 42.74692154000013], [44.869071961000145, 42.74158477700007], [44.860134125000116, 42.73418045000017], [44.851135254000155, 42.72494507000005], [44.83206939700011, 42.701683045000095], [44.81792450000012, 42.66688537700003], [44.80377578700012, 42.64165878200009], [44.79820251500013, 42.63172149600018], [44.78342819300019, 42.62532806399997], [44.77751922600004, 42.624736786000085], [44.7679367070001, 42.62558364900008], [44.75845718300019, 42.62985992400013], [44.75298690699998, 42.63338470400009], [44.74649047800011, 42.64402771000016], [44.73438644500004, 42.69260406400002], [44.72741317800012, 42.72059631400009], [44.72076797500017, 42.72665405200007], [44.71286392200011, 42.732276916000046], [44.70682525600017, 42.738101959000176], [44.697326661000034, 42.74237442100019], [44.687183381000125, 42.74596786500018], [44.67710876400008, 42.747947693000185], [44.67937469500009, 42.75283813400006], [44.67448806800013, 42.79051208500016], [44.68863296600006, 42.833896638000056], [44.714462279000145, 42.85615158100018], [44.73836517400014, 42.84936142000015], [44.724578858000086, 42.83371353200005], [44.731685639000034, 42.81901550300012], [44.750961303999986, 42.80580902100019], [44.79410552900009, 42.789524078000056], [44.851608276000036, 42.788829803000056], [44.880001069000116, 42.79542923000014], [44.91403198300014, 42.81735229500015], [44.92008972200017, 42.836887360000105], [44.94644546500007, 42.85648727400013], [44.980396271000075, 42.88537597700008], [44.974933625000176, 42.90773391800013], [44.963863373000095, 42.93601226800013], [44.94179153400006, 42.956306458000086], [44.94245529200009, 42.96797180300007], [44.94633102400013, 42.99430084200009], [44.939445496000076, 43.02011489900019], [44.929515839000146, 43.04457092200016], [44.90766143700006, 43.058734894000054], [44.93271255600007, 43.079338074000134], [44.95468902600015, 43.100543975000164], [44.97497940100004, 43.12488937300009], [44.996467591, 43.149883270000146], [45.01919937100007, 43.18039703400012], [45.02289962700013, 43.20220947400014], [45.005920409, 43.21541214000007], [44.985973359000184, 43.229236603000004], [44.96798324600019, 43.23565673900009], [44.94669342100019, 43.23449325700011], [44.92646026600005, 43.23064422600004], [44.893302917000085, 43.24816894500009], [44.89192962700014, 43.26544189500004], [44.89224243200016, 43.287567139000146], [44.89371490400015, 43.32220459000018], [44.91377258300014, 43.36663818400007], [44.93111038100011, 43.380882264000036], [44.950527191000106, 43.405456543000184], [44.96308517400007, 43.43718719500015], [44.971145630000194, 43.47594451900005], [45.00806045500019, 43.510517121000134], [45.03976440500003, 43.504478455000026], [45.061775207000096, 43.494781494000165], [45.09531402599998, 43.4732856760001], [45.134498597000004, 43.45140457100018], [45.16412353499999, 43.440933228000006], [45.196567534999986, 43.4374580380001], [45.218349456000055, 43.437812804000146], [45.19731903000013, 43.409404755000025], [45.19604873600014, 43.38275527900004], [45.195579529000156, 43.359928132000164], [45.19784546000017, 43.34759902900015], [45.215854644000046, 43.325931549000074], [45.25113296500018, 43.320610047000116], [45.2772750850001, 43.32445907500011], [45.29563903800016, 43.31937408400006], [45.31081008900014, 43.30858993600009], [45.30857467599998, 43.27468109200004], [45.3019332880001, 43.235301972000116], [45.30439758300014, 43.204540253000175], [45.30168533300008, 43.18769454900007], [45.28742981000016, 43.17310714800004], [45.25728607300016, 43.14416122400013], [45.23068618900004, 43.115238191], [45.202224731, 43.07858276400003], [45.18202590900012, 43.047199250000176], [45.16761779800004, 43.003364564000094], [45.164619446000074, 42.97655487000014], [45.15805435300018, 42.959629059000065], [45.17029952900015, 42.93893051200013], [45.19654846200012, 42.92470932100008], [45.21262359500014, 42.909942626000145], [45.207954406000056, 42.89029312100013], [45.19095993000013, 42.86701202400019], [45.16406631500007, 42.842899322000164], [45.14733123800016, 42.82627487300016], [45.148700715000075, 42.80519867000004], [45.154243468999994, 42.787807465000014], [45.15911102300004, 42.76164627200001], [45.132682799000065, 42.733848572000056], [45.10008621200012, 42.70910644500003], [45.0888748160001, 42.695873260000155]]], "type": "Polygon"}, "id": "454", "properties": {"CC_2": "R42010", "COUNTRY": "Russia", "ENGTYPE_2": "District", "GID_0": "RUS", "GID_1": "RUS.17_1", "GID_2": "RUS.17.3_1", "HASC_2": "RU.IN.SU", "NAME_1": "Ingush", "NAME_2": "Sunzhenskiy rayon", "NL_NAME_1": "\u0420\u0435\u0441\u043f\u0443\u0301\u0431\u043b\u0438\u043a\u0430 \u0418\u043d\u0433\u0443\u0448\u0435\u0301\u0442\u0438\u044f", "NL_NAME_2": "\u0421\u0443\u043d\u0436\u0435\u043d\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "TYPE_2": "Raion", "VARNAME_2": "NA", "display_name": "\u0421\u0443\u043d\u0436\u0435\u043d\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "is_choropleth": 1, "is_district_layer": 0, "pop_display": "51 650 \u0447\u0435\u043b.", "population": 51650}, "type": "Feature"}], "type": "FeatureCollection"});
+
+        
+    
+    geo_json_dce48da5752ceae4420d56d504e19c69.bindTooltip(
+    function(layer){
+    let div = L.DomUtil.create('div');
+    
+    let handleObject = feature => {
+        if (feature === null) {
+            return '';
+        } else if (typeof(feature)=='object') {
+            return JSON.stringify(feature);
+        } else {
+            return feature;
+        }
+    }
+    let fields = ["display_name", "pop_display"];
+    let aliases = ["\u0422\u0435\u0440\u0440\u0438\u0442\u043e\u0440\u0438\u044f:", "\u041d\u0430\u0441\u0435\u043b\u0435\u043d\u0438\u0435:"];
+    let table = '<table>' +
+        String(
+        fields.map(
+        (v,i)=>
+        `<tr>
+            <th>${aliases[i]}</th>
+            
+            <td>${handleObject(layer.feature.properties[v])}</td>
+        </tr>`).join(''))
+    +'</table>';
+    div.innerHTML=table;
+    
+    return div
+    }
+    ,{
+  "sticky": true,
+  "className": "foliumtooltip",
+});
+                     
+    
+        function geo_json_976081594553d6b2387f3dc38cd61f9f_styler(feature) {
+            switch(feature.id) {
+                case "452": 
+                    return {"color": "#334155", "dashArray": null, "fillColor": "#74C476", "fillOpacity": 0.72, "weight": 1.5};
+                case "453": 
+                    return {"color": "#334155", "dashArray": null, "fillColor": "#EDF8E9", "fillOpacity": 0.72, "weight": 1.5};
+                default:
+                    return {"color": "#334155", "dashArray": null, "fillColor": "#006D2C", "fillOpacity": 0.72, "weight": 1.5};
+            }
+        }
+        function geo_json_976081594553d6b2387f3dc38cd61f9f_highlighter(feature) {
+            switch(feature.id) {
+                default:
+                    return {"color": "#064E3B", "fillOpacity": 0.9, "weight": 3};
+            }
+        }
+
+        function geo_json_976081594553d6b2387f3dc38cd61f9f_onEachFeature(feature, layer) {
+
+            layer.on({
+                mouseout: function(e) {
+                    if(typeof e.target.setStyle === "function"){
+                            geo_json_976081594553d6b2387f3dc38cd61f9f.resetStyle(e.target);
+                    }
+                },
+                mouseover: function(e) {
+                    if(typeof e.target.setStyle === "function"){
+                        const highlightStyle = geo_json_976081594553d6b2387f3dc38cd61f9f_highlighter(e.target.feature)
+                        e.target.setStyle(highlightStyle);
+                    }
+                },
+            });
+        };
+        var geo_json_976081594553d6b2387f3dc38cd61f9f = L.geoJson(null, {
+                onEachFeature: geo_json_976081594553d6b2387f3dc38cd61f9f_onEachFeature,
+            
+                style: geo_json_976081594553d6b2387f3dc38cd61f9f_styler,
+            ...{
+  "interactive": true,
+}
+        });
+
+        function geo_json_976081594553d6b2387f3dc38cd61f9f_add (data) {
+            geo_json_976081594553d6b2387f3dc38cd61f9f
+                .addData(data);
+        }
+            geo_json_976081594553d6b2387f3dc38cd61f9f_add({"bbox": [44.583942413000045, 42.624736786000085, 45.31081008900014, 43.57490158100006], "features": [{"bbox": [44.583942413000045, 43.28902053900015, 45.00806045500019, 43.57490158100006], "geometry": {"coordinates": [[[44.92815780500007, 43.53591918900014], [44.94995117200017, 43.51895904600008], [44.96030425900011, 43.511825562000126], [44.9807853690001, 43.508590698000035], [45.00806045500019, 43.510517121000134], [44.971145630000194, 43.47594451900005], [44.96308517400007, 43.43718719500015], [44.950527191000106, 43.405456543000184], [44.93111038100011, 43.380882264000036], [44.91377258300014, 43.36663818400007], [44.893665314000145, 43.36075592100019], [44.86959457400013, 43.35614395200008], [44.844852447000164, 43.35449218700012], [44.823432923000155, 43.34702301000016], [44.79476165700004, 43.33025360200003], [44.77194976800001, 43.31184005800003], [44.76038742100019, 43.296577454000044], [44.74911117500011, 43.28902053900015], [44.736228944000175, 43.29004287700013], [44.71964263900014, 43.29556274400011], [44.70375824000007, 43.30654525799997], [44.69351577800012, 43.31861495900006], [44.6826019290001, 43.33213043200004], [44.67502594100017, 43.34187698400018], [44.66140365500013, 43.34613418599997], [44.63563156000015, 43.35425567600015], [44.61210250800008, 43.36209487900015], [44.59593963500009, 43.37579727100001], [44.583942413000045, 43.398376466000116], [44.59435272300004, 43.424774171000195], [44.60224151600005, 43.45574951200007], [44.59740829399999, 43.47784423800016], [44.596286774000134, 43.50758743400013], [44.59792709300001, 43.52709961000005], [44.61225509700017, 43.53494262800007], [44.645069122000166, 43.54139328000019], [44.6737594600001, 43.53688430900007], [44.710220338000056, 43.53836822599999], [44.72732162400018, 43.525157929000045], [44.72349929800009, 43.501739502000135], [44.73504638600019, 43.48347473100017], [44.758167266999976, 43.47588348300019], [44.790744781, 43.476562500000114], [44.81823348900019, 43.48669052200006], [44.826026917000036, 43.50740051300005], [44.826797484999986, 43.53094863900009], [44.81655120800019, 43.55810928400001], [44.82924652000003, 43.57490158100006], [44.85094070400004, 43.57374954200003], [44.87655258200016, 43.572834016000115], [44.886047364000035, 43.56037902800006], [44.892753601000095, 43.54350662200011], [44.90917205800008, 43.53322219800003], [44.92815780500007, 43.53591918900014]]], "type": "Polygon"}, "id": "452", "properties": {"CC_2": "R42010", "COUNTRY": "Russia", "ENGTYPE_2": "District", "GID_0": "RUS", "GID_1": "RUS.17_1", "GID_2": "RUS.17.1_1", "HASC_2": "RU.IN.MR", "NAME_1": "Ingush", "NAME_2": "Malgobekskiy rayon", "NL_NAME_1": "\u0420\u0435\u0441\u043f\u0443\u0301\u0431\u043b\u0438\u043a\u0430 \u0418\u043d\u0433\u0443\u0448\u0435\u0301\u0442\u0438\u044f", "NL_NAME_2": "\u041c\u0430\u043b\u0433\u043e\u0431\u0435\u043a\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "TYPE_2": "Raion", "VARNAME_2": "NA", "display_name": "\u041c\u0430\u043b\u0433\u043e\u0431\u0435\u043a\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "grp": 13.0, "grp_display": "13,0 \u043c\u043b\u0440\u0434 \u20bd", "is_choropleth": 1, "is_district_layer": 0, "is_economy": 1}, "type": "Feature"}, {"bbox": [44.64410018900003, 43.058734894000054, 45.02289962700013, 43.36663818400007], "geometry": {"coordinates": [[[44.66140365500013, 43.34613418599997], [44.67502594100017, 43.34187698400018], [44.6826019290001, 43.33213043200004], [44.69351577800012, 43.31861495900006], [44.70375824000007, 43.30654525799997], [44.71964263900014, 43.29556274400011], [44.736228944000175, 43.29004287700013], [44.74911117500011, 43.28902053900015], [44.76038742100019, 43.296577454000044], [44.77194976800001, 43.31184005800003], [44.79476165700004, 43.33025360200003], [44.823432923000155, 43.34702301000016], [44.844852447000164, 43.35449218700012], [44.86959457400013, 43.35614395200008], [44.893665314000145, 43.36075592100019], [44.91377258300014, 43.36663818400007], [44.89371490400015, 43.32220459000018], [44.89224243200016, 43.287567139000146], [44.89192962700014, 43.26544189500004], [44.893302917000085, 43.24816894500009], [44.92646026600005, 43.23064422600004], [44.94669342100019, 43.23449325700011], [44.96798324600019, 43.23565673900009], [44.985973359000184, 43.229236603000004], [45.005920409, 43.21541214000007], [45.02289962700013, 43.20220947400014], [45.01919937100007, 43.18039703400012], [44.996467591, 43.149883270000146], [44.97497940100004, 43.12488937300009], [44.95468902600015, 43.100543975000164], [44.93271255600007, 43.079338074000134], [44.90766143700006, 43.058734894000054], [44.88585662800011, 43.07247161900017], [44.86230468700012, 43.08531570400004], [44.83623504600007, 43.10547637900004], [44.81568527200011, 43.1108398450001], [44.79178237999997, 43.11996841500007], [44.775020599000186, 43.13366699200009], [44.76374816900011, 43.15997696000005], [44.75040054300007, 43.178794862000075], [44.73080062900016, 43.18197631800007], [44.70351409900002, 43.18249511800019], [44.677162171000134, 43.17300796600017], [44.64410018900003, 43.182109832000094], [44.66234970200014, 43.20425796500007], [44.66197967500017, 43.22841644200008], [44.664173125000104, 43.25668334900007], [44.6574172980001, 43.289669037000124], [44.65645599300001, 43.319557190000126], [44.66140365500013, 43.34613418599997]]], "type": "Polygon"}, "id": "453", "properties": {"CC_2": "R42010", "COUNTRY": "Russia", "ENGTYPE_2": "District", "GID_0": "RUS", "GID_1": "RUS.17_1", "GID_2": "RUS.17.2_1", "HASC_2": "RU.IN.NR", "NAME_1": "Ingush", "NAME_2": "Nazranovskiy rayon", "NL_NAME_1": "\u0420\u0435\u0441\u043f\u0443\u0301\u0431\u043b\u0438\u043a\u0430 \u0418\u043d\u0433\u0443\u0448\u0435\u0301\u0442\u0438\u044f", "NL_NAME_2": "\u041d\u0430\u0437\u0440\u0430\u043d\u043e\u0432\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "TYPE_2": "Raion", "VARNAME_2": "NA", "display_name": "\u041d\u0430\u0437\u0440\u0430\u043d\u043e\u0432\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "grp": 11.6, "grp_display": "11,6 \u043c\u043b\u0440\u0434 \u20bd", "is_choropleth": 1, "is_district_layer": 0, "is_economy": 1}, "type": "Feature"}, {"bbox": [44.67448806800013, 42.624736786000085, 45.31081008900014, 43.510517121000134], "geometry": {"coordinates": [[[45.0888748160001, 42.695873260000155], [45.082946778000064, 42.69460678100012], [45.04552841200007, 42.69852829000013], [45.035068512000066, 42.70124435400015], [44.99999999900007, 42.72679901200013], [44.99571228100007, 42.72992324799998], [44.971057893000136, 42.74457550000017], [44.95503997800006, 42.74853134200009], [44.92753219600007, 42.75268936200001], [44.91097641000016, 42.75210189800009], [44.906066895000095, 42.75192642200017], [44.89170837500012, 42.74988937400019], [44.878253937000125, 42.74692154000013], [44.869071961000145, 42.74158477700007], [44.860134125000116, 42.73418045000017], [44.851135254000155, 42.72494507000005], [44.83206939700011, 42.701683045000095], [44.81792450000012, 42.66688537700003], [44.80377578700012, 42.64165878200009], [44.79820251500013, 42.63172149600018], [44.78342819300019, 42.62532806399997], [44.77751922600004, 42.624736786000085], [44.7679367070001, 42.62558364900008], [44.75845718300019, 42.62985992400013], [44.75298690699998, 42.63338470400009], [44.74649047800011, 42.64402771000016], [44.73438644500004, 42.69260406400002], [44.72741317800012, 42.72059631400009], [44.72076797500017, 42.72665405200007], [44.71286392200011, 42.732276916000046], [44.70682525600017, 42.738101959000176], [44.697326661000034, 42.74237442100019], [44.687183381000125, 42.74596786500018], [44.67710876400008, 42.747947693000185], [44.67937469500009, 42.75283813400006], [44.67448806800013, 42.79051208500016], [44.68863296600006, 42.833896638000056], [44.714462279000145, 42.85615158100018], [44.73836517400014, 42.84936142000015], [44.724578858000086, 42.83371353200005], [44.731685639000034, 42.81901550300012], [44.750961303999986, 42.80580902100019], [44.79410552900009, 42.789524078000056], [44.851608276000036, 42.788829803000056], [44.880001069000116, 42.79542923000014], [44.91403198300014, 42.81735229500015], [44.92008972200017, 42.836887360000105], [44.94644546500007, 42.85648727400013], [44.980396271000075, 42.88537597700008], [44.974933625000176, 42.90773391800013], [44.963863373000095, 42.93601226800013], [44.94179153400006, 42.956306458000086], [44.94245529200009, 42.96797180300007], [44.94633102400013, 42.99430084200009], [44.939445496000076, 43.02011489900019], [44.929515839000146, 43.04457092200016], [44.90766143700006, 43.058734894000054], [44.93271255600007, 43.079338074000134], [44.95468902600015, 43.100543975000164], [44.97497940100004, 43.12488937300009], [44.996467591, 43.149883270000146], [45.01919937100007, 43.18039703400012], [45.02289962700013, 43.20220947400014], [45.005920409, 43.21541214000007], [44.985973359000184, 43.229236603000004], [44.96798324600019, 43.23565673900009], [44.94669342100019, 43.23449325700011], [44.92646026600005, 43.23064422600004], [44.893302917000085, 43.24816894500009], [44.89192962700014, 43.26544189500004], [44.89224243200016, 43.287567139000146], [44.89371490400015, 43.32220459000018], [44.91377258300014, 43.36663818400007], [44.93111038100011, 43.380882264000036], [44.950527191000106, 43.405456543000184], [44.96308517400007, 43.43718719500015], [44.971145630000194, 43.47594451900005], [45.00806045500019, 43.510517121000134], [45.03976440500003, 43.504478455000026], [45.061775207000096, 43.494781494000165], [45.09531402599998, 43.4732856760001], [45.134498597000004, 43.45140457100018], [45.16412353499999, 43.440933228000006], [45.196567534999986, 43.4374580380001], [45.218349456000055, 43.437812804000146], [45.19731903000013, 43.409404755000025], [45.19604873600014, 43.38275527900004], [45.195579529000156, 43.359928132000164], [45.19784546000017, 43.34759902900015], [45.215854644000046, 43.325931549000074], [45.25113296500018, 43.320610047000116], [45.2772750850001, 43.32445907500011], [45.29563903800016, 43.31937408400006], [45.31081008900014, 43.30858993600009], [45.30857467599998, 43.27468109200004], [45.3019332880001, 43.235301972000116], [45.30439758300014, 43.204540253000175], [45.30168533300008, 43.18769454900007], [45.28742981000016, 43.17310714800004], [45.25728607300016, 43.14416122400013], [45.23068618900004, 43.115238191], [45.202224731, 43.07858276400003], [45.18202590900012, 43.047199250000176], [45.16761779800004, 43.003364564000094], [45.164619446000074, 42.97655487000014], [45.15805435300018, 42.959629059000065], [45.17029952900015, 42.93893051200013], [45.19654846200012, 42.92470932100008], [45.21262359500014, 42.909942626000145], [45.207954406000056, 42.89029312100013], [45.19095993000013, 42.86701202400019], [45.16406631500007, 42.842899322000164], [45.14733123800016, 42.82627487300016], [45.148700715000075, 42.80519867000004], [45.154243468999994, 42.787807465000014], [45.15911102300004, 42.76164627200001], [45.132682799000065, 42.733848572000056], [45.10008621200012, 42.70910644500003], [45.0888748160001, 42.695873260000155]]], "type": "Polygon"}, "id": "454", "properties": {"CC_2": "R42010", "COUNTRY": "Russia", "ENGTYPE_2": "District", "GID_0": "RUS", "GID_1": "RUS.17_1", "GID_2": "RUS.17.3_1", "HASC_2": "RU.IN.SU", "NAME_1": "Ingush", "NAME_2": "Sunzhenskiy rayon", "NL_NAME_1": "\u0420\u0435\u0441\u043f\u0443\u0301\u0431\u043b\u0438\u043a\u0430 \u0418\u043d\u0433\u0443\u0448\u0435\u0301\u0442\u0438\u044f", "NL_NAME_2": "\u0421\u0443\u043d\u0436\u0435\u043d\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "TYPE_2": "Raion", "VARNAME_2": "NA", "display_name": "\u0421\u0443\u043d\u0436\u0435\u043d\u0441\u043a\u0438\u0439 \u0440\u0430\u0439\u043e\u043d", "grp": 43.9, "grp_display": "43,9 \u043c\u043b\u0440\u0434 \u20bd", "is_choropleth": 1, "is_district_layer": 0, "is_economy": 1}, "type": "Feature"}], "type": "FeatureCollection"});
+
+        
+    
+    geo_json_976081594553d6b2387f3dc38cd61f9f.bindTooltip(
+    function(layer){
+    let div = L.DomUtil.create('div');
+    
+    let handleObject = feature => {
+        if (feature === null) {
+            return '';
+        } else if (typeof(feature)=='object') {
+            return JSON.stringify(feature);
+        } else {
+            return feature;
+        }
+    }
+    let fields = ["display_name", "grp_display"];
+    let aliases = ["\u0422\u0435\u0440\u0440\u0438\u0442\u043e\u0440\u0438\u044f:", "\u0412\u0420\u041f:"];
+    let table = '<table>' +
+        String(
+        fields.map(
+        (v,i)=>
+        `<tr>
+            <th>${aliases[i]}</th>
+            
+            <td>${handleObject(layer.feature.properties[v])}</td>
+        </tr>`).join(''))
+    +'</table>';
+    div.innerHTML=table;
+    
+    return div
+    }
+    ,{
+  "sticky": true,
+  "className": "foliumtooltip",
+});
+                     
+    
+            var feature_group_3551b7ec17da1130e4c1f2a946172177 = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var marker_91226cebe09f8bb67696527d751206f1 = L.marker(
+                [43.2330031, 44.7830015],
+                {
+}
+            ).addTo(feature_group_3551b7ec17da1130e4c1f2a946172177);
+        
+    
+            var icon_b871cd2588d4cc2b52df4a77ef650cfc = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "star",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_adf97a8c8a2e8650e461ccf3e5039c2a = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_e2b3fe80cebdb96f291281f9d2bb433e = $(`<div id="html_e2b3fe80cebdb96f291281f9d2bb433e" style="width: 100.0%; height: 100.0%;"><b>Назрань</b><br>Тип: центр региона</div>`)[0];
+                popup_adf97a8c8a2e8650e461ccf3e5039c2a.setContent(html_e2b3fe80cebdb96f291281f9d2bb433e);
+            
+        
+
+        marker_91226cebe09f8bb67696527d751206f1.bindPopup(popup_adf97a8c8a2e8650e461ccf3e5039c2a)
+        ;
+
+        
+    
+    
+            marker_91226cebe09f8bb67696527d751206f1.bindTooltip(
+                `<div>
+                     Назрань
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_91226cebe09f8bb67696527d751206f1.setIcon(icon_b871cd2588d4cc2b52df4a77ef650cfc);
+            
+    
+            feature_group_3551b7ec17da1130e4c1f2a946172177.addTo(map_804b4e905c828d0f8546b9999b0457e2);
+        
+    
+            var layer_control_f88701beb1bfb74dd9631dc54f99dd1e_layers = {
+                base_layers : {
+                    "Carto Voyager" : tile_layer_7138f54224def06eb5b5abd7e7f4f9e7,
+                    "\u0421\u043f\u0443\u0442\u043d\u0438\u043a (Esri)" : tile_layer_913629d9f720ce2283576da0ff28144a,
+                    "\u0422\u0435\u043c\u043d\u0430\u044f \u0442\u0435\u043c\u0430 (Carto)" : tile_layer_143a05d4fdb4a91e71940d1893a0cb00,
+                },
+                overlays :  {
+                    "\u0422\u0435\u0440\u0440\u0438\u0442\u043e\u0440\u0438\u0438" : geo_json_9fd96dc253e60cfdcd92c034de7eddf7,
+                    "\u041d\u0430\u0441\u0435\u043b\u0435\u043d\u0438\u0435" : geo_json_dce48da5752ceae4420d56d504e19c69,
+                    "\u042d\u043a\u043e\u043d\u043e\u043c\u0438\u043a\u0430 (\u0412\u0420\u041f)" : geo_json_976081594553d6b2387f3dc38cd61f9f,
+                    "\u0426\u0435\u043d\u0442\u0440\u044b" : feature_group_3551b7ec17da1130e4c1f2a946172177,
+                },
+            };
+            let layer_control_f88701beb1bfb74dd9631dc54f99dd1e = L.control.layers(
+                layer_control_f88701beb1bfb74dd9631dc54f99dd1e_layers.base_layers,
+                layer_control_f88701beb1bfb74dd9631dc54f99dd1e_layers.overlays,
+                {
+  "position": "bottomleft",
+  "collapsed": false,
+  "autoZIndex": true,
+}
+            ).addTo(map_804b4e905c828d0f8546b9999b0457e2);
+
+        
+    
+            L.control.fullscreen(
+                {
+  "position": "topleft",
+  "title": "Full Screen",
+  "titleCancel": "Exit Full Screen",
+  "forceSeparateButton": false,
+}
+            ).addTo(map_804b4e905c828d0f8546b9999b0457e2);
+        
+</script>
+</html>

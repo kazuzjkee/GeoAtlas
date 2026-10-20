@@ -4,15 +4,199 @@ from folium import plugins
 import os
 import json
 import webbrowser
+from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point
 
-BASE_PATH = 'Py_Geo/shape/'
+# ==========================================
+# КОНФИГУРАЦИЯ И ТРАНСЛИТЕРАЦИЯ
+# ==========================================
+BASE_SHP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Py_Geo', 'shape', 'russia_unified')
 
-SHAPEFILES = {
-    'districts': 'raion.shp',
-    'district_centers': 'raicentr.shp',
-    'rivers': 'water-line.shp',
-    'water_bodies': 'water-polygon.shp'
+REGION_TRANSLATIONS = {
+    'Adygey': 'Республика Адыгея', 'Altay': 'Алтайский край', 'Amur': 'Амурская область',
+    "Arkhangel'sk": 'Архангельская область', "Astrakhan'": 'Астраханская область',
+    'Bashkortostan': 'Республика Башкортостан', 'Belgorod': 'Белгородская область',
+    'Bryansk': 'Брянская область', 'Buryat': 'Республика Бурятия', 'Chechnya': 'Чеченская Республика',
+    'Chelyabinsk': 'Челябинская область', 'Chukot': 'Чукотский автономный округ',
+    'Chuvash': 'Чувашская Республика', 'City of St. Petersburg': 'Санкт-Петербург',
+    'Dagestan': 'Республика Дагестан', 'Gorno-Altay': 'Республика Алтай',
+    'Ingush': 'Республика Ингушетия', 'Irkutsk': 'Иркутская область',
+    'Ivanovo': 'Ивановская область', 'Kabardin-Balkar': 'Кабардино-Балкарская Республика',
+    'Kaliningrad': 'Калининградская область', 'Kalmyk': 'Республика Калмыкия',
+    'Kaluga': 'Калужская область', 'Kamchatka': 'Камчатский край',
+    'Karachay-Cherkess': 'Карачаево-Черкесская Республика', 'Karelia': 'Республика Карелия',
+    'Kemerovo': 'Кемеровская область', 'Khabarovsk': 'Хабаровский край',
+    'Khakass': 'Республика Хакасия', 'Khanty-Mansiy': 'Ханты-Мансийский АО',
+    'Kirov': 'Кировская область', 'Komi': 'Республика Коми', 'Kostroma': 'Костромская область',
+    'Krasnodar': 'Краснодарский край', 'Krasnoyarsk': 'Красноярский край',
+    'Kurgan': 'Курганская область', 'Kursk': 'Курская область',
+    'Leningrad': 'Ленинградская область', 'Lipetsk': 'Липецкая область',
+    'Maga Buryatdan': 'Магаданская область', 'Mariy-El': 'Республика Марий Эл',
+    'Mordovia': 'Республика Мордовия', 'Moscow City': 'Москва', 'Moskva': 'Московская область',
+    'Murmansk': 'Мурманская область', 'Nenets': 'Ненецкий автономный округ',
+    'Nizhegorod': 'Нижегородская область', 'North Ossetia': 'Республика Северная Осетия',
+    'Novgorod': 'Новгородская область', 'Novosibirsk': 'Новосибирская область',
+    'Omsk': 'Омская область', 'Orel': 'Орловская область', 'Orenburg': 'Оренбургская область',
+    'Penza': 'Пензенская область', "Perm'": 'Пермский край', "Primor'ye": 'Приморский край',
+    'Pskov': 'Псковская область', 'Rostov': 'Ростовская область', "Ryazan'": 'Рязанская область',
+    'Sakha': 'Республика Саха (Якутия)', 'Sakhalin': 'Сахалинская область',
+    'Samara': 'Самарская область', 'Saratov': 'Саратовская область',
+    'Smolensk': 'Смоленская область', "Stavropol'": 'Ставропольский край',
+    'Sverdlovsk': 'Свердловская область', 'Tambov': 'Тамбовская область',
+    'Tatarstan': 'Республика Татарстан', 'Tomsk': 'Томская область',
+    'Tula': 'Тульская область', 'Tuva': 'Республика Тыва', "Tver'": 'Тверская область',
+    "Tyumen'": 'Тюменская область', 'Udmurt': 'Удмуртская Республика',
+    "Ul'yanovsk": 'Ульяновская область', 'Vladimir': 'Владимирская область',
+    'Volgograd': 'Волгоградская область', 'Vologda': 'Вологодская область',
+    'Voronezh': 'Воронежская область', 'Yamal-Nenets': 'Ямало-Ненецкий АО',
+    "Yaroslavl'": 'Ярославская область', 'Yevrey': 'Еврейская автономная область',
+    "Zabaykal'ye": 'Забайкальский край'
 }
+
+DISTRICT_TRANSLATIONS = {
+    'Sasovskiy': 'Сасовский район',
+    'Sasovo': 'Сасово',
+    'Eysk': 'Ейск',
+    'Elets': 'Елец',
+    'Ioshkar-Ola': 'Йошкар-Ола',
+    'Khimki': 'Химки',
+    'Dolgoprudny': 'Долгопрудный',
+    'Dzerzinski': 'Дзержинский',
+    "Egor'evsk": 'Егорьевск',
+    'Elektrostahl': 'Электросталь',
+    'Karasnoarmesyk': 'Красноармейск',
+    'Kraznoznamensk': 'Краснознаменск',
+    'Molodyozhny': 'Молодёжный',
+    'Petrovsky': 'Петровский',
+    'Protvino': 'Протвино',
+    'Pushchino': 'Пущино',
+    'Roshal': 'Рошаль',
+    'Shcherbinka': 'Щербинка',
+    'Voskhod': 'Восход',
+    'Zhukovsky': 'Жуковский',
+    'Eveno-Bytantayskiy rayon': 'Эвено-Бытантайский улус',
+    "Oktyabr'sk": 'Октябрьск',
+    'Zhigulevsk': 'Жигулёвск',
+    'Budennovsk': 'Будённовск',
+    'Essentuki': 'Ессентуки',
+    'Efremov': 'Ефремов',
+    'Raduga': 'Радужный',
+    'Primorskiy': 'Приморский район',
+    'Kinel-Cherk': 'Кинель-Черкасский район',
+    'Central': 'Центральный АО',
+    'Eastern': 'Восточный АО',
+    'North-Eastern': 'Северо-Восточный АО',
+    'Northern': 'Северный АО',
+    'South-Eastern': 'Юго-Восточный АО',
+    'South-Western': 'Юго-Западный АО',
+    'Southern': 'Южный АО',
+    'Western': 'Западный АО',
+    'Zelenogradsky': 'Зеленоградский АО'
+}
+
+def slugify_name(text):
+    import re
+    text = str(text).strip()
+    translit_map = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+        'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+        'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+        'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
+        'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+    }
+    res = []
+    for ch in text.lower():
+        if ch in translit_map:
+            res.append(translit_map[ch])
+        elif ch.isalnum():
+            res.append(ch)
+        elif ch in [' ', '-', '_']:
+            res.append('_')
+    slug = ''.join(res)
+    slug = re.sub(r'_+', '_', slug).strip('_')
+    custom_slugs = {
+        'rostov': 'rostov', 'krasnodar': 'krasnodar',
+        'city_of_st_petersburg': 'spb', 'moscow_city': 'moscow',
+        'moskva': 'moscow_oblast'
+    }
+    return custom_slugs.get(slug, slug or 'region')
+
+def clean_geom(geom):
+    """Очищает и восстанавливает валидность геометрии, преобразуя GeometryCollection в Polygon/MultiPolygon."""
+    if geom is None or geom.is_empty:
+        return geom
+    if not geom.is_valid:
+        try:
+            from shapely.validation import make_valid
+            geom = make_valid(geom)
+        except Exception:
+            try:
+                geom = geom.buffer(0)
+            except Exception:
+                pass
+    if geom.geom_type == 'GeometryCollection':
+        from shapely.ops import unary_union
+        polys = [g for g in geom.geoms if g.geom_type in ['Polygon', 'MultiPolygon']]
+        if polys:
+            geom = unary_union(polys)
+        else:
+            lines = [g for g in geom.geoms if g.geom_type in ['LineString', 'MultiLineString']]
+            if lines:
+                geom = unary_union(lines)
+    return geom
+
+# ==========================================
+# ГИБРИДНАЯ КОНФИГУРАЦИЯ РЕГИОНОВ (ДЕТАЛЬНЫЕ КАРТЫ)
+# ==========================================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+REGIONS_CONFIG = {
+    'rostov': {
+        'path': os.path.join(BASE_DIR, 'Py_Geo', 'shape', 'rostov'),
+        'title': 'Ростовская область',
+        'center': [47.5, 40.5],
+        'zoom': 8,
+        'output': 'rostov_quiz_map.html',
+        'is_rf': False,
+        'files': {
+            'districts': 'raion.shp',
+            'district_centers': 'raicentr.shp',
+            'rivers': 'water-line.shp',
+            'water_bodies': 'water-polygon.shp'
+        }
+    },
+    'krasnodar': {
+        'path': os.path.join(BASE_DIR, 'Py_Geo', 'shape', 'krasnodar'),
+        'title': 'Краснодарский край',
+        'center': [45.2, 39.0],
+        'zoom': 8,
+        'output': 'krasnodar_quiz_map.html',
+        'is_rf': False,
+        'files': {
+            'districts': 'boundary-3857.shp',
+            'district_centers': 'City-3857.shp',
+            'rivers': 'water-line.shp',
+            'water_bodies': 'water-polygon.shp'
+        }
+    },
+    'russia': {
+        'path': os.path.join(BASE_DIR, 'Py_Geo', 'shape', 'russia'),
+        'title': 'Российская Федерация',
+        'center': [63.0, 95.0],
+        'zoom': 3,
+        'output': 'russia_quiz_map.html',
+        'is_rf': True,
+        'files': {
+            'districts': 'gadm41_RUS_1.shp',
+            'district_centers': 'Cities.shp',
+            'rivers': 'Rivers.shp',
+            'water_bodies': 'Lakes.shp'
+        }
+    }
+}
+
+ACTIVE_REGION = 'russia'
+
+CARTO_KEY = 'cb1_3wsm_1_6bdccfe40c07a69c4fce7b68'
 
 STYLES = {
     'districts': {
@@ -36,70 +220,565 @@ STYLES = {
 }
 
 LAYER_NAMES = {
-    'districts': 'Районы',
+    'districts': 'Территории',
     'rivers': 'Реки',
     'water_bodies': 'Водоемы'
 }
 
-MAP_CENTER = [48.0, 40.5]
-INITIAL_ZOOM = 8
-CARTO_KEY = 'cb1_3wsm_1_6bdccfe40c07a69c4fce7b68'
-
+# ==========================================
+# ОБЪЕДИНЕННАЯ БАЗА ДАННЫХ НАСЕЛЕНИЯ
+# ==========================================
 KNOWN_POPULATION = {
-    'Ростов-на-Дону': 1140000, 'Таганрог': 245000, 'Шахты': 226000, 'Волгодонск': 168000,
-    'Новочеркасск': 163000, 'Батайск': 126000, 'Новошахтинск': 103000, 'Каменск-Шахтинский': 86000,
-    'Азов': 81000, 'Гуково': 62000, 'Донецк': 46000, 'Зверево': 19000, 'Аксайский': 121000,
-    'Азовский': 106000, 'Белокалитвинский': 91000, 'Сальский': 101000, 'Мясниковский': 52000,
-    'Красносулинский': 74000, 'Миллеровский': 63000, 'Морозовский': 37000, 'Зерноградский': 51000,
-    'Семикаракорский': 48000, 'Октябрьский': 70000, 'Неклиновский': 87000, 'Каменский': 41000,
-    'Багаевский': 33000, 'Константиновский': 31000, 'Цимлянский': 33000, 'Шолоховский': 25000,
-    'Чертковский': 30000, 'Тацинский': 34000, 'Орловский': 36000, 'Пролетарский': 33000,
-    'Матвеево-Курганский': 39000, 'Песчанокопский': 27000, 'Ремонтненский': 17000, 'Заветинский': 15000,
-    'Дубовский': 21000, 'Зимовниковский': 34000, 'Кагальницкий': 28000, 'Кашарский': 22000,
-    'Куйбышевский': 13000, 'Мартыновский': 34000, 'Милютинский': 12000, 'Обливский': 17000,
-    'Родионово-Несветайский': 22000, 'Советский': 6000, 'Тарасовский': 27000, 'Усть-Донецкий': 28000,
-    'Целинский': 29000, 'Боковский': 14000, 'Верхнедонской': 17000, 'Веселовский': 25000, 'Волгодонской': 33000
+    # 1. Города федерального значения и составные / специфичные основы (ДОЛЖНЫ идти ДО общих корней)
+    'санкт-петербург': 5597763,
+    'петербург': 5597763,
+    'севастопол': 561374,
+    'московск': 8594454,
+    'москв': 13104177,
+    'ростов-на-дону': 1140000,
+    'ростов': 4132800,
+    'краснодарск': 5833000,
+    'краснодар': 1100000,
+    'приморско-ахтар': 59000,   # Должен идти ДО 'примор'
+    'усть-лабин': 105000,       # Должен идти ДО 'лабин' и 'абин'
+    'лабин': 97000,             # Должен идти ДО 'абин' ('л-абин-ский')
+    'абинск': 98000,
+    'красноармей': 105000,      # Должен идти ДО 'ейск' ('красноарм-ейск-ий')
+    'матвеево-курган': 39000,   # Должен идти ДО 'курган'
+    'курганин': 104000,         # Должен идти ДО 'курган'
+    'курган': 760000,
+    'усть-донец': 28000,        # Должен идти ДО 'донецк'
+    'донецк': 46000,
+    'волгодонской': 33000,      # Должен идти ДО 'волгодонск'
+    'волгодонск': 168000,
+    'каменск-шахтинск': 86000,  # Должен идти ДО 'каменск'
+    'каменск': 41000,
+    'азовск': 106000,           # Должен идти ДО 'азов'
+    'азов': 81000,
+    'сахалин': 460000,          # Должен идти ДО 'саха'
+    'саха': 997565,
+    'якут': 997565,
+    'алтайск': 2130000,         # Должен идти ДО 'алтай'
+    'алтай': 210000,
+    'костром': 570000,          # Должен идти ДО 'омск' ('костр-омск-ая')
+    'томск': 1050000,           # Должен идти ДО 'омск' ('т-омск-ая')
+    'омск': 1830000,
+    'ямал': 512000,             # Должен идти ДО 'ненец' (Ямало-Ненецкий)
+    'янао': 512000,
+    'ненец': 42000,
+    'чечен': 1500000,           # Должен идти ДО 'ингуш'
+    'ингуш': 520000,
+    'ленинградская область': 2000000, # Должен идти ДО 'ленинград' (район в крае)
+    'орловская область': 700000,      # Должен идти ДО 'орлов' (район в области)
+    'орел': 700000,
+    'калининград': 1030000,     # Должен идти ДО 'калинин' (район в крае)
+
+    # 2. Сибирь, Север и Дальний Восток (по основам)
+    'иркут': 2340000,
+    'краснояр': 2846000,
+    'хабаров': 1278000,
+    'камчат': 288000,
+    'чукот': 47500,
+    'магадан': 134000,
+    'мурман': 660000,
+    'забайкал': 984000,
+    'примор': 1820000,
+    'амур': 750000,
+    'свердлов': 4239161,
+    'бурят': 970000,
+    'тыва': 337000,
+    'тува': 337000,
+    'хакас': 530000,
+    'новосиб': 2790000,
+    'кемеров': 2550000,
+    'тюмен': 1600000,
+    'хмао': 1720000,
+    'ханты': 1720000,
+    'еврей': 147000,
+    'врей': 147000,
+    'коми': 720000,
+    'карел': 523000,
+
+    # 3. Поволжье, Урал, Центр, Северо-Запад, Юг, Кавказ (по основам)
+    'башкорт': 4077600,
+    'татар': 4001625,
+    'челябин': 3396739,
+    'нижегород': 3060335,
+    'самар': 3128043,
+    'волгоград': 2450000,
+    'саратов': 2380000,
+    'воронеж': 2270000,
+    'перм': 2500000,
+    'архангель': 1000000,
+    'вологод': 1130000,
+    'псков': 585000,
+    'новгород': 575000,
+    'твер': 1200000,
+    'ярослав': 1190000,
+    'иванов': 910000,
+    'владимир': 1320000,
+    'рязан': 1080000,
+    'тульск': 1470000,
+    'калуж': 1070000,
+    'смолен': 870000,
+    'брянск': 1150000,
+    'курск': 1060000,
+    'белгород': 1500000,
+    'липецк': 1120000,
+    'тамбов': 960000,
+    'пензен': 1240000,
+    'ульянов': 1180000,
+    'мордов': 770000,
+    'чуваш': 1170000,
+    'марий': 670000,
+    'удмурт': 1440000,
+    'киров': 1130000,
+    'оренбург': 1840000,
+    'астрахан': 950000,
+    'калмык': 265000,
+    'дагестан': 3200000,
+    'осетия': 680000,
+    'осетин': 680000,
+    'кабардин': 900000,
+    'карача': 468000,
+    'адыге': 498000,
+    'ставропол': 2890000,
+
+    # 4. Районы и города Ростовской области (по основам)
+    'таганрог': 245000, 'шахты': 226000,
+    'новочеркасск': 163000, 'батайск': 126000, 'новошахтинск': 103000,
+    'гуково': 62000, 'зверево': 19000,
+    'аксай': 121000, 'белокалитвин': 91000, 'сальск': 101000, 'мясников': 52000,
+    'красносулин': 74000, 'миллеров': 63000, 'морозов': 37000, 'зерноград': 51000,
+    'семикаракор': 48000, 'октябрьск': 70000, 'неклинов': 87000,
+    'багаев': 33000, 'константинов': 31000, 'цимлян': 33000, 'шолохов': 25000,
+    'чертков': 30000, 'тацин': 34000, 'орлов': 36000, 'пролетар': 33000,
+    'песчанокоп': 27000, 'ремонтнен': 17000, 'заветин': 15000,
+    'дубов': 21000, 'зимовников': 34000, 'кагальниц': 28000, 'кашар': 22000,
+    'куйбышев': 13000, 'мартынов': 34000, 'милютин': 12000, 'облив': 17000,
+    'родионово-несветай': 22000, 'советск': 6000, 'тарасов': 27000,
+    'целин': 29000, 'боков': 14000, 'верхнедон': 17000, 'веселов': 25000, 'егорлык': 34000,
+
+    # 5. Краснодарский край (Городские округа и районы по основам)
+    'сочи': 430000, 'новороссийск': 340000, 'армавир': 208000,
+    'анапа': 205000, 'геленджик': 116000, 'горячий ключ': 69000,
+    'апшерон': 98000, 'белоглин': 29000, 'белоречен': 108000,
+    'брюховец': 50000, 'выселк': 59000, 'гулькевич': 98000, 'динск': 147000,
+    'ейск': 136000, 'кавказ': 121000, 'калинин': 50000, 'канев': 104000,
+    'коренов': 86000, 'крылов': 35000, 'крымск': 133000,
+    'кущев': 65000, 'ленинград': 63000,
+    'мостов': 70000, 'новокубан': 87000, 'новопокров': 42000, 'отраднен': 70000,
+    'павлов': 67000, 'северск': 122000, 'славян': 132000,
+    'старомин': 40000, 'тбилис': 48000, 'темрюк': 124000, 'тимашев': 105000,
+    'тихорец': 114000, 'туапсин': 128000, 'успен': 40000,
+    'щербинов': 35000
 }
 
 
-class RostovMap:
-    def __init__(self):
+# ==========================================
+# ОБЪЕДИНЕННАЯ БАЗА ДАННЫХ ЭКОНОМИКИ (ВРП, млрд руб.)
+# ==========================================
+KNOWN_ECONOMY = {
+    # 1. Города федерального значения и составные / специфичные основы (ДОЛЖНЫ идти ДО общих корней)
+    'санкт-петербург': 7300,
+    'петербург': 7300,
+    'севастопол': 240,
+    'московск': 7100,
+    'москв': 24400,
+    'ростов-на-дону': 650,
+    'ростов': 2200,
+    'краснодарск': 3500,
+    'краснодар': 950,
+    'приморско-ахтар': 35,       # Должен идти ДО 'примор'
+    'усть-лабин': 45,           # Должен идти ДО 'лабин' и 'абин'
+    'лабин': 40,                 # Должен идти ДО 'абин'
+    'абинск': 42,
+    'красноармей': 48,          # Должен идти ДО 'ейск'
+    'матвеево-курган': 22,       # Должен идти ДО 'курган'
+    'курганин': 45,             # Должен идти ДО 'курган'
+    'курган': 310,
+    'усть-донец': 18,            # Должен идти ДО 'донецк'
+    'донецк': 25,
+    'волгодонской': 24,          # Должен идти ДО 'волгодонск'
+    'волгодонск': 120,
+    'каменск-шахтинск': 55,      # Должен идти ДО 'каменск'
+    'каменск': 25,
+    'азовск': 45,               # Должен идти ДО 'азов'
+    'азов': 50,
+    'сахалин': 1300,             # Должен идти ДО 'саха'
+    'саха': 1800,
+    'якут': 1800,
+    'алтайск': 850,              # Должен идти ДО 'алтай'
+    'алтай': 70,
+    'костром': 240,              # Должен идти ДО 'омск'
+    'томск': 650,                # Должен идти ДО 'омск'
+    'омск': 850,
+    'ямал': 4300,                # Должен идти ДО 'ненец'
+    'янао': 4300,
+    'ненец': 390,
+    'чечен': 280,                # Должен идти ДО 'ингуш'
+    'ингуш': 85,
+    'ленинградская область': 1600,
+    'орловская область': 320,
+    'орел': 320,
+    'калининград': 700,
+
+    # 2. Субъекты РФ (по основам)
+    'хмао': 5900,
+    'ханты': 5900,
+    'татар': 3300,
+    'свердлов': 3200,
+    'краснояр': 3100,
+    'башкорт': 2100,
+    'самар': 2100,
+    'челябин': 2100,
+    'нижегород': 2000,
+    'иркут': 1900,
+    'кемеров': 1800,
+    'новосиб': 1700,
+    'перм': 1700,
+    'тюмен': 1400,
+    'примор': 1300,
+    'оренбург': 1300,
+    'воронеж': 1250,
+    'белгород': 1200,
+    'волгоград': 1100,
+    'саратов': 1050,
+    'ставропол': 1000,
+    'хабаров': 950,
+    'тульск': 950,
+    'дагестан': 850,
+    'мурман': 850,
+    'удмурт': 850,
+    'липецк': 800,
+    'вологод': 800,
+    'коми': 780,
+    'архангель': 750,
+    'астрахан': 700,
+    'ярослав': 680,
+    'калуж': 650,
+    'курск': 650,
+    'владимир': 650,
+    'твер': 550,
+    'амур': 550,
+    'пензен': 550,
+    'рязан': 550,
+    'ульянов': 500,
+    'брянск': 480,
+    'забайкал': 450,
+    'смолен': 450,
+    'киров': 450,
+    'чуваш': 420,
+    'тамбов': 420,
+    'карел': 380,
+    'бурят': 350,
+    'камчат': 340,
+    'новгород': 340,
+    'мордов': 330,
+    'хакас': 320,
+    'иванов': 320,
+    'магадан': 280,
+    'псков': 240,
+    'марий': 240,
+    'северная осетия': 210,
+    'осетия': 210,
+    'осетин': 210,
+    'кабардин': 220,
+    'адыге': 180,
+    'чукот': 160,
+    'карача': 120,
+    'калмык': 110,
+    'тыва': 90,
+    'тува': 90,
+    'еврей': 75,
+    'врей': 75,
+
+    # 3. Районы и города Ростовской области
+    'таганрог': 140, 'шахты': 110,
+    'новочеркасск': 95, 'батайск': 75, 'новошахтинск': 50,
+    'гуково': 28, 'зверево': 15,
+    'аксай': 80, 'белокалитвин': 45, 'сальск': 45, 'мясников': 35,
+    'красносулин': 42, 'миллеров': 38, 'морозов': 25, 'зерноград': 32,
+    'семикаракор': 28, 'октябрьск': 40, 'неклинов': 45,
+    'багаев': 20, 'константинов': 20, 'цимлян': 24, 'шолохов': 18,
+    'чертков': 20, 'тацин': 22, 'орлов': 24, 'пролетар': 22,
+    'песчанокоп': 18, 'ремонтнен': 14, 'заветин': 12,
+    'дубов': 15, 'зимовников': 24, 'кагальниц': 20, 'кашар': 16,
+    'куйбышев': 10, 'мартынов': 24, 'милютин': 10, 'облив': 12,
+    'родионово-несветай': 16, 'советск': 6, 'тарасов': 18,
+    'целин': 20, 'боков': 11, 'верхнедон': 12, 'веселов': 16, 'егорлык': 22,
+
+    # 4. Краснодарский край (Городские округа и районы)
+    'новороссийск': 280, 'сочи': 240, 'армавир': 90,
+    'анапа': 85, 'геленджик': 65, 'горячий ключ': 35,
+    'апшерон': 45, 'белоглин': 20, 'белоречен': 55,
+    'брюховец': 30, 'выселк': 35, 'гулькевич': 50, 'динск': 75,
+    'ейск': 70, 'кавказ': 65, 'калинин': 30, 'канев': 55,
+    'коренов': 45, 'крылов': 22, 'крымск': 65,
+    'кущев': 40, 'ленинград': 38,
+    'мостов': 35, 'новокубан': 45, 'новопокров': 25, 'отраднен': 35,
+    'павлов': 38, 'северск': 60, 'славян': 70,
+    'старомин': 25, 'тбилис': 28, 'темрюк': 75, 'тимашев': 65,
+    'тихорец': 60, 'туапсин': 80, 'туапсе': 80, 'успен': 24,
+    'щербинов': 22
+}
+
+
+class InteractiveAtlas:
+    def __init__(self, region_key=None, region_name=None, region_districts=None, clipped_rivers=None, clipped_lakes=None, clipped_cities=None, is_rf=False):
+        # Автоматическое определение: передан ли region_key или region_name
+        cfg = None
+        if isinstance(region_key, str) and region_key.lower() in REGIONS_CONFIG:
+            self.region_key = region_key.lower()
+            cfg = REGIONS_CONFIG[self.region_key]
+        elif isinstance(region_name, str) and region_name.lower() in REGIONS_CONFIG:
+            self.region_key = region_name.lower()
+            cfg = REGIONS_CONFIG[self.region_key]
+        elif region_key in ['rf', 'Российская Федерация', 'россия']:
+            self.region_key = 'russia'
+            cfg = REGIONS_CONFIG['russia']
+        elif region_name in ['rf', 'Российская Федерация', 'россия']:
+            self.region_key = 'russia'
+            cfg = REGIONS_CONFIG['russia']
+        else:
+            self.region_key = None
+
+        self.cfg = cfg
+        if cfg:
+            self.ru_title = cfg['title']
+            self.region_name = cfg['title']
+            self.is_rf = cfg.get('is_rf', False)
+            self.slug = self.region_key
+            self.output_filename = cfg.get('output', f"{self.slug}_quiz_map.html")
+            self.center = cfg['center']
+            self.zoom = cfg['zoom']
+        else:
+            self.region_name = str(region_name or region_key or 'Регион').strip()
+            self.is_rf = is_rf
+            self.ru_title = REGION_TRANSLATIONS.get(self.region_name, self.region_name)
+            self.slug = slugify_name(self.region_name)
+            self.output_filename = f"{self.slug}_quiz_map.html"
+            self.center = [55.75, 37.61]
+            self.zoom = 7
+
+        self.title = f"Интерактивный атлас: {self.ru_title}"
+
+        self.input_districts = region_districts
+        self.input_rivers = clipped_rivers
+        self.input_lakes = clipped_lakes
+        self.input_cities = clipped_cities
+
+        # Вычисляем индивидуальный центр и zoom карты через total_bounds (для нарезанных регионов)
+        if not self.cfg and self.input_districts is not None and not self.input_districts.empty:
+            bounds = self.input_districts.total_bounds
+            center_lat = (bounds[1] + bounds[3]) / 2.0
+            center_lon = (bounds[0] + bounds[2]) / 2.0
+            self.center = [center_lat, center_lon]
+            lat_diff = abs(bounds[3] - bounds[1])
+            lon_diff = abs(bounds[2] - bounds[0])
+            max_diff = max(lat_diff, lon_diff)
+            if max_diff > 25: self.zoom = 4
+            elif max_diff > 12: self.zoom = 5
+            elif max_diff > 6: self.zoom = 6
+            elif max_diff > 3: self.zoom = 7
+            elif max_diff > 1.5: self.zoom = 8
+            else: self.zoom = 9
+
+        # Инициализируем карту без жестко привязанной подложки, добавляем 3 переключаемые подложки
         self.map = folium.Map(
-            location=MAP_CENTER,
-            zoom_start=INITIAL_ZOOM,
+            location=self.center,
+            zoom_start=self.zoom,
             control_scale=True,
-            tiles=f'https://basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}.png?key={CARTO_KEY}',
-            attr='© OpenStreetMap contributors, © CARTO',
+            tiles=None,
             width='100%',
             height='100%'
         )
+
+        # Фит границ только для локальных нарезанных регионов (не для РФ, чтобы не ломать начальный масштаб)
+        if not self.is_rf and not self.cfg and self.input_districts is not None and not self.input_districts.empty:
+            bounds = self.input_districts.total_bounds
+            self.map.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
+
+        # 1. Светлая подложка (Carto Voyager) - по умолчанию
+        folium.TileLayer(
+            tiles=f'https://basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}.png?key={CARTO_KEY}',
+            name='Carto Voyager',
+            attr='© OpenStreetMap contributors, © CARTO',
+            control=True,
+            show=True
+        ).add_to(self.map)
+
+        # 2. Спутниковая подложка (Esri World Imagery)
+        folium.TileLayer(
+            tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            name='Спутник (Esri)',
+            attr='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+            control=True,
+            show=False
+        ).add_to(self.map)
+
+        # 3. Темная тема (CartoDB dark_matter)
+        folium.TileLayer(
+            tiles=f'https://basemaps.cartocdn.com/rastertiles/dark_all/{{z}}/{{x}}/{{y}}.png?key={CARTO_KEY}',
+            name='Темная тема (Carto)',
+            attr='© OpenStreetMap contributors, © CARTO',
+            control=True,
+            show=False
+        ).add_to(self.map)
+
         self.districts_gdf = None
         self.centers_gdf = None
         self.rivers_gdf = None
 
-    def _extract_valid_name(self, row, preferred_order=['NAME_RU', 'NAME', 'name']):
+    def _fix_antimeridian(self, geom):
+        if geom is None or geom.is_empty or not geom.is_valid:
+            return geom
+            
+        try:
+            if geom.geom_type == 'Polygon':
+                exterior = [(x + 360 if x < 0 else x, y) for x, y in geom.exterior.coords]
+                interiors = [[(x + 360 if x < 0 else x, y) for x, y in interior.coords] for interior in geom.interiors]
+                return Polygon(exterior, interiors)
+            elif geom.geom_type == 'MultiPolygon':
+                return MultiPolygon([self._fix_antimeridian(p) for p in geom.geoms])
+            elif geom.geom_type == 'LineString':
+                return LineString([(x + 360 if x < 0 else x, y) for x, y in geom.coords])
+            elif geom.geom_type == 'MultiLineString':
+                return MultiLineString([self._fix_antimeridian(ls) for ls in geom.geoms])
+            elif geom.geom_type == 'Point':
+                # Точки НЕ сдвигаем за 180 меридиан, иначе в Leaflet маркеры улетают за пределы карты
+                return geom
+        except Exception:
+            pass
+            
+        return geom
+
+    # БРОНЕБОЙНЫЙ ПРЕДОХРАНИТЕЛЬ CRS
+    def _safe_to_crs(self, gdf):
+        if gdf is None or gdf.empty:
+            return gdf
+            
+        try:
+            if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
+                gdf = gdf.to_crs('EPSG:4326')
+            elif not gdf.crs:
+                b = gdf.total_bounds
+                if (-360 <= b[0] <= 360) and (-90 <= b[1] <= 90) and (-360 <= b[2] <= 360) and (-90 <= b[3] <= 90):
+                    gdf = gdf.set_crs('EPSG:4326')
+                else:
+                    gdf = gdf.set_crs('EPSG:3857').to_crs('EPSG:4326')
+        except Exception as e:
+            b = gdf.total_bounds
+            is_degrees = (-360 <= b[0] <= 360) and (-90 <= b[1] <= 90) and (-360 <= b[2] <= 360) and (-90 <= b[3] <= 90)
+            
+            if is_degrees:
+                gdf = gdf.set_crs('EPSG:4326', allow_override=True)
+            else:
+                try:
+                    gdf = gdf.set_crs('EPSG:3857', allow_override=True).to_crs('EPSG:4326')
+                except Exception:
+                    gdf = gdf.set_crs('EPSG:4326', allow_override=True)
+                    
+        # Очистка и восстановление геометрии
+        gdf = gdf.dropna(subset=['geometry'])
+        bounds = gdf.bounds
+        gdf = gdf[~bounds.isna().any(axis=1)]
+        gdf = gdf[~gdf.geometry.is_empty]
+        try:
+            gdf['geometry'] = gdf['geometry'].apply(clean_geom)
+        except Exception:
+            pass
+        gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty]
+        
+        # Фикс Чукотки и территорий за 180 меридианом
+        try:
+            gdf.geometry = gdf.geometry.apply(self._fix_antimeridian)
+        except Exception:
+            pass
+        
+        # Упрощение полигонов: ТОЛЬКО для карты всей России (для сохранения компактного размера)
+        if getattr(self, 'is_rf', False) or getattr(self, 'region_key', '') == 'russia':
+            try:
+                gdf.geometry = gdf.geometry.simplify(0.015, preserve_topology=True)
+            except Exception:
+                pass
+                
+        return gdf
+
+    def _load_gdf(self, source, layer_key):
+        """Загружает GeoDataFrame из переданного объекта, пути файла или из REGIONS_CONFIG / input_*."""
+        if isinstance(source, gpd.GeoDataFrame):
+            return source.copy()
+        if isinstance(source, str) and source and os.path.exists(source):
+            return gpd.read_file(source)
+        if source is None and self.cfg and layer_key:
+            fname = self.cfg.get('files', {}).get(layer_key)
+            if fname:
+                fpath = os.path.join(self.cfg['path'], fname)
+                if os.path.exists(fpath):
+                    return gpd.read_file(fpath)
+        input_map = {
+            'districts': self.input_districts,
+            'rivers': self.input_rivers,
+            'water_bodies': self.input_lakes,
+            'district_centers': self.input_cities
+        }
+        fallback = input_map.get(layer_key)
+        if isinstance(fallback, gpd.GeoDataFrame) and not fallback.empty:
+            return fallback.copy()
+        return None
+
+    def _extract_valid_name(self, row, preferred_order=None):
+        if preferred_order is None:
+            if getattr(self, 'is_rf', False) or getattr(self, 'region_key', '') == 'russia':
+                preferred_order = ['NL_NAME_1', 'NAME_1', 'NAME_RU', 'NAME_RWIN', 'NAME', 'name', 'REGION_NAM']
+            else:
+                preferred_order = ['NAME_RU', 'NAME', 'NL_NAME_2', 'NAME_2', 'NL_NAME_1', 'NAME_1', 'name']
+
         for col in preferred_order:
-            if col in row and row[col] is not None:
+            if col in row.index and row[col] is not None:
                 val = str(row[col]).strip()
-                if val and val.lower() not in ['none', 'nan', 'null', '']:
-                    return val
+                if val and val.lower() not in ['none', 'nan', 'null', '', 'na', 'n/a', '<null>']:
+                    val = val.replace('\u0301', '').strip()
+                    if val.endswith(')') and '(' not in val:
+                        val = val.rstrip(')').strip()
+                    if val in DISTRICT_TRANSLATIONS:
+                        return DISTRICT_TRANSLATIONS[val]
+                    if val in REGION_TRANSLATIONS:
+                        return REGION_TRANSLATIONS[val]
+                    translations = {
+                        'Moscow City': 'Москва', 'Moskva': 'Московская область', 'Moscow': 'Москва',
+                        'Saint Petersburg': 'Санкт-Петербург', 'St. Petersburg': 'Санкт-Петербург',
+                        'Sankt-Peterburg': 'Санкт-Петербург', 'City of St. Petersburg': 'Санкт-Петербург',
+                        'Sevastopol': 'Севастополь', 'Sevastopol City': 'Севастополь'
+                    }
+                    return translations.get(val, val)
         return ''
 
     def _clean_river_name(self, name):
         if not name or str(name).lower() in ['none', 'nan', 'null', '']:
             return ''
         n = str(name).strip().replace('река ', '').replace('р. ', '').replace('р.', '').replace('"', '').strip()
-        for key in ['Маныч', 'Северский Донец', 'Калитва', 'Тузлов', 'Сал']:
+        for key in ['Маныч', 'Северский Донец', 'Калитва', 'Тузлов', 'Сал', 'Волга', 'Обь', 'Енисей', 'Лена', 'Амур', 'Кубань']:
             if key in n:
                 return key
         return n
 
-    def add_districts(self, shp_path):
-        gdf = gpd.read_file(shp_path)
-        if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
-            gdf = gdf.to_crs('EPSG:4326')
+    def add_districts(self, gdf=None):
+        gdf = self._load_gdf(gdf, 'districts')
+        if gdf is None or gdf.empty:
+            return None
         
-        gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME_RU', 'NAME', 'name']), axis=1)
+        gdf = gdf.copy()
+        gdf = self._safe_to_crs(gdf)
+        if gdf is None or gdf.empty:
+            return None
+        
+        gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r), axis=1)
+        gdf['display_name'] = gdf['display_name'].apply(lambda n: n if n else self.ru_title)
+        
+        # МАГИЧЕСКАЯ МЕТКА: отделяет территории от гидрографии
+        gdf['is_district_layer'] = 1
         self.districts_gdf = gdf
 
         tooltip = folium.GeoJsonTooltip(
@@ -117,21 +796,25 @@ class RostovMap:
         ).add_to(self.map)
         return gdf
 
-    def add_water_bodies(self, shp_path):
-        gdf = gpd.read_file(shp_path)
-        if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
-            gdf = gdf.to_crs('EPSG:4326')
+    def add_water_bodies(self, gdf=None):
+        gdf = self._load_gdf(gdf, 'water_bodies')
+        if gdf is None or gdf.empty:
+            return None
+        
+        gdf = gdf.copy()
+        gdf = self._safe_to_crs(gdf)
+        if gdf is None or gdf.empty:
+            return None
 
-        gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME', 'NAME_RU', 'name']), axis=1)
+        def extract_lake_name(row):
+            for col in ['name_ru', 'NAME_RU', 'name', 'NAME', 'name_en']:
+                if col in row.index and row[col] is not None:
+                    v = str(row[col]).strip()
+                    if v and v.lower() not in ['none', 'nan', 'null', '']:
+                        return v
+            return 'Водоем'
 
-        for idx, row in gdf.iterrows():
-            val = row['display_name']
-            if not val or val.lower() in ['none', 'nan', 'null', '']:
-                bounds = row.geometry.bounds
-                if bounds[0] > 41.3 and bounds[1] > 47.3:
-                    gdf.at[idx, 'display_name'] = 'Цимлянское водохранилище'
-                else:
-                    gdf.at[idx, 'display_name'] = 'Водоем'
+        gdf['display_name'] = gdf.apply(extract_lake_name, axis=1)
 
         tooltip = folium.GeoJsonTooltip(
             fields=['display_name'],
@@ -144,23 +827,55 @@ class RostovMap:
             name=LAYER_NAMES['water_bodies'],
             style_function=lambda x: STYLES['water_bodies'],
             tooltip=tooltip,
-            interactive=False
+            interactive=True
         ).add_to(self.map)
         return gdf
 
-    def add_rivers(self, shp_path):
-        gdf = gpd.read_file(shp_path)
-        if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
-            gdf = gdf.to_crs('EPSG:4326')
+    def add_rivers(self, gdf=None):
+        gdf = self._load_gdf(gdf, 'rivers')
+        if gdf is None or gdf.empty:
+            return None
+        
+        gdf = gdf.copy()
+        for col in ['waterway', 'WATERWAY']:
+            if col in gdf.columns:
+                gdf = gdf[gdf[col].astype(str).str.lower().isin(['river', 'stream', 'canal', 'waterway', 'drain'])]
+                break
 
-        gdf['raw_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME_RU', 'NAME', 'name']), axis=1)
+        if 'TYPE' in gdf.columns:
+            gdf = gdf[gdf['TYPE'].astype(str).str.lower().isin(['река', 'протока', 'канал', 'river'])]
+                    
+        gdf = self._safe_to_crs(gdf)
+        if gdf is None or gdf.empty:
+            return None
+
+        def extract_river_name(row):
+            for col in ['name_ru', 'NAME_RU', 'name', 'NAME', 'name_en']:
+                if col in row.index and row[col] is not None:
+                    v = str(row[col]).strip()
+                    if v and v.lower() not in ['none', 'nan', 'null', '']:
+                        return v
+            return ''
+
+        gdf['raw_name'] = gdf.apply(extract_river_name, axis=1)
         gdf['clean_name'] = gdf['raw_name'].apply(self._clean_river_name)
 
-        named = gdf[gdf['clean_name'] != ''].dissolve(by='clean_name').reset_index()
+        named = gdf[gdf['clean_name'] != '']
+        if not named.empty:
+            named = named.dissolve(by='clean_name').reset_index()
         unnamed = gdf[gdf['clean_name'] == ''].copy()
         unnamed['clean_name'] = 'Водоток'
 
-        all_rivers = gpd.pd.concat([named, unnamed], ignore_index=True)
+        if named.empty:
+            all_rivers = unnamed
+        elif unnamed.empty:
+            all_rivers = named
+        else:
+            all_rivers = gpd.pd.concat([named, unnamed], ignore_index=True)
+
+        if all_rivers.empty:
+            return None
+
         all_rivers['display_name'] = all_rivers['clean_name']
         self.rivers_gdf = all_rivers
 
@@ -175,29 +890,62 @@ class RostovMap:
             name=LAYER_NAMES['rivers'],
             style_function=lambda x: STYLES['rivers'],
             tooltip=tooltip,
-            interactive=False
+            interactive=True
         ).add_to(self.map)
 
         return all_rivers
 
-    def add_district_centers(self, shp_path):
-        gdf = gpd.read_file(shp_path)
-        if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
-            gdf = gdf.to_crs('EPSG:4326')
-        self.centers_gdf = gdf
+    def add_district_centers(self, gdf=None):
+        gdf = self._load_gdf(gdf, 'district_centers')
+        if gdf is None or gdf.empty:
+            return None
+        
+        gdf = gdf.copy()
+        
+        # 1. Если есть колонка CAPITAL (как в Cities.shp для РФ) — оставляем только столицы регионов
+        if 'CAPITAL' in gdf.columns:
+            gdf = gdf[gdf['CAPITAL'].astype(str).str.strip().str.lower().isin(['c', 'с'])].copy()
 
-        gdf['clean_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME', 'NAME_RU', 'name']), axis=1)
+        gdf = self._safe_to_crs(gdf)
+        if gdf is None or gdf.empty:
+            return None
+        
+        def get_city_name(row):
+            for col in ['NAME_RWIN', 'NAME_RU', 'name_ru', 'NAME', 'name', 'NAME_EN', 'name_en', 'CITY_NAME']:
+                if col in row.index and row[col] is not None:
+                    val = str(row[col]).strip()
+                    if val and val.lower() not in ['none', 'nan', 'null', '']:
+                        return val
+            return ''
+
+        gdf['clean_name'] = gdf.apply(get_city_name, axis=1)
 
         point_gdf = gdf[gdf.geometry.type == 'Point']
         if len(point_gdf) == 0:
             point_gdf = gdf.copy()
             point_gdf['geometry'] = point_gdf.geometry.centroid
 
-        feature_group = folium.FeatureGroup(name="Райцентры")
+        feature_group = folium.FeatureGroup(name="Центры")
+        valid_indices = []
+
         for idx, row in point_gdf.iterrows():
-            lon, lat = (row.geometry.x, row.geometry.y) if hasattr(row.geometry, 'x') else (row.geometry.centroid.x, row.geometry.centroid.y)
-            name = row['clean_name'] if row['clean_name'] else f"Центр {idx}"
-            status = str(row.get('OFFICIAL_S', '')).replace('ru:', '') if row.get('OFFICIAL_S') else 'центр'
+            geom = row.geometry
+            if geom is None or geom.is_empty:
+                continue
+            lon = float(geom.x if hasattr(geom, 'x') else geom.centroid.x)
+            lat = float(geom.y if hasattr(geom, 'y') else geom.centroid.y)
+
+            # Строгая фильтрация координат: точка должна лежать в пределах территории РФ
+            if not (19.0 <= lon <= 180.0 and 41.0 <= lat <= 82.0):
+                continue
+
+            valid_indices.append(idx)
+            name = row['clean_name'] or f"Центр {idx}"
+            status = str(row.get('STATUS', row.get('FEATURECLA', row.get('OFFICIAL_S', row.get('place', 'город'))))).replace('ru:', '')
+            if status in ['city', 'Admin-1 capital']: status = 'центр региона'
+            elif status == 'town': status = 'город'
+            elif status == 'village': status = 'село/поселок'
+
             folium.Marker(
                 location=[lat, lon],
                 popup=f"<b>{name}</b><br>Тип: {status}",
@@ -206,6 +954,8 @@ class RostovMap:
             ).add_to(feature_group)
 
         feature_group.add_to(self.map)
+        self.centers_gdf = point_gdf.loc[valid_indices].copy() if valid_indices else point_gdf
+        return self.centers_gdf
 
     def _calculate_neighbors_data(self):
         if self.districts_gdf is None or len(self.districts_gdf) == 0:
@@ -213,12 +963,21 @@ class RostovMap:
 
         valid_gdf = self.districts_gdf[self.districts_gdf.geometry.is_valid & ~self.districts_gdf.geometry.is_empty].copy()
         valid_gdf = valid_gdf[valid_gdf['display_name'] != ''].copy()
-        metric_gdf = valid_gdf.to_crs('EPSG:3857')
+        
+        try:
+            # Цилиндрическая равновеликая проекция (Cylindrical Equal-Area) без искажения площадей
+            metric_gdf = valid_gdf.to_crs('EPSG:6933')
+        except Exception:
+            metric_gdf = valid_gdf
+            
         neighbors_data = []
 
         centers_wgs = None
-        if self.centers_gdf is not None:
-            centers_wgs = self.centers_gdf.to_crs('EPSG:4326')
+        if self.centers_gdf is not None and not self.centers_gdf.empty:
+            try:
+                centers_wgs = self.centers_gdf.to_crs('EPSG:4326')
+            except Exception:
+                centers_wgs = self.centers_gdf
 
         for idx, row in valid_gdf.iterrows():
             current_geom = row.geometry
@@ -227,30 +986,61 @@ class RostovMap:
             intersecting_rows = valid_gdf[valid_gdf.geometry.intersects(buffered_geom)]
             neighbor_names = [str(n) for n in intersecting_rows['display_name'].tolist() if str(n) != current_name and str(n).strip()]
             
-            center_name = "г. Ростов-на-Дону (Областной центр)" if 'Ростов-на-Дону' in current_name else "Райцентр"
-            if centers_wgs is not None:
+            center_name = "Административный центр"
+            if centers_wgs is not None and not centers_wgs.empty:
                 matched_c = centers_wgs[centers_wgs.geometry.within(current_geom)]
                 if not matched_c.empty:
-                    c_val = matched_c.iloc[0].get('clean_name') or matched_c.iloc[0].get('NAME') or ''
-                    status = matched_c.iloc[0].get('OFFICIAL_S', '')
+                    c_val = matched_c.iloc[0].get('clean_name') or matched_c.iloc[0].get('NAME_RWIN') or matched_c.iloc[0].get('NAME_RU') or matched_c.iloc[0].get('NAME') or ''
+                    status = matched_c.iloc[0].get('STATUS', matched_c.iloc[0].get('OFFICIAL_S', ''))
                     status_clean = str(status).replace('ru:', '') if status else ''
                     center_name = f"{c_val} ({status_clean})" if status_clean else str(c_val)
 
-            area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if idx in metric_gdf.index else 500
+            area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if idx in metric_gdf.index else 0
 
+            # === УМНЫЙ ПОИСК НАСЕЛЕНИЯ ===
             population = None
+            search_name = current_name.lower().replace('\u0301', '').replace('e', 'е').replace('ё', 'е')
+            
             for key, val in KNOWN_POPULATION.items():
-                if key in current_name:
+                if key in search_name:
                     population = val
                     break
+                    
             if population is None:
-                population = int(area_sq_km * 20)
+                if 'область' in search_name:
+                    population = int(area_sq_km * 20)
+                elif 'республика' in search_name:
+                    population = int(area_sq_km * 10)
+                elif 'край' in search_name:
+                    population = int(area_sq_km * 5)
+                elif 'округ' in search_name or 'аок' in search_name:
+                    population = int(area_sq_km * 1)
+                else:
+                    population = int(area_sq_km * 25)
+
+            # === УМНЫЙ ПОИСК / РАСЧЕТ ВРП (ЭКОНОМИКА) ===
+            grp = None
+            for key, val in KNOWN_ECONOMY.items():
+                if key in search_name:
+                    grp = float(val)
+                    break
+
+            if grp is None:
+                if population == 0:
+                    grp = 0.0
+                elif population > 500_000:
+                    grp = round(population * 1.2 / 1000, 1)
+                else:
+                    grp = round(population * 0.85 / 1000, 1)
+            else:
+                grp = round(grp, 1)
 
             neighbors_data.append({
                 'name': current_name,
                 'center': center_name,
                 'area': area_sq_km,
                 'population': population,
+                'grp': grp,
                 'neighbors': list(set(neighbor_names))
             })
         return neighbors_data
@@ -264,10 +1054,45 @@ class RostovMap:
             (self.rivers_gdf['clean_name'] != 'Водоток')
         ].copy()
 
-        metric_rivers = named_rivers.to_crs('EPSG:3857')
-        named_rivers['length_km'] = (metric_rivers.geometry.length / 1000).round(1)
-        top_rivers = named_rivers.sort_values(by='length_km', ascending=False).head(35)
+        if named_rivers.empty:
+            return []
 
+        try:
+            from pyproj import Geod
+            geod = Geod(ellps='WGS84')
+
+            def unshift_geom(geom):
+                if geom is None or geom.is_empty:
+                    return geom
+                def fix_coords(coords):
+                    return [(x - 360 if x > 180 else (x + 360 if x < -180 else x), y) for x, y in coords]
+                if geom.geom_type == 'LineString':
+                    return LineString(fix_coords(geom.coords))
+                elif geom.geom_type == 'MultiLineString':
+                    return MultiLineString([LineString(fix_coords(ls.coords)) for ls in geom.geoms])
+                return geom
+
+            lengths = []
+            for _, r in named_rivers.iterrows():
+                geom = r.geometry
+                if geom is None or geom.is_empty:
+                    lengths.append(0.0)
+                else:
+                    try:
+                        clean_g = unshift_geom(geom)
+                        l_km = round(geod.geometry_length(clean_g) / 1000.0, 1)
+                        lengths.append(l_km)
+                    except Exception:
+                        lengths.append(0.0)
+            named_rivers['length_km'] = lengths
+        except Exception:
+            try:
+                metric_rivers = named_rivers.to_crs('EPSG:6933')
+                named_rivers['length_km'] = (metric_rivers.geometry.length / 1000).round(1)
+            except Exception:
+                named_rivers['length_km'] = 0.0
+            
+        top_rivers = named_rivers.sort_values(by='length_km', ascending=False).head(35)
         return [{"name": str(r['clean_name']), "length": float(r['length_km'])} for _, r in top_rivers.iterrows()]
 
     def add_quiz_controls(self):
@@ -276,10 +1101,16 @@ class RostovMap:
         districts_data = [{"name": d['name']} for d in neighbors_data if d['name'].strip()]
         centers_data = []
         if self.centers_gdf is not None:
-            for _, row in self.centers_gdf.iterrows():
-                lon, lat = (row.geometry.x, row.geometry.y) if hasattr(row.geometry, 'x') else (row.geometry.centroid.x, row.geometry.centroid.y)
-                st = str(row.get('OFFICIAL_S', '')).replace('ru:', '') if row.get('OFFICIAL_S') else 'центр'
-                name = row.get('clean_name') or row.get('NAME') or 'Центр'
+            for idx, row in self.centers_gdf.iterrows():
+                geom = row.geometry
+                if geom is None or geom.is_empty:
+                    continue
+                lon = float(geom.x if hasattr(geom, 'x') else geom.centroid.x)
+                lat = float(geom.y if hasattr(geom, 'y') else geom.centroid.y)
+                if not (19.0 <= lon <= 180.0 and 41.0 <= lat <= 82.0):
+                    continue
+                st = str(row.get('STATUS', row.get('OFFICIAL_S', 'город'))).replace('ru:', '')
+                name = row.get('clean_name') or row.get('NAME_RWIN') or row.get('NAME') or f"Центр {idx}"
                 centers_data.append({
                     "name": str(name),
                     "status": st,
@@ -287,1555 +1118,36 @@ class RostovMap:
                     "lon": lon
                 })
 
-        # Вычисляем точные границы области для адаптивного зума
         if self.districts_gdf is not None and not self.districts_gdf.empty:
-            bounds = self.districts_gdf.total_bounds # [min_lon, min_lat, max_lon, max_lat]
+            bounds = self.districts_gdf.total_bounds
             region_bounds = [[bounds[1], bounds[0]], [bounds[3], bounds[2]]]
         else:
-            region_bounds = [[45.89, 38.15], [50.26, 44.33]]
+            region_bounds = [[self.center[0]-1, self.center[1]-1], [self.center[0]+1, self.center[1]+1]]
 
-        js_code = f'''
+        dynamic_js = f'''
 const REGION_BOUNDS = {json.dumps(region_bounds)};
 const EMBEDDED_DISTRICTS = {json.dumps(districts_data, ensure_ascii=False)};
 const EMBEDDED_CENTERS = {json.dumps(centers_data, ensure_ascii=False)};
 const EMBEDDED_NEIGHBORS = {json.dumps(neighbors_data, ensure_ascii=False)};
 const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
-
-let currentQuiz = null;
-let currentQuestion = 0;
-let score = 0;
-let maxPossibleScore = 0;
-let totalQuestions = 10;
-let quizData = [];
-let selectedOption = null;
-let clickMarker = null;
-let resultMarker = null;
-let resultLine = null;
-let popupsDisabled = false;
-let highlightedDistrictLayer = null;
-let highlightedRiverLayers = [];
-
-let timerEnabled = false;
-let questionTimer = null;
-const QUESTION_TIME_LIMIT = 20;
-let timeLeft = QUESTION_TIME_LIMIT;
-let quizStartTime = 0;
-
-let studyCategory = 'districts';
-let studyQueue = [];
-let studyIndex = 0;
-let studyCenterMarker = null;
-
-function getMapObject() {{
-    if (window._leaflet_map) return window._leaflet_map;
-    for (let key in window) {{
-        if (window[key] && window[key]._layers && typeof window[key].eachLayer === 'function') {{
-            window._leaflet_map = window[key];
-            return window._leaflet_map;
-        }}
-    }}
-    return null;
-}}
-
-function setBasemapVisible(isVisible) {{
-    const tilePane = document.querySelector('.leaflet-tile-pane');
-    if (tilePane) {{
-        tilePane.style.visibility = isVisible ? 'visible' : 'hidden';
-    }}
-}}
-
-function togglePanelCollapse() {{
-    const panel = document.getElementById('quiz-controls');
-    const btn = document.getElementById('panel-collapse-btn');
-    if (panel) {{
-        panel.classList.toggle('collapsed');
-        document.body.classList.toggle('ui-collapsed');
-        if (panel.classList.contains('collapsed')) {{
-            if (btn) btn.innerHTML = '▲ Развернуть панель атласа';
-        }} else {{
-            if (btn) btn.innerHTML = '▼ Свернуть панель к карте';
-        }}
-    }}
-}}
-
-function clearMarkers() {{
-    if (clickMarker) {{ try {{ clickMarker.remove(); }} catch(e) {{}} clickMarker = null; }}
-    if (resultMarker) {{ try {{ resultMarker.remove(); }} catch(e) {{}} resultMarker = null; }}
-    if (resultLine) {{ try {{ resultLine.remove(); }} catch(e) {{}} resultLine = null; }}
-    if (typeof studyCenterMarker !== 'undefined' && studyCenterMarker) {{ 
-        try {{ studyCenterMarker.remove(); }} catch(e) {{}} 
-        studyCenterMarker = null; 
-    }}
-}}
-
-function resetActiveHighlight(hideRiverCompletely = false) {{
-    if (highlightedDistrictLayer) {{
-        try {{
-            highlightedDistrictLayer.setStyle({{
-                color: '#2E8B57',
-                weight: 2,
-                fillColor: '#90EE90',
-                fillOpacity: 0.25,
-                dashArray: '5, 5'
-            }});
-        }} catch(e) {{}}
-        highlightedDistrictLayer = null;
-    }}
-
-    if (highlightedRiverLayers && highlightedRiverLayers.length > 0) {{
-        highlightedRiverLayers.forEach(layer => {{
-            try {{
-                if (hideRiverCompletely) {{
-                    layer.setStyle({{ color: 'transparent', weight: 0, opacity: 0 }});
-                }} else {{
-                    layer.setStyle({{ color: '#0284C7', weight: 2.5, opacity: 0.9 }});
-                }}
-            }} catch(e) {{}}
-        }});
-        highlightedRiverLayers = [];
-    }}
-}}
-
-function restoreAllRiverStyles() {{
-    const map = getMapObject();
-    if (!map) return;
-    map.eachLayer(function(layer) {{
-        if (layer.feature && layer.feature.geometry && (layer.feature.geometry.type === 'LineString' || layer.feature.geometry.type === 'MultiLineString')) {{
-            try {{ layer.setStyle({{ color: '#0284C7', weight: 2.5, opacity: 0.9 }}); }} catch(e) {{}}
-        }}
-    }});
-}}
-
-/* ДИНАМИЧЕСКИЙ СБРОС ВИДА - АДАПТИРУЕТСЯ ПОД ЭКРАН 1080p ИЛИ 4K */
-function resetMapView() {{
-    const map = getMapObject();
-    if (map) {{
-        try {{ map.fitBounds(REGION_BOUNDS, {{padding: [15, 15]}}); }} catch(e) {{}}
-    }}
-}}
-
-function setQuizLayers(quizMode) {{
-    try {{
-        const layers = document.querySelectorAll('.leaflet-control-layers-overlays label');
-        layers.forEach(label => {{
-            const text = label.textContent.trim();
-            const input = label.querySelector('input[type="checkbox"]');
-            if (!input) return;
-
-            if (quizMode === 'center') {{
-                if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
-                if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
-            }} else if (quizMode === 'district' || quizMode === 'neighbor' || quizMode === 'study_districts') {{
-                if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
-                if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
-            }} else if (quizMode === 'river' || quizMode === 'study_rivers') {{
-                if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
-                if (text.includes('Реки') || text.includes('Водоемы')) {{ if (!input.checked) input.click(); }}
-            }} else if (quizMode === 'study_centers') {{
-                if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
-                if (text.includes('Райцентры') || text.includes('Районы')) {{ if (!input.checked) input.click(); }}
-            }} else {{
-                if (!input.checked) input.click();
-            }}
-        }});
-    }} catch(e) {{}}
-}}
-
-function restoreAllLayers() {{
-    setQuizLayers('normal');
-    restoreAllRiverStyles();
-}}
-
-function disablePopups() {{
-    if (popupsDisabled) return;
-    const style = document.createElement('style');
-    style.id = 'disable-popups-style';
-    style.textContent = '.leaflet-popup, .leaflet-tooltip {{ display: none !important; }}';
-    document.head.appendChild(style);
-    popupsDisabled = true;
-}}
-
-function enablePopups() {{
-    const style = document.getElementById('disable-popups-style');
-    if (style) style.remove();
-    popupsDisabled = false;
-}}
-
-function toggleTimer() {{
-    const checkbox = document.getElementById('timer-toggle');
-    if (checkbox) timerEnabled = checkbox.checked;
-}}
-
-function startTimer() {{
-    stopTimer();
-    const tb = document.getElementById('timer-bar-container');
-    if (!timerEnabled) {{
-        if (tb) tb.style.display = 'none';
-        return;
-    }}
-    if (tb) tb.style.display = 'block';
-    timeLeft = QUESTION_TIME_LIMIT;
-    updateTimerDisplay();
-
-    questionTimer = setInterval(() => {{
-        timeLeft--;
-        updateTimerDisplay();
-        if (timeLeft <= 0) {{
-            stopTimer();
-            handleTimeout();
-        }}
-    }}, 1000);
-}}
-
-function stopTimer() {{
-    if (questionTimer) {{
-        clearInterval(questionTimer);
-        questionTimer = null;
-    }}
-}}
-
-function updateTimerDisplay() {{
-    const timerText = document.getElementById('timer-text');
-    const timerBar = document.getElementById('timer-bar');
-    if (timerText) timerText.textContent = `${{timeLeft}}с`;
-    if (timerBar) {{
-        const percent = Math.max(0, (timeLeft / QUESTION_TIME_LIMIT) * 100);
-        timerBar.style.width = `${{percent}}%`;
-        timerBar.style.background = percent > 50 ? '#10B981' : percent > 25 ? '#F59E0B' : '#EF4444';
-    }}
-}}
-
-function handleTimeout() {{
-    if (currentQuestion >= quizData.length) return;
-    const question = quizData[currentQuestion];
-    showFeedback('Время вышло!', 'error');
-
-    if (question.type === 'district' || question.type === 'neighbor' || question.type === 'river') {{
-        document.querySelectorAll('.quiz-option').forEach(opt => {{
-            if (opt.textContent === question.correctAnswer) {{
-                opt.classList.add('correct');
-            }}
-            opt.disabled = true;
-        }});
-    }} else if (question.type === 'center') {{
-        if (window._clickBlocker) {{
-            const map = getMapObject();
-            try {{ map.removeLayer(window._clickBlocker); }} catch(e) {{}}
-            window._clickBlocker = null;
-        }}
-    }}
-
-    setTimeout(() => {{
-        currentQuestion++;
-        showQuestion();
-    }}, 1800);
-}}
-
-/* ==================== ОБУЧАЮЩИЙ РЕЖИМ ==================== */
-function startStudyMode(category = 'districts') {{
-    studyCategory = category;
-    currentQuiz = 'study';
-    setBasemapVisible(true);
-    closeInfoCard();
-    clearMarkers();
-    resetActiveHighlight();
-    disablePopups();
-
-    document.getElementById('normal-mode').style.display = 'none';
-    document.getElementById('quiz-mode').style.display = 'none';
-    document.getElementById('results-mode').style.display = 'none';
-    document.getElementById('study-mode').style.display = 'block';
-
-    updateStudyTabButtons();
-
-    if (category === 'districts') {{
-        setQuizLayers('study_districts');
-        studyQueue = [...EMBEDDED_NEIGHBORS];
-    }} else if (category === 'rivers') {{
-        setQuizLayers('study_rivers');
-        restoreAllRiverStyles();
-        studyQueue = [...EMBEDDED_RIVERS];
-    }} else if (category === 'centers') {{
-        setQuizLayers('study_centers');
-        studyQueue = [...EMBEDDED_CENTERS];
-    }}
-
-    shuffleArray(studyQueue);
-    studyIndex = 0;
-    renderStudyItem();
-}}
-
-function updateStudyTabButtons() {{
-    const btns = ['districts', 'rivers', 'centers'];
-    btns.forEach(b => {{
-        const el = document.getElementById(`study-tab-${{b}}`);
-        if (el) {{
-            if (b === studyCategory) el.classList.add('active');
-            else el.classList.remove('active');
-        }}
-    }});
-}}
-
-function switchStudyCategory(category) {{
-    startStudyMode(category);
-}}
-
-function renderStudyItem() {{
-    if (!studyQueue || studyQueue.length === 0) return;
-    if (studyIndex < 0) studyIndex = 0;
-    if (studyIndex >= studyQueue.length) studyIndex = studyQueue.length - 1;
-
-    clearMarkers();
-    resetActiveHighlight(studyCategory === 'rivers');
-
-    const item = studyQueue[studyIndex];
-    const counterEl = document.getElementById('study-counter-val');
-    const contentEl = document.getElementById('study-content-box');
-    if (counterEl) counterEl.textContent = `${{studyIndex + 1}} / ${{studyQueue.length}}`;
-
-    if (!contentEl) return;
-
-    if (studyCategory === 'districts') {{
-        const neighborsHtml = item.neighbors && item.neighbors.length > 0
-            ? item.neighbors.map(n => `<span class="neighbor-tag" onclick="jumpToStudyItem('${{n}}')">${{n}}</span>`).join('')
-            : '<span style="color: #94A3B8; font-size: 11px;">Нет смежных границ</span>';
-
-        const popFormatted = item.population ? `${{Number(item.population).toLocaleString('ru-RU')}} чел.` : 'Уточняется';
-
-        contentEl.innerHTML = `
-            <h3 class="study-title">${{item.name}}</h3>
-            <div class="info-row"><span>Райцентр:</span><strong>${{item.center || '—'}}</strong></div>
-            <div class="info-row"><span>Население:</span><strong>~${{popFormatted}}</strong></div>
-            <div class="info-row"><span>Площадь:</span><strong>~${{item.area}} км²</strong></div>
-            <div style="margin-top: 8px;">
-                <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит с районами:</span>
-                <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${{neighborsHtml}}</div>
-            </div>
-        `;
-        highlightDistrictOnMapByName(item.name);
-
-    }} else if (studyCategory === 'rivers') {{
-        contentEl.innerHTML = `
-            <h3 class="study-title">Река ${{item.name}}</h3>
-            <div class="info-row"><span>Тип:</span><strong>Водный объект / Водоток</strong></div>
-            <div class="info-row"><span>Протяженность в РО:</span><strong>~${{item.length}} км</strong></div>
-            <div class="hint-small" style="margin-top: 8px;">Русло выделено красной линией на карте</div>
-        `;
-        highlightRiverOnMapByName(item.name);
-
-    }} else if (studyCategory === 'centers') {{
-        contentEl.innerHTML = `
-            <h3 class="study-title">${{item.name}}</h3>
-            <div class="info-row"><span>Статус:</span><strong>${{item.status || 'райцентр'}}</strong></div>
-            <div class="info-row"><span>Координаты:</span><strong>${{item.lat.toFixed(3)}}°, ${{item.lon.toFixed(3)}}°</strong></div>
-            <div class="hint-small" style="margin-top: 8px;">Объект отмечен пульсирующим маркером</div>
-        `;
-        const map = getMapObject();
-        if (map) {{
-            map.setView([item.lat, item.lon], 11);
-            studyCenterMarker = L.circleMarker([item.lat, item.lon], {{
-                radius: 12,
-                color: '#EF4444',
-                fillColor: '#F59E0B',
-                fillOpacity: 0.9,
-                weight: 3
-            }}).addTo(map);
-        }}
-    }}
-}}
-
-function nextStudyItem() {{
-    if (studyIndex < studyQueue.length - 1) {{
-        studyIndex++;
-        renderStudyItem();
-    }} else {{
-        alert('🎉 Вы просмотрели все объекты в этой категории!');
-    }}
-}}
-
-function prevStudyItem() {{
-    if (studyIndex > 0) {{
-        studyIndex--;
-        renderStudyItem();
-    }}
-}}
-
-function randomStudyItem() {{
-    studyIndex = Math.floor(Math.random() * studyQueue.length);
-    renderStudyItem();
-}}
-
-function jumpToStudyItem(name) {{
-    const foundIdx = studyQueue.findIndex(d => d.name === name);
-    if (foundIdx !== -1) {{
-        studyIndex = foundIdx;
-        renderStudyItem();
-    }}
-}}
-
-function exitStudyMode() {{
-    setBasemapVisible(true);
-    clearMarkers();
-    resetActiveHighlight(false);
-    restoreAllLayers();
-    enablePopups();
-    resetMapView();
-    currentQuiz = null;
-
-    const sm = document.getElementById('study-mode');
-    const nm = document.getElementById('normal-mode');
-    if (sm) sm.style.display = 'none';
-    if (nm) nm.style.display = 'block';
-    setTimeout(setupDistrictClickListeners, 300);
-}}
-
-/* ==================== ВИКТОРИНЫ ==================== */
-function startDistrictQuiz() {{
-    currentQuiz = 'district';
-    quizStartTime = Date.now();
-    setBasemapVisible(false);
-    closeInfoCard();
-    clearMarkers();
-    resetActiveHighlight();
-    disablePopups();
-    setQuizLayers('district');
-
-    document.getElementById('normal-mode').style.display = 'none';
-    document.getElementById('study-mode').style.display = 'none';
-    document.getElementById('quiz-mode').style.display = 'block';
-    document.getElementById('results-mode').style.display = 'none';
-
-    document.getElementById('quiz-title').textContent = 'Угадай район по очертаниям';
-    document.getElementById('hint-button').style.display = 'block';
-    loadDistrictQuiz();
-}}
-
-function startNeighborQuiz() {{
-    currentQuiz = 'neighbor';
-    quizStartTime = Date.now();
-    setBasemapVisible(false);
-    closeInfoCard();
-    clearMarkers();
-    resetActiveHighlight();
-    disablePopups();
-    setQuizLayers('neighbor');
-
-    document.getElementById('normal-mode').style.display = 'none';
-    document.getElementById('study-mode').style.display = 'none';
-    document.getElementById('quiz-mode').style.display = 'block';
-    document.getElementById('results-mode').style.display = 'none';
-
-    document.getElementById('quiz-title').textContent = 'Районы-соседи';
-    document.getElementById('hint-button').style.display = 'none';
-    loadNeighborQuiz();
-}}
-
-function startCenterQuiz() {{
-    currentQuiz = 'center';
-    quizStartTime = Date.now();
-    setBasemapVisible(true);
-    closeInfoCard();
-    clearMarkers();
-    resetActiveHighlight();
-    disablePopups();
-    setQuizLayers('center');
-
-    document.getElementById('normal-mode').style.display = 'none';
-    document.getElementById('study-mode').style.display = 'none';
-    document.getElementById('quiz-mode').style.display = 'block';
-    document.getElementById('results-mode').style.display = 'none';
-
-    document.getElementById('quiz-title').textContent = 'Найди райцентр на карте';
-    document.getElementById('hint-button').style.display = 'block';
-    loadCenterQuiz();
-}}
-
-function startRiverQuiz() {{
-    if (!EMBEDDED_RIVERS || EMBEDDED_RIVERS.length < 4) {{
-        alert('Недостаточно данных по рекам для запуска викторины');
-        return;
-    }}
-    currentQuiz = 'river';
-    quizStartTime = Date.now();
-    setBasemapVisible(true);
-    closeInfoCard();
-    clearMarkers();
-    resetActiveHighlight();
-    restoreAllRiverStyles();
-    disablePopups();
-    setQuizLayers('river');
-
-    document.getElementById('normal-mode').style.display = 'none';
-    document.getElementById('study-mode').style.display = 'none';
-    document.getElementById('quiz-mode').style.display = 'block';
-    document.getElementById('results-mode').style.display = 'none';
-
-    document.getElementById('quiz-title').textContent = 'Угадай реку по руслу';
-    document.getElementById('hint-button').style.display = 'block';
-    loadRiverQuiz();
-}}
-
-function loadDistrictQuiz() {{
-    maxPossibleScore = totalQuestions;
-    generateDistrictQuestions(EMBEDDED_DISTRICTS);
-}}
-
-function generateDistrictQuestions(data) {{
-    quizData = [];
-    const validData = data.filter(d => d.name && d.name.trim() !== '');
-    if (!validData || validData.length === 0) return;
-    for (let i = 0; i < totalQuestions; i++) {{
-        const correct = validData[Math.floor(Math.random() * validData.length)];
-        const options = [correct.name];
-        while (options.length < 4 && options.length < validData.length) {{
-            const wrong = validData[Math.floor(Math.random() * validData.length)];
-            if (!options.includes(wrong.name)) {{
-                options.push(wrong.name);
-            }}
-        }}
-        shuffleArray(options);
-        quizData.push({{
-            type: 'district',
-            correctAnswer: correct.name,
-            options: options,
-            hint: `Площадь района: ~${{Math.round(Math.random() * 2000 + 500)}} км²`,
-            districtName: correct.name
-        }});
-    }}
-    showQuestion();
-}}
-
-function loadCenterQuiz() {{
-    maxPossibleScore = totalQuestions * 3;
-    generateCenterQuestions(EMBEDDED_CENTERS);
-}}
-
-function generateCenterQuestions(data) {{
-    quizData = [];
-    const validData = data.filter(d => d.name && d.name.trim() !== '');
-    if (!validData || validData.length === 0) return;
-    for (let i = 0; i < totalQuestions; i++) {{
-        const correct = validData[Math.floor(Math.random() * validData.length)];
-        quizData.push({{
-            type: 'center',
-            correctAnswer: correct.name,
-            correctLat: correct.lat,
-            correctLon: correct.lon,
-            hint: `Статус поселения: ${{correct.status || 'районный центр'}}`,
-            centerName: correct.name
-        }});
-    }}
-    showQuestion();
-}}
-
-function loadNeighborQuiz() {{
-    maxPossibleScore = totalQuestions;
-    generateNeighborQuestions(EMBEDDED_NEIGHBORS);
-}}
-
-function generateNeighborQuestions(data) {{
-    quizData = [];
-    const validPool = data.filter(d => d.name && d.name.trim() !== '' && d.neighbors && d.neighbors.length >= 1);
-    const allNames = validPool.map(d => d.name);
-
-    if (validPool.length === 0) {{
-        alert('Недостаточно данных о топологии районов');
-        exitQuizDirectly();
-        return;
-    }}
-
-    for (let i = 0; i < totalQuestions; i++) {{
-        const current = validPool[Math.floor(Math.random() * validPool.length)];
-        const neighbors = [...current.neighbors];
-        shuffleArray(neighbors);
-        
-        let options = [];
-        if (neighbors.length >= 3) {{
-            options = neighbors.slice(0, 3);
-        }} else {{
-            options = [...neighbors];
-            while (options.length < 3) {{
-                const dummyNeighbor = allNames[Math.floor(Math.random() * allNames.length)];
-                if (!options.includes(dummyNeighbor) && dummyNeighbor !== current.name) {{
-                    options.push(dummyNeighbor);
-                }}
-            }}
-        }}
-
-        const nonNeighbors = allNames.filter(name => name !== current.name && !current.neighbors.includes(name));
-        const wrongNeighbor = nonNeighbors.length > 0 
-            ? nonNeighbors[Math.floor(Math.random() * nonNeighbors.length)] 
-            : allNames[0];
-
-        options.push(wrongNeighbor);
-        shuffleArray(options);
-
-        quizData.push({{
-            type: 'neighbor',
-            districtName: current.name,
-            correctAnswer: wrongNeighbor,
-            options: options
-        }});
-    }}
-    showQuestion();
-}}
-
-function loadRiverQuiz() {{
-    maxPossibleScore = totalQuestions;
-    generateRiverQuestions(EMBEDDED_RIVERS);
-}}
-
-function generateRiverQuestions(data) {{
-    quizData = [];
-    const validData = data.filter(d => d.name && d.name.trim() !== '');
-    if (!validData || validData.length === 0) return;
-    const questionsCount = Math.min(totalQuestions, validData.length);
-
-    for (let i = 0; i < questionsCount; i++) {{
-        const correct = validData[i % validData.length];
-        const options = [correct.name];
-        while (options.length < 4 && options.length < validData.length) {{
-            const wrong = validData[Math.floor(Math.random() * validData.length)];
-            if (!options.includes(wrong.name)) {{
-                options.push(wrong.name);
-            }}
-        }}
-        shuffleArray(options);
-        quizData.push({{
-            type: 'river',
-            correctAnswer: correct.name,
-            options: options,
-            riverName: correct.name,
-            hint: `Длина русла в пределах области: ~${{correct.length}} км`
-        }});
-    }}
-    shuffleArray(quizData);
-    showQuestion();
-}}
-
-function showQuestion() {{
-    if (currentQuestion >= quizData.length) {{
-        stopTimer();
-        showResults();
-        return;
-    }}
-
-    clearMarkers();
-    resetActiveHighlight(currentQuiz === 'river');
-
-    const oldFeedback = document.getElementById('feedback');
-    if (oldFeedback) oldFeedback.remove();
-
-    const oldBtn = document.getElementById('confirm-button');
-    if (oldBtn) oldBtn.remove();
-
-    const question = quizData[currentQuestion];
-    document.getElementById('current-question').textContent = currentQuestion + 1;
-    document.getElementById('total-questions').textContent = quizData.length;
-    const qTextEl = document.getElementById('question-text');
-    const optionsContainer = document.getElementById('options-container');
-
-    if (optionsContainer) optionsContainer.innerHTML = '';
-
-    if (question.type === 'district') {{
-        qTextEl.textContent = 'Угадайте район по очертаниям:';
-        question.options.forEach(option => {{
-            const button = document.createElement('button');
-            button.className = 'quiz-option';
-            button.textContent = option;
-            button.onclick = () => selectOption(button, option, question.correctAnswer);
-            optionsContainer.appendChild(button);
-        }});
-        highlightDistrictOnMapByName(question.districtName);
-
-    }} else if (question.type === 'neighbor') {{
-        qTextEl.textContent = `С каким районом НЕ граничит ${{question.districtName}}?`;
-        question.options.forEach(option => {{
-            const button = document.createElement('button');
-            button.className = 'quiz-option';
-            button.textContent = option;
-            button.onclick = () => selectOption(button, option, question.correctAnswer);
-            optionsContainer.appendChild(button);
-        }});
-        highlightDistrictOnMapByName(question.districtName);
-
-    }} else if (question.type === 'river') {{
-        qTextEl.textContent = 'Какая река подсвечена на карте?';
-        question.options.forEach(option => {{
-            const button = document.createElement('button');
-            button.className = 'quiz-option';
-            button.textContent = option;
-            button.onclick = () => selectOption(button, option, question.correctAnswer);
-            optionsContainer.appendChild(button);
-        }});
-        highlightRiverOnMapByName(question.riverName);
-
-    }} else if (question.type === 'center') {{
-        qTextEl.textContent = `Найдите на карте: ${{question.correctAnswer}}`;
-        if (optionsContainer) {{
-            optionsContainer.innerHTML = '<div class="center-quiz-instruction">Кликните на карту в точке нахождения объекта<br><span>до 5 км: +3 очка | до 15 км: +2 | до 30 км: +1</span></div>';
-        }}
-        window.currentQuestionData = question;
-        setupMapClickListener(question);
-    }}
-
-    const hintC = document.getElementById('hint-container');
-    if (hintC) hintC.style.display = 'none';
-    selectedOption = null;
-    startTimer();
-}}
-
-function selectOption(button, selected, correct) {{
-    document.querySelectorAll('.quiz-option').forEach(opt => {{
-        opt.classList.remove('selected');
-    }});
-    button.classList.add('selected');
-    selectedOption = selected;
-    showConfirmButton();
-}}
-
-function showConfirmButton() {{
-    const optionsContainer = document.getElementById('options-container');
-    if (!optionsContainer) return;
-    const oldButton = document.getElementById('confirm-button');
-    if (oldButton) oldButton.remove();
-
-    const confirmButton = document.createElement('button');
-    confirmButton.textContent = '✓ Подтвердить ответ';
-    confirmButton.className = 'btn-confirm';
-    confirmButton.onclick = checkAnswer;
-    confirmButton.id = 'confirm-button';
-    optionsContainer.appendChild(confirmButton);
-}}
-
-function checkAnswer() {{
-    if (!selectedOption && currentQuiz !== 'center') {{
-        alert('Пожалуйста, выберите вариант ответа!');
-        return;
-    }}
-    stopTimer();
-    const question = quizData[currentQuestion];
-    const isCorrect = selectedOption === question.correctAnswer;
-    
-    document.querySelectorAll('.quiz-option').forEach(opt => {{
-        if (opt.textContent === question.correctAnswer) {{
-            opt.classList.add('correct');
-        }}
-        if (opt.textContent === selectedOption && !isCorrect) {{
-            opt.classList.add('incorrect');
-        }}
-        opt.disabled = true;
-    }});
-
-    const oldButton = document.getElementById('confirm-button');
-    if (oldButton) oldButton.remove();
-
-    if (isCorrect) {{
-        score++;
-        showFeedback('Правильно!', 'success');
-    }} else {{
-        showFeedback(`Неправильно! Ответ: ${{question.correctAnswer}}`, 'error');
-    }}
-    updateScore();
-    setTimeout(() => {{
-        currentQuestion++;
-        showQuestion();
-    }}, 1800);
-}}
-
-function setupMapClickListener(question) {{
-    const map = getMapObject();
-    if (!map) return;
-
-    if (window._clickBlocker) {{
-        try {{ map.removeLayer(window._clickBlocker); }} catch(e) {{}}
-        window._clickBlocker = null;
-    }}
-
-    window._clickBlocker = L.rectangle(
-        [[-90, -180], [90, 180]],
-        {{ color: 'transparent', fillColor: 'transparent', fillOpacity: 0, weight: 0, interactive: true }}
-    ).addTo(map);
-
-    window._clickHandler = function(e) {{
-        handleMapClick(e.latlng.lat, e.latlng.lng, question);
-    }};
-
-    window._clickBlocker.on('click', window._clickHandler);
-}}
-
-function handleMapClick(lat, lon, question) {{
-    stopTimer();
-    const correctLat = question.correctLat;
-    const correctLon = question.correctLon;
-
-    const distance = calculateDistance(lat, lon, correctLat, correctLon);
-    let pointsAwarded = 0;
-    let message = '';
-    let badgeType = 'error';
-
-    if (distance <= 5) {{
-        pointsAwarded = 3;
-        message = `Идеально! (${{distance.toFixed(1)}} км) +3 очка!`;
-        badgeType = 'success';
-    }} else if (distance <= 15) {{
-        pointsAwarded = 2;
-        message = `Хорошо! (${{distance.toFixed(1)}} км) +2 очка!`;
-        badgeType = 'success';
-    }} else if (distance <= 30) {{
-        pointsAwarded = 1;
-        message = `Близко (${{distance.toFixed(1)}} км) +1 очко!`;
-        badgeType = 'success';
-    }} else {{
-        pointsAwarded = 0;
-        message = `Мимо! (${{distance.toFixed(1)}} км от цели)`;
-        badgeType = 'error';
-    }}
-
-    score += pointsAwarded;
-    clearMarkers();
-
-    const map = getMapObject();
-    if (window._clickBlocker) {{
-        try {{
-            if (window._clickHandler) {{
-                window._clickBlocker.off('click', window._clickHandler);
-            }}
-            map.removeLayer(window._clickBlocker);
-        }} catch(e) {{}}
-        window._clickBlocker = null;
-        window._clickHandler = null;
-    }}
-
-    const markerColor = pointsAwarded > 0 ? '#10B981' : '#EF4444';
-
-    clickMarker = L.circleMarker([lat, lon], {{
-        radius: 9,
-        color: markerColor,
-        fillColor: markerColor,
-        fillOpacity: 0.8,
-        weight: 2
-    }}).addTo(map);
-
-    resultMarker = L.circleMarker([correctLat, correctLon], {{
-        radius: 8,
-        color: '#2563EB',
-        fillColor: '#2563EB',
-        fillOpacity: 0.5,
-        weight: 2,
-        dashArray: '4, 4'
-    }}).addTo(map);
-
-    resultLine = L.polyline([[lat, lon], [correctLat, correctLon]], {{
-        color: markerColor,
-        weight: 2.5,
-        opacity: 0.8,
-        dashArray: '5, 8'
-    }}).addTo(map);
-
-    map.fitBounds([
-        [Math.min(lat, correctLat) - 0.1, Math.min(lon, correctLon) - 0.1],
-        [Math.max(lat, correctLat) + 0.1, Math.max(lon, correctLon) + 0.1]
-    ]);
-
-    showFeedback(message, badgeType);
-    updateScore();
-
-    setTimeout(() => {{
-        currentQuestion++;
-        showQuestion();
-    }}, 2600);
-}}
-
-function calculateDistance(lat1, lon1, lat2, lon2) {{
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-        Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}}
-
-function showFeedback(message, type) {{
-    const container = document.getElementById('options-container');
-    if (!container) return;
-    const oldFeedback = document.getElementById('feedback');
-    if (oldFeedback) oldFeedback.remove();
-
-    const feedback = document.createElement('div');
-    feedback.className = `feedback-box ${{type}}`;
-    feedback.textContent = message;
-    feedback.id = 'feedback';
-    container.appendChild(feedback);
-}}
-
-function showHint() {{
-    const question = quizData[currentQuestion];
-    if (question && question.hint) {{
-        const ht = document.getElementById('hint-text');
-        const hc = document.getElementById('hint-container');
-        if (ht) ht.textContent = question.hint;
-        if (hc) hc.style.display = 'block';
-    }}
-}}
-
-function updateScore() {{
-    const scoreEl = document.getElementById('score');
-    const accEl = document.getElementById('accuracy');
-    if (scoreEl) scoreEl.textContent = score;
-    const currentMax = currentQuiz === 'center' ? (currentQuestion + 1) * 3 : (currentQuestion + 1);
-    const accuracy = currentMax > 0 ? Math.round((score / currentMax) * 100) : 0;
-    if (accEl) accEl.textContent = `Эффективность: ${{accuracy}}%`;
-}}
-
-function normalizeDistrictName(str) {{
-    if (!str) return '';
-    let s = str.toString().toLowerCase().trim();
-    let isDistrict = s.includes('район') || s.includes('р-н');
-    let isCity = s.includes('город') || s.includes('округ') || s.includes('г.');
-
-    let clean = s.replace('городской округ', '')
-                 .replace('район', '')
-                 .replace('р-н', '')
-                 .replace('г.', '')
-                 .replace(/[^a-zа-яё0-9]/gi, '')
-                 .trim();
-
-    if (isDistrict) return clean + '_raion';
-    if (isCity) return clean + '_city';
-    return clean;
-}}
-
-/* ПОДСВЕТКА РАЙОНА С ОГРАНИЧЕНИЕМ ЗУМА ДО 9 (ДЛЯ СОХРАНЕНИЯ КОНТЕКСТА) */
-function highlightDistrictOnMapByName(districtName) {{
-    const map = getMapObject();
-    if (!map) return;
-
-    resetActiveHighlight();
-    const targetNorm = normalizeDistrictName(districtName);
-    const targetSimple = districtName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
-
-    let targetLayer = null;
-
-    map.eachLayer(function(layer) {{
-        if (layer.feature && layer.feature.properties && !targetLayer) {{
-            const props = layer.feature.properties;
-            if (props.ADMIN_LVL === '6' || props.ADMIN_LVL === 6 || props.oktmo) {{
-                const pName = props.display_name || props.NAME_RU || props.NAME || '';
-                if (normalizeDistrictName(pName) === targetNorm) {{
-                    targetLayer = layer;
-                }}
-            }}
-        }}
-    }});
-
-    if (!targetLayer) {{
-        map.eachLayer(function(layer) {{
-            if (layer.feature && layer.feature.properties && !targetLayer) {{
-                const props = layer.feature.properties;
-                if (props.ADMIN_LVL === '6' || props.ADMIN_LVL === 6 || props.oktmo) {{
-                    const pSimple = (props.display_name || props.NAME_RU || props.NAME || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
-                    if (pSimple === targetSimple || pSimple.includes(targetSimple) || targetSimple.includes(pSimple)) {{
-                        targetLayer = layer;
-                    }}
-                }}
-            }}
-        }});
-    }}
-
-    if (targetLayer) {{
-        highlightedDistrictLayer = targetLayer;
-        try {{
-            targetLayer.setStyle({{
-                color: '#F59E0B',
-                weight: 4,
-                fillColor: '#F59E0B',
-                fillOpacity: 0.5,
-                dashArray: null
-            }});
-            map.fitBounds(targetLayer.getBounds(), {{ maxZoom: 9, padding: [50, 50] }});
-        }} catch(e) {{}}
-    }}
-}}
-
-function highlightRiverOnMapByName(riverName) {{
-    const map = getMapObject();
-    if (!map) return;
-
-    resetActiveHighlight(true);
-    const target = riverName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
-
-    let targetGroup = L.featureGroup();
-    highlightedRiverLayers = [];
-
-    map.eachLayer(function(layer) {{
-        if (layer.feature && layer.feature.geometry) {{
-            const gType = layer.feature.geometry.type || '';
-            if (gType.includes('LineString')) {{
-                const props = layer.feature.properties || {{}};
-                const pName = (props.clean_name || props.display_name || props.name || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
-                if (pName && pName === target) {{
-                    highlightedRiverLayers.push(layer);
-                    try {{
-                        layer.setStyle({{
-                            color: '#EF4444',
-                            weight: 5,
-                            opacity: 1.0
-                        }});
-                        targetGroup.addLayer(layer);
-                    }} catch(e) {{}}
-                }}
-            }}
-        }}
-    }});
-
-    if (highlightedRiverLayers.length > 0) {{
-        try {{
-            map.fitBounds(targetGroup.getBounds(), {{padding: [40, 40]}});
-        }} catch(e) {{}}
-    }}
-}}
-
-function showDistrictInfoCard(districtName) {{
-    const targetNorm = normalizeDistrictName(districtName);
-    const targetSimple = districtName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
-
-    let district = EMBEDDED_NEIGHBORS.find(d => normalizeDistrictName(d.name) === targetNorm);
-    if (!district) {{
-        district = EMBEDDED_NEIGHBORS.find(d => {{
-            let s = d.name.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
-            return s === targetSimple || s.includes(targetSimple) || targetSimple.includes(s);
-        }});
-    }}
-
-    if (!district) return;
-
-    const card = document.getElementById('district-info-card');
-    if (!card) return;
-
-    highlightDistrictOnMapByName(district.name);
-
-    const neighborsHtml = district.neighbors && district.neighbors.length > 0 
-        ? district.neighbors.map(n => `<span class="neighbor-tag" onclick="showDistrictInfoCard('${{n}}')">${{n}}</span>`).join('')
-        : '<em>Нет смежных границ</em>';
-
-    const popFormatted = district.population 
-        ? `${{Number(district.population).toLocaleString('ru-RU')}} чел.` 
-        : 'Нет данных';
-
-    card.innerHTML = `
-        <div class="info-card-header">
-            <strong>${{district.name}}</strong>
-            <button onclick="closeInfoCard()" class="close-card-btn">&times;</button>
-        </div>
-        <div class="info-card-body">
-            <div class="info-row"><span>Райцентр:</span><strong>${{district.center}}</strong></div>
-            <div class="info-row"><span>Население:</span><strong>~${{popFormatted}}</strong></div>
-            <div class="info-row"><span>Площадь:</span><strong>~${{district.area}} км²</strong></div>
-            <div style="margin-top: 8px;">
-                <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит с районами:</span>
-                <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${{neighborsHtml}}</div>
-            </div>
-        </div>
-    `;
-    card.style.display = 'block';
-}}
-
-function closeInfoCard() {{
-    const card = document.getElementById('district-info-card');
-    if (card) card.style.display = 'none';
-    resetActiveHighlight();
-}}
-
-function setupDistrictClickListeners() {{
-    const map = getMapObject();
-    if (!map) {{
-        setTimeout(setupDistrictClickListeners, 400);
-        return;
-    }}
-
-    map.eachLayer(function(layer) {{
-        if (layer.feature && layer.feature.properties) {{
-            const props = layer.feature.properties;
-            const isDistrictPoly = (props.ADMIN_LVL === '6' || props.ADMIN_LVL === 6 || props.oktmo);
-            if (isDistrictPoly) {{
-                const name = props.display_name || props.NAME_RU || props.NAME;
-                if (name) {{
-                    layer.off('click');
-                    layer.on('click', function(e) {{
-                        if (currentQuiz === null) {{
-                            showDistrictInfoCard(name);
-                        }}
-                    }});
-                }}
-            }}
-        }}
-    }});
-}}
-
-function exitQuiz() {{
-    if (confirm('Завершить викторину?')) {{
-        exitQuizDirectly();
-    }}
-}}
-
-function exitQuizDirectly() {{
-    stopTimer();
-    setBasemapVisible(true);
-    const map = getMapObject();
-    if (map && window._clickBlocker) {{
-        try {{
-            if (window._clickHandler) {{
-                window._clickBlocker.off('click', window._clickHandler);
-            }}
-            map.removeLayer(window._clickBlocker);
-        }} catch(e) {{}}
-        window._clickBlocker = null;
-        window._clickHandler = null;
-    }}
-    clearMarkers();
-    enablePopups();
-    resetActiveHighlight(false);
-    restoreAllLayers();
-    resetMapView();
-
-    currentQuiz = null;
-    resetQuiz();
-    setTimeout(setupDistrictClickListeners, 300);
-
-    document.getElementById('quiz-mode').style.display = 'none';
-    document.getElementById('results-mode').style.display = 'none';
-    document.getElementById('study-mode').style.display = 'none';
-    document.getElementById('normal-mode').style.display = 'block';
-}}
-
-function showResults() {{
-    clearMarkers();
-    setBasemapVisible(true);
-    resetActiveHighlight(true);
-    resetMapView();
-    restoreAllLayers();
-    enablePopups();
-
-    currentQuiz = null;
-    setTimeout(setupDistrictClickListeners, 500);
-
-    document.getElementById('quiz-mode').style.display = 'none';
-    document.getElementById('normal-mode').style.display = 'none';
-    document.getElementById('study-mode').style.display = 'none';
-    document.getElementById('results-mode').style.display = 'block';
-
-    const accuracy = maxPossibleScore > 0 ? Math.round((score / maxPossibleScore) * 100) : 0;
-    let message = '', emoji = '';
-    if (accuracy >= 85) {{ message = 'Превосходно! Отличное пространственное знание области!'; emoji = '🏆'; }}
-    else if (accuracy >= 65) {{ message = 'Хорошо! Вы уверенно ориентируетесь на карте.'; emoji = '👍'; }}
-    else if (accuracy >= 45) {{ message = 'Удовлетворительно, рекомендуем повторить номенклатуру.'; emoji = '📚'; }}
-    else {{ message = 'Попробуйте ещё раз, практика даст результат!'; emoji = '💪'; }}
-
-    const studentInfo = getCurrentStudentInfo();
-    const studentLine = studentInfo ? `<p style="margin: 4px 0; font-size: 13px; color: #0284C7;">Студент: <strong>${{studentInfo.name}}</strong> (${{studentInfo.group}})</p>` : '';
-
-    const rc = document.getElementById('results-content');
-    if (rc) {{
-        rc.innerHTML = `
-            <div style="font-size: 42px; margin: 10px 0;">${{emoji}}</div>
-            ${{studentLine}}
-            <h3 style="margin: 6px 0; color: #1E293B;">${{score}} из ${{maxPossibleScore}} баллов</h3>
-            <p style="margin: 4px 0; font-size: 13px; color: #475569;">Результативность: <strong>${{accuracy}}%</strong></p>
-            <p style="margin-top: 6px; font-size: 12px; color: #64748B;">${{message}}</p>
-        `;
-    }}
-    saveResult(accuracy);
-}}
-
-function closeResultsAndReturnToMenu() {{
-    document.getElementById('results-mode').style.display = 'none';
-    document.getElementById('normal-mode').style.display = 'block';
-    resetQuiz();
-}}
-
-function saveResult(accuracy) {{
-    const student = getCurrentStudentInfo();
-    let timeSec = Math.round((Date.now() - (quizStartTime || Date.now())) / 1000);
-    let timeStr = `${{Math.floor(timeSec / 60)}} мин. ${{timeSec % 60}} сек.`;
-
-    const results = JSON.parse(localStorage.getItem('rostovQuizResults') || '[]');
-    results.push({{
-        date: new Date().toLocaleString(),
-        student: student ? student.name : 'Анонимно',
-        group: student ? student.group : '-',
-        type: currentQuiz,
-        score: score,
-        maxScore: maxPossibleScore,
-        accuracy: accuracy,
-        time_spent: timeStr
-    }});
-    localStorage.setItem('rostovQuizResults', JSON.stringify(results));
-
-    if (student) {{
-        fetch('/api/results/save', {{
-            method: 'POST',
-            headers: {{ 'Content-Type': 'application/json' }},
-            body: JSON.stringify({{
-                email: student.email,
-                name: student.name,
-                group: student.group,
-                quiz_type: currentQuiz,
-                score: score,
-                max_score: maxPossibleScore,
-                accuracy: accuracy,
-                time_spent: timeStr
-            }})
-        }}).catch(e => {{}});
-    }}
-}}
-
-let globalLeaderboardCache = [];
-let currentLbTab = 'global';
-let currentLbFilter = 'all';
-
-function showLeaderboard() {{
-    fetch('/api/results/leaderboard')
-    .then(res => res.json())
-    .then(data => {{
-        globalLeaderboardCache = data;
-        renderLeaderboardModal();
-    }}).catch(e => alert('Не удалось загрузить таблицу лидеров с сервера'));
-}}
-
-function switchLbTab(tab) {{
-    currentLbTab = tab;
-    updateLbView();
-}}
-
-function switchLbFilter(filter) {{
-    currentLbFilter = filter;
-    updateLbView();
-}}
-
-function renderLeaderboardModal() {{
-    let existing = document.getElementById('leaderboard-modal-container');
-    if (existing) existing.remove();
-
-    let html = `
-    <div class="welcome-overlay" id="leaderboard-modal-container">
-        <div class="welcome-card leaderboard-modal-card" style="text-align: center; max-width: 700px;">
-            <h3>🏆 Центр успеваемости и лидеров</h3>
-            
-            <div class="lb-main-tabs">
-                <button onclick="switchLbTab('global')" id="lb-tab-global" class="lb-tab-btn ${{currentLbTab==='global'?'active':''}}">🌍 Глобальный топ</button>
-                <button onclick="switchLbTab('profile')" id="lb-tab-profile" class="lb-tab-btn ${{currentLbTab==='profile'?'active':''}}">👤 Мой профиль и история</button>
-            </div>
-
-            <div id="lb-content-area" class="lb-content-fade">
-                ${{getLbContentHtml()}}
-            </div>
-
-            <button onclick="closeLeaderboardModal()" class="btn-start" style="margin-top: 16px;">Закрыть</button>
-        </div>
-    </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', html);
-}}
-
-function updateLbView() {{
-    let area = document.getElementById('lb-content-area');
-    if (!area) return;
-
-    let btnGlobal = document.getElementById('lb-tab-global');
-    let btnProfile = document.getElementById('lb-tab-profile');
-    if (btnGlobal && btnProfile) {{
-        if (currentLbTab === 'global') {{
-            btnGlobal.classList.add('active');
-            btnProfile.classList.remove('active');
-        }} else {{
-            btnProfile.classList.add('active');
-            btnGlobal.classList.remove('active');
-        }}
-    }}
-
-    area.classList.add('fade-anim');
-    setTimeout(() => {{
-        area.innerHTML = getLbContentHtml();
-        area.classList.remove('fade-anim');
-    }}, 150);
-}}
-
-function getLbContentHtml() {{
-    let filtersHtml = `
-    <div class="lb-filters">
-        <button onclick="switchLbFilter('all')" class="lb-filter-chip ${{currentLbFilter==='all'?'active':''}}">Все тесты</button>
-        <button onclick="switchLbFilter('district')" class="lb-filter-chip ${{currentLbFilter==='district'?'active':''}}">Районы</button>
-        <button onclick="switchLbFilter('neighbor')" class="lb-filter-chip ${{currentLbFilter==='neighbor'?'active':''}}">Соседи</button>
-        <button onclick="switchLbFilter('river')" class="lb-filter-chip ${{currentLbFilter==='river'?'active':''}}">Реки</button>
-        <button onclick="switchLbFilter('center')" class="lb-filter-chip ${{currentLbFilter==='center'?'active':''}}">Центры</button>
-    </div>`;
-
-    if (currentLbTab === 'global') {{
-        let data = globalLeaderboardCache;
-        if (currentLbFilter !== 'all') {{
-            data = data.filter(r => r.quiz_type === currentLbFilter);
-        }}
-
-        if (!data || data.length === 0) {{
-            return filtersHtml + '<p style="color: #64748B; font-size: 13px; margin: 25px 0;">Пока нет результатов в этой категории.</p>';
-        }}
-
-        let tableHtml = filtersHtml + '<div class="lb-table-wrap"><table class="lb-styled-table"><tr><th>№</th><th>Студент</th><th>Группа</th><th>Тест</th><th>Баллы</th><th>%</th><th>Время</th></tr>';
-        data.forEach((r, index) => {{
-            tableHtml += `<tr><td>${{index+1}}</td><td>${{r.name}}</td><td>${{r.group}}</td><td>${{r.quiz_type}}</td><td><b>${{r.score}}/${{r.max_score}}</b></td><td>${{r.accuracy}}%</td><td>${{r.time_spent}}</td></tr>`;
-        }});
-        tableHtml += '</table></div>';
-        return tableHtml;
-    }} else {{
-        let student = getCurrentStudentInfo();
-        if (!student) {{
-            return `
-            <div style="padding: 30px 10px; text-align: center;">
-                <p style="color: #64748B; font-size: 13.5px; margin-bottom: 15px;">Чтобы просматривать личную статистику и историю, авторизуйтесь через корпоративную почту ЮФУ.</p>
-                <button onclick="closeLeaderboardModal(); openAuthModal();" class="btn-start">Войти через ЮФУ</button>
-            </div>`;
-        }}
-
-        let allResults = JSON.parse(localStorage.getItem('rostovQuizResults') || '[]');
-        let myResults = allResults.filter(r => student && r.student === student.name);
-
-        if (currentLbFilter !== 'all') {{
-            myResults = myResults.filter(r => r.type === currentLbFilter);
-        }}
-
-        if (myResults.length === 0) {{
-            return filtersHtml + `
-            <div style="padding: 25px 10px; text-align: center;">
-                <p style="font-weight: 700; color: #0369A1; font-size: 14px;">Привет, ${{student.name}} (${{student.group}})!</p>
-                <p style="color: #64748B; font-size: 13px; margin-top: 8px;">У вас пока нет сохраненных результатов в выбранной категории.</p>
-            </div>`;
-        }}
-
-        let bestResult = [...myResults].sort((a,b) => b.accuracy - a.accuracy || b.score - a.score)[0];
-        let lastResults = [...myResults].reverse();
-
-        let profileHtml = filtersHtml + `
-        <div style="text-align: left; margin-bottom: 12px; background: #F0FDF4; border: 1px solid #BBF7D0; padding: 10px 14px; border-radius: 12px;">
-            <p style="margin: 0; font-size: 12.5px; color: #166534; font-weight: 700;">👤 Студент: ${{student.name}}</p>
-            <p style="margin: 2px 0 0 0; font-size: 11.5px; color: #15803D;">Группа: ${{student.group}}</p>
-        </div>
-
-        <div style="margin-bottom: 12px; text-align: left;">
-            <h4 style="margin: 0 0 5px 0; font-size: 12.5px; color: #1E293B;">⭐ Лучший результат:</h4>
-            <div style="background: #FFFBEB; border: 1px solid #FDE68A; padding: 8px 12px; border-radius: 9px; font-size: 11.5px; color: #92400E; display: flex; justify-content: space-between; align-items: center;">
-                <span>Тест: <b>${{bestResult.type}}</b> | Баллы: <b>${{bestResult.score}}/${{bestResult.maxScore}}</b> (${{bestResult.accuracy}}%)</span>
-                <span>⏱ ${{bestResult.time_spent}}</span>
-            </div>
-        </div>
-
-        <div style="text-align: left;">
-            <h4 style="margin: 0 0 5px 0; font-size: 12.5px; color: #1E293B;">📜 История прохождений:</h4>
-            <div class="lb-table-wrap">
-                <table class="lb-styled-table">
-                    <tr><th>Дата</th><th>Тест</th><th>Баллы</th><th>%</th><th>Время</th></tr>`;
-        
-        lastResults.forEach(r => {{
-            profileHtml += `<tr><td>${{r.date}}</td><td>${{r.type}}</td><td><b>${{r.score}}/${{r.maxScore}}</b></td><td>${{r.accuracy}}%</td><td>${{r.time_spent}}</td></tr>`;
-        }});
-
-        profileHtml += `</table></div></div>`;
-        return profileHtml;
-    }}
-}}
-
-function closeLeaderboardModal() {{
-    let el = document.getElementById('leaderboard-modal-container');
-    if (el) el.remove();
-}}
-
-function resetQuiz() {{
-    stopTimer();
-    currentQuestion = 0;
-    score = 0;
-    maxPossibleScore = 0;
-    quizData = [];
-    selectedOption = null;
-    updateScore();
-    clearMarkers();
-}}
-
-function shuffleArray(array) {{
-    for (let i = array.length - 1; i > 0; i--) {{
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }}
-}}
-
-function closeWelcomeModal() {{
-    const modal = document.getElementById('welcome-modal');
-    if (modal) {{
-        modal.classList.add('fade-out');
-        setTimeout(() => {{
-            modal.style.display = 'none';
-        }}, 250);
-    }}
-    const dontShow = document.getElementById('dont-show-welcome');
-    if (dontShow && dontShow.checked) {{
-        localStorage.setItem('rostovMapHideWelcome', 'true');
-    }}
-}}
-
-function openWelcomeModal() {{
-    const modal = document.getElementById('welcome-modal');
-    if (modal) {{
-        modal.classList.remove('fade-out');
-        modal.style.display = 'flex';
-    }}
-}}
-
-function openAuthModal() {{
-    const modal = document.getElementById('auth-modal');
-    if (modal) modal.style.display = 'flex';
-    resetAuthForms();
-}}
-
-function closeAuthModal() {{
-    const modal = document.getElementById('auth-modal');
-    if (modal) modal.style.display = 'none';
-}}
-
-function resetAuthForms() {{
-    document.getElementById('auth-step-1').style.display = 'block';
-    document.getElementById('auth-step-2').style.display = 'none';
-    document.getElementById('auth-error').style.display = 'none';
-    document.getElementById('auth-code-input').value = '';
-}}
-
-async function requestSfeduCode() {{
-    const email = document.getElementById('auth-email').value.trim();
-    const name = document.getElementById('auth-name').value.trim();
-    const group = document.getElementById('auth-group').value.trim();
-    const errBox = document.getElementById('auth-error');
-
-    if (!email || !name || !group) {{
-        showAuthError('Заполните все поля');
-        return;
-    }}
-
-    if (!email.toLowerCase().endsWith('@sfedu.ru') && !email.toLowerCase().endsWith('.sfedu.ru')) {{
-        showAuthError('Разрешены только адреса @sfedu.ru');
-        return;
-    }}
-
-    try {{
-        const res = await fetch('/api/auth/send-code', {{
-            method: 'POST',
-            headers: {{ 'Content-Type': 'application/json' }},
-            body: JSON.stringify({{ email, full_name: name, group_num: group }})
-        }});
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Ошибка отправки кода');
-
-        document.getElementById('auth-step-1').style.display = 'none';
-        document.getElementById('auth-step-2').style.display = 'block';
-        document.getElementById('auth-target-email').textContent = email;
-        errBox.style.display = 'none';
-
-        if (data.dev_code) {{
-            alert(`[Демо/ЮФУ] Ваш проверочный код: ${{data.dev_code}}`);
-        }}
-    }} catch(e) {{
-        showAuthError(e.message || 'Ошибка соединения с сервером');
-    }}
-}}
-
-async function verifySfeduCode() {{
-    const email = document.getElementById('auth-email').value.trim();
-    const code = document.getElementById('auth-code-input').value.trim();
-
-    if (!code || code.length !== 6) {{
-        showAuthError('Введите 6-значный код');
-        return;
-    }}
-
-    try {{
-        const res = await fetch('/api/auth/verify-code', {{
-            method: 'POST',
-            headers: {{ 'Content-Type': 'application/json' }},
-            body: JSON.stringify({{ email, code }})
-        }});
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Неверный код');
-
-        localStorage.setItem('sfeduStudent', JSON.stringify(data.user));
-        updateStudentHeader();
-        closeAuthModal();
-    }} catch(e) {{
-        showAuthError(e.message || 'Неверный или просроченный код');
-    }}
-}}
-
-function showAuthError(msg) {{
-    const errBox = document.getElementById('auth-error');
-    errBox.textContent = msg;
-    errBox.style.display = 'block';
-}}
-
-function logoutStudent() {{
-    if (confirm('Выйти из профиля студента ЮФУ?')) {{
-        localStorage.removeItem('sfeduStudent');
-        updateStudentHeader();
-    }}
-}}
-
-function getCurrentStudentInfo() {{
-    try {{
-        const raw = localStorage.getItem('sfeduStudent');
-        return raw ? JSON.parse(raw) : null;
-    }} catch(e) {{
-        return null;
-    }}
-}}
-
-function updateStudentHeader() {{
-    const student = getCurrentStudentInfo();
-    const authBtn = document.getElementById('auth-top-btn');
-    const profileBox = document.getElementById('student-profile-badge');
-
-    if (student) {{
-        if (authBtn) authBtn.style.display = 'none';
-        if (profileBox) {{
-            profileBox.style.display = 'flex';
-            document.getElementById('student-badge-name').textContent = student.name;
-            document.getElementById('student-badge-group').textContent = `${{student.group}} | ЮФУ`;
-        }}
-    }} else {{
-        if (authBtn) authBtn.style.display = 'flex';
-        if (profileBox) profileBox.style.display = 'none';
-    }}
-}}
-
-window.addEventListener('load', function() {{
-    resetMapView();
-    setTimeout(setupDistrictClickListeners, 400);
-    updateStudentHeader();
-    if (!localStorage.getItem('rostovMapHideWelcome')) {{
-        setTimeout(openWelcomeModal, 400);
-    }}
-}});
 '''
 
-        self.map.get_root().html.add_child(folium.Element(f"<script>{js_code}</script>"))
+        quiz_js_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'quiz.js')
+        with open(quiz_js_path, 'r', encoding='utf-8') as f:
+            quiz_js = f.read()
 
-        quiz_html = '''
+        self.map.get_root().html.add_child(folium.Element(f"<script>{dynamic_js}\n{quiz_js}</script>"))
+
+        quiz_html = f'''
         <div class="top-nav-buttons" id="top-nav-panel">
-            <button class="nav-top-btn" onclick="resetMapView()" style="background: linear-gradient(135deg, #EFF6FF, #DBEAFE); border-color: #93C5FD; color: #1D4ED8;" title="Показать всю область">
-                <span>🌍 Вся область</span>
+            <button class="nav-top-btn" onclick="resetMapView()" style="background: linear-gradient(135deg, #EFF6FF, #DBEAFE); border-color: #93C5FD; color: #1D4ED8;" title="Показать всю карту">
+                <span>🌍 Вся карта</span>
             </button>
             <button class="nav-top-btn admin-btn" onclick="window.open('/admin', '_blank')" title="Панель преподавателя">
                 <span>📊 Преподавателю</span>
             </button>
-            <button id="auth-top-btn" class="nav-top-btn auth-btn" onclick="openAuthModal()" title="Вход для студентов ЮФУ">
-                <span>🎓 Вход ЮФУ</span>
+            <button id="auth-top-btn" class="nav-top-btn auth-btn" onclick="goToMainAuth()" title="Авторизация через главное меню">
+                <span>🎓 Войти через Главное меню</span>
             </button>
             <div id="student-profile-badge" class="student-badge" style="display: none;">
                 <div class="badge-avatar">🎓</div>
@@ -1850,7 +1162,6 @@ window.addEventListener('load', function() {{
         </div>
 
         <div id="quiz-controls" class="app-card">
-            <!-- Кнопка мобильной шторки -->
             <button id="panel-collapse-btn" class="mobile-collapse-trigger" onclick="togglePanelCollapse()">
                 ▼ Свернуть панель к карте
             </button>
@@ -1865,7 +1176,7 @@ window.addEventListener('load', function() {{
                     Обучающий режим
                 </div>
                 <div class="study-pick-grid">
-                    <button onclick="startStudyMode('districts')" class="btn btn-study-action">🗺️ Районы</button>
+                    <button onclick="startStudyMode('districts')" class="btn btn-study-action">🗺️ Территории</button>
                     <button onclick="startStudyMode('rivers')" class="btn btn-study-action">🌊 Реки</button>
                     <button onclick="startStudyMode('centers')" class="btn btn-study-action">📍 Центры</button>
                 </div>
@@ -1874,20 +1185,24 @@ window.addEventListener('load', function() {{
                     Проверка знаний (Викторины)
                 </div>
 
+                <button onclick="openExamModal()" class="btn btn-exam" id="btn-open-exam" style="background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%); color: white; font-weight: 800; border: none; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35); margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span>📝 Режим контрольной (Экзамен)</span>
+                </button>
+
                 <button onclick="startDistrictQuiz()" class="btn btn-district">
-                    Угадай район по очертаниям
+                    Узнать территорию по силуэту
                 </button>
 
                 <button onclick="startNeighborQuiz()" class="btn btn-neighbor">
-                    Районы-соседи (пространственный тест)
+                    Топология и соседи (тест)
                 </button>
 
                 <button onclick="startRiverQuiz()" class="btn btn-river">
-                    Угадай реку по руслу
+                    Определить реку по руслу
                 </button>
 
                 <button onclick="startCenterQuiz()" class="btn btn-center">
-                    Найди райцентр на карте
+                    Найти центр на карте
                 </button>
 
                 <div class="timer-setting-box">
@@ -1908,7 +1223,7 @@ window.addEventListener('load', function() {{
             <!-- РЕЖИМ ОБУЧЕНИЯ (МУЛЬТИКАТЕГОРИИ) -->
             <div id="study-mode" style="display: none;">
                 <div class="study-category-bar">
-                    <button id="study-tab-districts" onclick="switchStudyCategory('districts')" class="study-cat-tab">🗺️ Районы</button>
+                    <button id="study-tab-districts" onclick="switchStudyCategory('districts')" class="study-cat-tab">🗺️ Территории</button>
                     <button id="study-tab-rivers" onclick="switchStudyCategory('rivers')" class="study-cat-tab">🌊 Реки</button>
                     <button id="study-tab-centers" onclick="switchStudyCategory('centers')" class="study-cat-tab">📍 Центры</button>
                 </div>
@@ -1986,59 +1301,10 @@ window.addEventListener('load', function() {{
             </div>
         </div>
 
-        <!-- Окно авторизации ЮФУ -->
-        <div id="auth-modal" class="welcome-overlay" style="display: none;">
-            <div class="auth-card">
-                <div class="auth-header">
-                    <div>
-                        <h3>Вход через профиль ЮФУ</h3>
-                        <p style="margin: 2px 0 0 0; font-size: 11.5px; color: #64748B;">Студенческая почта @sfedu.ru</p>
-                    </div>
-                    <button onclick="closeAuthModal()" class="close-card-btn">&times;</button>
-                </div>
-
-                <div id="auth-error" class="auth-error" style="display: none;"></div>
-
-                <div id="auth-step-1">
-                    <div class="form-group">
-                        <label>Корпоративная почта ЮФУ:</label>
-                        <input type="email" id="auth-email" placeholder="ivanov@sfedu.ru" class="auth-input">
-                    </div>
-                    <div class="form-group">
-                        <label>ФИО студента:</label>
-                        <input type="text" id="auth-name" placeholder="Иванов Иван Иванович" class="auth-input">
-                    </div>
-                    <div class="form-group">
-                        <label>Академическая группа / Специальность:</label>
-                        <input type="text" id="auth-group" placeholder="Геофак, 4 курс" class="auth-input">
-                    </div>
-                    <button onclick="requestSfeduCode()" class="btn-start" style="width: 100%; margin-top: 14px;">
-                        Получить код подтверждения
-                    </button>
-                </div>
-
-                <div id="auth-step-2" style="display: none;">
-                    <p style="font-size: 13px; color: #475569; margin: 0 0 12px 0;">
-                        Код верификации отправлен на адрес: <br><strong id="auth-target-email" style="color: #0F172A;"></strong>
-                    </p>
-                    <div class="form-group">
-                        <label>6-значный код:</label>
-                        <input type="text" id="auth-code-input" maxlength="6" placeholder="000000" class="auth-input code-input">
-                    </div>
-                    <button onclick="verifySfeduCode()" class="btn-start" style="width: 100%; margin-top: 14px;">
-                        Подтвердить и войти
-                    </button>
-                    <button onclick="resetAuthForms()" style="background: none; border: none; color: #64748B; font-size: 12px; margin-top: 10px; width: 100%; cursor: pointer;">
-                        ← Ввести другой адрес
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <div id="welcome-modal" class="welcome-overlay" style="display: none;">
             <div class="welcome-card">
                 <div class="welcome-badge">Географический атлас</div>
-                <h2 class="welcome-title">Ростовская область</h2>
+                <h2 class="welcome-title">{self.title}</h2>
                 <p class="welcome-subtitle">Интерактивный картографический комплекс и система тестирования пространственных знаний</p>
                 
                 <div class="welcome-grid">
@@ -2046,7 +1312,7 @@ window.addEventListener('load', function() {{
                         <div class="feature-icon" style="background: #E8F5E9; color: #2E7D32;">🎓</div>
                         <div class="feature-content">
                             <h4>Режим обучения</h4>
-                            <p>Пошаговое изучение номенклатуры области: районов, русел рек и административных центров с автофокусом карты.</p>
+                            <p>Пошаговое изучение номенклатуры области: территорий, русел рек и административных центров с автофокусом карты.</p>
                         </div>
                     </div>
                     <div class="welcome-feature">
@@ -2060,14 +1326,14 @@ window.addEventListener('load', function() {{
                         <div class="feature-icon" style="background: #E0F7FA; color: #00796B;">🧩</div>
                         <div class="feature-content">
                             <h4>Топология и границы</h4>
-                            <p>Проверка знания смежности районов («Районы-соседи») и узнавания силуэтов муниципальных образований.</p>
+                            <p>Проверка знания смежности территорий («Районы-соседи») и узнавания силуэтов муниципальных образований.</p>
                         </div>
                     </div>
                     <div class="welcome-feature">
                         <div class="feature-icon" style="background: #EFF6FF; color: #1D4ED8;">🎯</div>
                         <div class="feature-content">
                             <h4>Поиск центров с точностью</h4>
-                            <p>Проверка топографической ориентации. Укажите кликом райцентр на карте и получите баллы в зависимости от погрешности.</p>
+                            <p>Проверка топографической ориентации. Укажите кликом центр на карте и получите баллы в зависимости от погрешности.</p>
                         </div>
                     </div>
                 </div>
@@ -2082,8 +1348,170 @@ window.addEventListener('load', function() {{
             </div>
         </div>
 
+        <!-- МОДАЛЬНОЕ ОКНО НАСТРОЙКИ КОНТРОЛЬНОЙ РАБОТЫ (ЭКЗАМЕНА) -->
+        <div id="exam-setup-modal" class="welcome-overlay" style="display: none;">
+            <div class="welcome-card" style="max-width: 480px;">
+                <div class="welcome-badge" style="background: linear-gradient(135deg, #7C3AED, #4F46E5); color: white;">ЮФУ Экзамен</div>
+                <h2 class="welcome-title" style="margin-bottom: 6px;">📝 Режим контрольной работы</h2>
+                <p class="welcome-subtitle" style="margin-bottom: 16px;">Аттестационное тестирование студентов Института наук о Земле ЮФУ</p>
+                
+                <div class="exam-setup-form">
+                    <div class="form-group" style="margin-bottom: 14px; text-align: left;">
+                        <label style="font-weight: 700; font-size: 13px; color: #1E293B; display: block; margin-bottom: 6px;">Категория вопросов:</label>
+                        <select id="exam-category-select" class="exam-select">
+                            <option value="mixed">🔀 Комплексный экзамен (все категории)</option>
+                            <option value="districts">🗺️ Территории (по силуэту)</option>
+                            <option value="rivers">🌊 Реки (по руслу)</option>
+                            <option value="centers">📍 Центры (на карте)</option>
+                            <option value="neighbors">🧩 Топология и соседи</option>
+                        </select>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; margin-bottom: 14px; text-align: left;">
+                        <div class="form-group" style="flex: 1;">
+                            <label style="font-weight: 700; font-size: 13px; color: #1E293B; display: block; margin-bottom: 6px;">Количество вопросов:</label>
+                            <select id="exam-count-select" class="exam-select">
+                                <option value="10">10 вопросов</option>
+                                <option value="15" selected>15 вопросов (стандарт)</option>
+                                <option value="20">20 вопросов</option>
+                                <option value="25">25 вопросов</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label style="font-weight: 700; font-size: 13px; color: #1E293B; display: block; margin-bottom: 6px;">Лимит времени:</label>
+                            <select id="exam-time-select" class="exam-select">
+                                <option value="5">5 минут</option>
+                                <option value="10" selected>10 минут (рекомендуется)</option>
+                                <option value="15">15 минут</option>
+                                <option value="20">20 минут</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="exam-rules-box">
+                        <div style="font-size: 13px; font-weight: 700; color: #991B1B; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                            <span>⚠️</span> <span>Правила экзамена и Anti-cheat:</span>
+                        </div>
+                        <ul style="margin: 0; padding-left: 18px; font-size: 11.5px; color: #7F1D1D; line-height: 1.5;">
+                            <li>Запущен общий таймер на всю работу (автозавершение по истечении).</li>
+                            <li><b>Запрещено переключать вкладки браузера</b> (фиксируется нарушение).</li>
+                            <li>При повторном уходе с вкладки экзамен аннулируется.</li>
+                            <li>Подсказки в режиме контрольной отключены.</li>
+                            <li>По окончании выдается именной цифровой токен ведомости.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 18px;">
+                    <button onclick="closeExamModal()" class="btn btn-secondary" style="flex: 1; padding: 10px;">Отмена</button>
+                    <button onclick="startExamFromModal()" class="btn-start" style="flex: 2; background: linear-gradient(135deg, #7C3AED, #4F46E5); padding: 10px; font-size: 14px;">🚀 Начать экзамен</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- МОДАЛЬНОЕ ОКНО ПРЕДУПРЕЖДЕНИЯ ANTI-CHEAT -->
+        <div id="anticheat-modal" class="welcome-overlay" style="display: none; z-index: 11000;">
+            <div class="welcome-card" style="max-width: 440px; border-top: 5px solid #EF4444; animation: shakeAnim 0.3s ease;">
+                <div style="font-size: 38px; text-align: center; margin-bottom: 6px;">🚨</div>
+                <h3 id="anticheat-title" style="margin: 0 0 10px 0; color: #991B1B; text-align: center; font-size: 18px;">ВНИМАНИЕ: Нарушение дисциплины!</h3>
+                <div id="anticheat-body" style="font-size: 13px; color: #334155; line-height: 1.5; margin-bottom: 18px; text-align: center;">
+                    Вы переключились на другую вкладку браузера во время контрольной работы!
+                </div>
+                <button id="anticheat-confirm-btn" class="btn btn-danger" style="width: 100%; padding: 10px; font-size: 13px; font-weight: 700;">
+                    Я понимаю, вернуться к экзамену
+                </button>
+            </div>
+        </div>
+
         <style>
-        .leaflet-tooltip {
+        .btn-exam {{
+            background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%) !important;
+            color: #FFFFFF !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.2px;
+            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.32) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            margin-bottom: 10px !important;
+            transition: all 0.2s ease !important;
+        }}
+        .btn-exam:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45) !important;
+            filter: brightness(1.08);
+        }}
+
+        .exam-select {{
+            width: 100%;
+            padding: 9px 12px;
+            border-radius: 8px;
+            border: 1px solid #CBD5E1;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1E293B;
+            background: #FFFFFF;
+            font-family: inherit;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            outline: none;
+            cursor: pointer;
+        }}
+        .exam-select:focus {{
+            border-color: #7C3AED;
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+        }}
+
+        .exam-rules-box {{
+            background: #FEF2F2;
+            border: 1px solid #FECACA;
+            border-radius: 10px;
+            padding: 12px 14px;
+            text-align: left;
+        }}
+
+        .exam-token-card {{
+            background: #F8FAFC;
+            border: 2px dashed #CBD5E1;
+            border-radius: 12px;
+            padding: 14px;
+            margin: 14px 0 10px 0;
+            text-align: center;
+        }}
+        .exam-token-val {{
+            font-family: 'JetBrains Mono', monospace, Consolas, Courier;
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            color: #4F46E5;
+            background: #EEF2FF;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #C7D2FE;
+            display: inline-block;
+            margin: 8px 0;
+            user-select: all;
+        }}
+        .token-copy-btn {{
+            background: #FFFFFF;
+            border: 1px solid #CBD5E1;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #334155;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }}
+        .token-copy-btn:hover {{
+            background: #F1F5F9;
+            color: #0F172A;
+            border-color: #94A3B8;
+        }}
+
+        @keyframes shakeAnim {{
+            0%, 100% {{ transform: translateX(0); }}
+            20%, 60% {{ transform: translateX(-6px); }}
+            40%, 80% {{ transform: translateX(6px); }}
+        }}
+        .leaflet-tooltip {{
             background-color: #ffffff !important;
             border: 1px solid #CBD5E1 !important;
             border-radius: 6px !important;
@@ -2095,22 +1523,22 @@ window.addEventListener('load', function() {{
             font-weight: 700 !important;
             color: #1E293B !important;
             line-height: 1.2 !important;
-        }
+        }}
 
-        .leaflet-tooltip table {
+        .leaflet-tooltip table {{
             margin: 0 !important;
             border-collapse: collapse !important;
-        }
-        .leaflet-tooltip table th {
+        }}
+        .leaflet-tooltip table th {{
             display: none !important;
-        }
-        .leaflet-tooltip table td {
+        }}
+        .leaflet-tooltip table td {{
             padding: 0 !important;
             margin: 0 !important;
             text-align: center !important;
-        }
+        }}
 
-        .top-nav-buttons {
+        .top-nav-buttons {{
             position: fixed;
             top: 14px;
             right: 330px;
@@ -2119,9 +1547,9 @@ window.addEventListener('load', function() {{
             align-items: center;
             gap: 8px;
             transition: opacity 0.25s ease, transform 0.25s ease;
-        }
+        }}
 
-        .nav-top-btn {
+        .nav-top-btn {{
             background: rgba(255, 255, 255, 0.96);
             backdrop-filter: blur(8px);
             border: 1px solid rgba(0, 0, 0, 0.08);
@@ -2136,26 +1564,26 @@ window.addEventListener('load', function() {{
             cursor: pointer;
             box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
             transition: all 0.2s ease;
-        }
-        .nav-top-btn:hover {
+        }}
+        .nav-top-btn:hover {{
             transform: translateY(-1px);
             background: #ffffff;
             box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-        }
+        }}
 
-        .admin-btn {
+        .admin-btn {{
             background: linear-gradient(135deg, #F0FDF4, #DCFCE7);
             border-color: #86EFAC;
             color: #166534;
-        }
+        }}
 
-        .leaderboard-top-btn {
+        .leaderboard-top-btn {{
             background: linear-gradient(135deg, #FFF7ED, #FFEDD5);
             border-color: #FDBA74;
             color: #C2410C;
-        }
+        }}
 
-        .student-badge {
+        .student-badge {{
             background: rgba(255, 255, 255, 0.96);
             backdrop-filter: blur(8px);
             border: 1px solid #BAE6FD;
@@ -2165,8 +1593,8 @@ window.addEventListener('load', function() {{
             align-items: center;
             gap: 8px;
             box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-        }
-        .badge-avatar {
+        }}
+        .badge-avatar {{
             width: 26px;
             height: 26px;
             background: #E0F2FE;
@@ -2175,11 +1603,11 @@ window.addEventListener('load', function() {{
             align-items: center;
             justify-content: center;
             font-size: 13px;
-        }
-        .badge-info { display: flex; flex-direction: column; text-align: left; }
-        .badge-name { font-size: 11.5px; font-weight: 700; color: #0369A1; line-height: 1.2; }
-        .badge-group { font-size: 10px; color: #64748B; }
-        .badge-logout {
+        }}
+        .badge-info {{ display: flex; flex-direction: column; text-align: left; }}
+        .badge-name {{ font-size: 11.5px; font-weight: 700; color: #0369A1; line-height: 1.2; }}
+        .badge-group {{ font-size: 10px; color: #64748B; }}
+        .badge-logout {{
             background: none;
             border: none;
             font-size: 16px;
@@ -2187,10 +1615,10 @@ window.addEventListener('load', function() {{
             cursor: pointer;
             margin-left: 4px;
             line-height: 1;
-        }
-        .badge-logout:hover { color: #EF4444; }
+        }}
+        .badge-logout:hover {{ color: #EF4444; }}
 
-        .help-circle-btn {
+        .help-circle-btn {{
             width: 38px;
             height: 38px;
             border-radius: 50%;
@@ -2207,23 +1635,23 @@ window.addEventListener('load', function() {{
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
-        }
-        .help-circle-btn:hover {
+        }}
+        .help-circle-btn:hover {{
             transform: scale(1.05);
             background: white;
             color: #10B981;
             box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
-        }
+        }}
 
-        .lb-main-tabs {
+        .lb-main-tabs {{
             display: flex;
             background: #F1F5F9;
             padding: 4px;
             border-radius: 12px;
             margin-bottom: 14px;
             gap: 4px;
-        }
-        .lb-tab-btn {
+        }}
+        .lb-tab-btn {{
             flex: 1;
             background: transparent;
             border: none;
@@ -2234,31 +1662,31 @@ window.addEventListener('load', function() {{
             border-radius: 9px;
             cursor: pointer;
             transition: all 0.2s ease;
-        }
-        .lb-tab-btn.active {
+        }}
+        .lb-tab-btn.active {{
             background: #ffffff;
             color: #0F172A;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
+        }}
 
-        .lb-content-fade {
+        .lb-content-fade {{
             transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
             opacity: 1;
             transform: translateY(0);
-        }
-        .fade-anim {
+        }}
+        .fade-anim {{
             opacity: 0;
             transform: translateY(6px);
-        }
+        }}
 
-        .lb-filters {
+        .lb-filters {{
             display: flex;
             gap: 6px;
             justify-content: center;
             margin-bottom: 12px;
             flex-wrap: wrap;
-        }
-        .lb-filter-chip {
+        }}
+        .lb-filter-chip {{
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
             padding: 5px 12px;
@@ -2268,27 +1696,27 @@ window.addEventListener('load', function() {{
             color: #475569;
             cursor: pointer;
             transition: all 0.15s ease;
-        }
-        .lb-filter-chip:hover { background: #F1F5F9; }
-        .lb-filter-chip.active {
+        }}
+        .lb-filter-chip:hover {{ background: #F1F5F9; }}
+        .lb-filter-chip.active {{
             background: #10B981;
             color: white;
             border-color: #10B981;
-        }
+        }}
 
-        .lb-table-wrap {
+        .lb-table-wrap {{
             max-height: 300px;
             overflow-y: auto;
             border-radius: 10px;
             border: 1px solid #E2E8F0;
-        }
-        .lb-styled-table {
+        }}
+        .lb-styled-table {{
             width: 100%;
             border-collapse: collapse;
             font-size: 12px;
             text-align: center;
-        }
-        .lb-styled-table th {
+        }}
+        .lb-styled-table th {{
             background: #F8FAFC;
             color: #475569;
             padding: 8px 6px;
@@ -2296,15 +1724,15 @@ window.addEventListener('load', function() {{
             position: sticky;
             top: 0;
             z-index: 2;
-        }
-        .lb-styled-table td {
+        }}
+        .lb-styled-table td {{
             padding: 7px 6px;
             border-bottom: 1px solid #F1F5F9;
             color: #334155;
-        }
-        .lb-styled-table tr:hover { background: #F8FAFC; }
+        }}
+        .lb-styled-table tr:hover {{ background: #F8FAFC; }}
 
-        .auth-card {
+        .auth-card {{
             background: #ffffff;
             border-radius: 18px;
             max-width: 440px;
@@ -2314,19 +1742,19 @@ window.addEventListener('load', function() {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             box-sizing: border-box;
             animation: welcomeIn 0.25s ease-out;
-        }
+        }}
 
-        .auth-header {
+        .auth-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #E2E8F0;
             padding-bottom: 12px;
             margin-bottom: 14px;
-        }
-        .auth-header h3 { margin: 0; font-size: 15px; color: #0F172A; }
+        }}
+        .auth-header h3 {{ margin: 0; font-size: 15px; color: #0F172A; }}
 
-        .auth-error {
+        .auth-error {{
             background: #FEE2E2;
             color: #B91C1C;
             padding: 8px 12px;
@@ -2334,20 +1762,20 @@ window.addEventListener('load', function() {{
             font-size: 12px;
             margin-bottom: 12px;
             border: 1px solid #FCA5A5;
-        }
+        }}
 
-        .form-group {
+        .form-group {{
             margin-bottom: 12px;
             text-align: left;
-        }
-        .form-group label {
+        }}
+        .form-group label {{
             display: block;
             font-size: 11.5px;
             color: #475569;
             font-weight: 600;
             margin-bottom: 4px;
-        }
-        .auth-input {
+        }}
+        .auth-input {{
             width: 100%;
             padding: 9px 12px;
             border-radius: 8px;
@@ -2356,17 +1784,17 @@ window.addEventListener('load', function() {{
             box-sizing: border-box;
             outline: none;
             transition: border-color 0.2s;
-        }
-        .auth-input:focus { border-color: #0284C7; }
-        .code-input {
+        }}
+        .auth-input:focus {{ border-color: #0284C7; }}
+        .code-input {{
             text-align: center;
             letter-spacing: 6px;
             font-size: 20px;
             font-weight: 800;
             color: #0284C7;
-        }
+        }}
 
-        .welcome-overlay {
+        .welcome-overlay {{
             position: fixed;
             inset: 0;
             background: rgba(15, 23, 42, 0.55);
@@ -2377,13 +1805,13 @@ window.addEventListener('load', function() {{
             justify-content: center;
             padding: 16px;
             transition: opacity 0.25s ease;
-        }
-        .welcome-overlay.fade-out {
+        }}
+        .welcome-overlay.fade-out {{
             opacity: 0;
             pointer-events: none;
-        }
+        }}
 
-        .welcome-card {
+        .welcome-card {{
             background: #ffffff;
             border-radius: 18px;
             max-width: 640px;
@@ -2396,14 +1824,14 @@ window.addEventListener('load', function() {{
             max-height: calc(100vh - 40px);
             overflow-y: auto;
             box-sizing: border-box;
-        }
+        }}
 
-        @keyframes welcomeIn {
-            from { opacity: 0; transform: scale(0.96) translateY(10px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
-        }
+        @keyframes welcomeIn {{
+            from {{ opacity: 0; transform: scale(0.96) translateY(10px); }}
+            to {{ opacity: 1; transform: scale(1) translateY(0); }}
+        }}
 
-        .welcome-badge {
+        .welcome-badge {{
             display: inline-block;
             background: #DCFCE7;
             color: #15803D;
@@ -2414,31 +1842,31 @@ window.addEventListener('load', function() {{
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 8px;
-        }
+        }}
 
-        .welcome-title {
+        .welcome-title {{
             margin: 0 0 6px 0;
             font-size: 24px;
             color: #0F172A;
             font-weight: 800;
             letter-spacing: -0.4px;
-        }
+        }}
 
-        .welcome-subtitle {
+        .welcome-subtitle {{
             margin: 0 0 22px 0;
             font-size: 13.5px;
             color: #64748B;
             line-height: 1.45;
-        }
+        }}
 
-        .welcome-grid {
+        .welcome-grid {{
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 14px;
             margin-bottom: 24px;
-        }
+        }}
 
-        .welcome-feature {
+        .welcome-feature {{
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
             border-radius: 12px;
@@ -2446,9 +1874,9 @@ window.addEventListener('load', function() {{
             display: flex;
             gap: 12px;
             align-items: flex-start;
-        }
+        }}
 
-        .feature-icon {
+        .feature-icon {{
             width: 36px;
             height: 36px;
             border-radius: 10px;
@@ -2457,23 +1885,23 @@ window.addEventListener('load', function() {{
             justify-content: center;
             font-size: 17px;
             flex-shrink: 0;
-        }
+        }}
 
-        .feature-content h4 {
+        .feature-content h4 {{
             margin: 0 0 3px 0;
             font-size: 13px;
             color: #1E293B;
             font-weight: 700;
-        }
+        }}
 
-        .feature-content p {
+        .feature-content p {{
             margin: 0;
             font-size: 11.5px;
             color: #64748B;
             line-height: 1.35;
-        }
+        }}
 
-        .welcome-footer {
+        .welcome-footer {{
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -2481,23 +1909,23 @@ window.addEventListener('load', function() {{
             border-top: 1px solid #E2E8F0;
             flex-wrap: wrap;
             gap: 12px;
-        }
+        }}
 
-        .welcome-checkbox {
+        .welcome-checkbox {{
             display: flex;
             align-items: center;
             font-size: 12px;
             color: #64748B;
             cursor: pointer;
             user-select: none;
-        }
+        }}
 
-        .welcome-checkbox input {
+        .welcome-checkbox input {{
             margin-right: 8px;
             cursor: pointer;
-        }
+        }}
 
-        .btn-start {
+        .btn-start {{
             background: linear-gradient(135deg, #10B981, #059669);
             color: white;
             border: none;
@@ -2508,13 +1936,13 @@ window.addEventListener('load', function() {{
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
             transition: all 0.2s ease;
-        }
-        .btn-start:hover {
+        }}
+        .btn-start:hover {{
             transform: translateY(-1px);
             box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
-        }
+        }}
 
-        .app-card {
+        .app-card {{
             position: fixed;
             top: 14px;
             right: 14px;
@@ -2531,18 +1959,18 @@ window.addEventListener('load', function() {{
             overflow-y: auto;
             box-sizing: border-box;
             transition: max-height 0.25s cubic-bezier(0.16, 1, 0.3, 1), padding 0.25s ease;
-        }
+        }}
 
-        .panel-header h3 {
+        .panel-header h3 {{
             margin: 0 0 12px 0;
             color: #1E293B;
             text-align: center;
             font-size: 15px;
             font-weight: 700;
             letter-spacing: -0.2px;
-        }
+        }}
 
-        .btn {
+        .btn {{
             display: block;
             width: 100%;
             border: none;
@@ -2556,21 +1984,21 @@ window.addEventListener('load', function() {{
             box-shadow: 0 2px 4px rgba(0,0,0,0.06);
             color: white;
             box-sizing: border-box;
-        }
+        }}
 
-        .btn:hover {
+        .btn:hover {{
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.12);
-        }
+        }}
 
-        .study-pick-grid {
+        .study-pick-grid {{
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 5px;
             margin-bottom: 8px;
-        }
+        }}
 
-        .btn-study-action {
+        .btn-study-action {{
             background: linear-gradient(135deg, #6366F1, #4F46E5);
             font-weight: 700;
             font-size: 11.5px;
@@ -2578,20 +2006,20 @@ window.addEventListener('load', function() {{
             margin-bottom: 0;
             box-shadow: 0 3px 8px rgba(99, 102, 241, 0.25);
             text-align: center;
-        }
-        .btn-study-action:hover {
+        }}
+        .btn-study-action:hover {{
             background: linear-gradient(135deg, #4F46E5, #4338CA);
-        }
+        }}
 
-        .study-category-bar {
+        .study-category-bar {{
             display: flex;
             background: #F1F5F9;
             padding: 3px;
             border-radius: 10px;
             margin-bottom: 10px;
             gap: 4px;
-        }
-        .study-cat-tab {
+        }}
+        .study-cat-tab {{
             flex: 1;
             border: none;
             background: transparent;
@@ -2602,23 +2030,23 @@ window.addEventListener('load', function() {{
             color: #64748B;
             cursor: pointer;
             transition: all 0.15s;
-        }
-        .study-cat-tab.active {
+        }}
+        .study-cat-tab.active {{
             background: white;
             color: #4F46E5;
             box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-        }
+        }}
 
-        .btn-district { background: linear-gradient(135deg, #10B981, #059669); }
-        .btn-neighbor { background: linear-gradient(135deg, #0D9488, #0F766E); }
-        .btn-river { background: linear-gradient(135deg, #0EA5E9, #0284C7); }
-        .btn-center { background: linear-gradient(135deg, #3B82F6, #2563EB); }
-        .btn-primary { background: #10B981; }
-        .btn-secondary { background: #64748B; }
-        .btn-warning { background: #F59E0B; }
-        .btn-danger { background: #EF4444; }
+        .btn-district {{ background: linear-gradient(135deg, #10B981, #059669); }}
+        .btn-neighbor {{ background: linear-gradient(135deg, #0D9488, #0F766E); }}
+        .btn-river {{ background: linear-gradient(135deg, #0EA5E9, #0284C7); }}
+        .btn-center {{ background: linear-gradient(135deg, #3B82F6, #2563EB); }}
+        .btn-primary {{ background: #10B981; }}
+        .btn-secondary {{ background: #64748B; }}
+        .btn-warning {{ background: #F59E0B; }}
+        .btn-danger {{ background: #EF4444; }}
 
-        .btn-confirm {
+        .btn-confirm {{
             display: block;
             width: 100%;
             border: none;
@@ -2633,14 +2061,14 @@ window.addEventListener('load', function() {{
             box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
             transition: all 0.2s ease;
             box-sizing: border-box;
-        }
-        .btn-confirm:hover {
+        }}
+        .btn-confirm:hover {{
             transform: translateY(-1px);
             box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
             background: linear-gradient(135deg, #1D4ED8, #1E40AF);
-        }
+        }}
 
-        .study-status-header {
+        .study-status-header {{
             background: linear-gradient(135deg, #6366F1, #4F46E5);
             color: white;
             padding: 9px 12px;
@@ -2649,18 +2077,18 @@ window.addEventListener('load', function() {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-        }
-        .study-status-header h4 { margin: 0; font-size: 13px; font-weight: 700; }
-        #study-counter-val { font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.25); padding: 2px 7px; border-radius: 6px; }
+        }}
+        .study-status-header h4 {{ margin: 0; font-size: 13px; font-weight: 700; }}
+        #study-counter-val {{ font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.25); padding: 2px 7px; border-radius: 6px; }}
 
-        .study-card-body {
+        .study-card-body {{
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
             border-radius: 10px;
             padding: 12px;
             margin-bottom: 12px;
-        }
-        .study-title {
+        }}
+        .study-title {{
             margin: 0 0 10px 0;
             font-size: 15px;
             color: #1E293B;
@@ -2668,36 +2096,36 @@ window.addEventListener('load', function() {{
             text-align: center;
             border-bottom: 1.5px solid #CBD5E1;
             padding-bottom: 6px;
-        }
-        .study-nav-grid {
+        }}
+        .study-nav-grid {{
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 6px;
-        }
+        }}
 
-        .timer-setting-box {
+        .timer-setting-box {{
             margin: 8px 0;
             padding: 8px 10px;
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
             border-radius: 8px;
-        }
+        }}
 
-        .checkbox-container {
+        .checkbox-container {{
             display: flex;
             align-items: center;
             font-size: 12px;
             cursor: pointer;
             color: #334155;
             user-select: none;
-        }
+        }}
 
-        .checkbox-container input {
+        .checkbox-container input {{
             margin-right: 8px;
             cursor: pointer;
-        }
+        }}
 
-        .hint-small {
+        .hint-small {{
             margin-top: 8px;
             padding: 8px;
             background: #F1F5F9;
@@ -2706,32 +2134,32 @@ window.addEventListener('load', function() {{
             color: #64748B;
             text-align: center;
             line-height: 1.3;
-        }
+        }}
 
-        .district-info-box {
+        .district-info-box {{
             display: none;
             margin-top: 10px;
             padding: 12px;
             background: #F0FDF4;
             border: 1px solid #BBF7D0;
             border-radius: 10px;
-        }
+        }}
 
-        .info-card-header {
+        .info-card-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1.5px solid #86EFAC;
             padding-bottom: 6px;
             margin-bottom: 8px;
-        }
+        }}
 
-        .info-card-header strong {
+        .info-card-header strong {{
             color: #166534;
             font-size: 13.5px;
-        }
+        }}
 
-        .close-card-btn {
+        .close-card-btn {{
             background: none;
             border: none;
             font-size: 18px;
@@ -2739,19 +2167,19 @@ window.addEventListener('load', function() {{
             color: #94A3B8;
             line-height: 1;
             padding: 0;
-        }
-        .close-card-btn:hover { color: #334155; }
+        }}
+        .close-card-btn:hover {{ color: #334155; }}
 
-        .info-row {
+        .info-row {{
             display: flex;
             justify-content: space-between;
             font-size: 12px;
             margin-bottom: 4px;
             color: #334155;
-        }
-        .info-row span { color: #64748B; }
+        }}
+        .info-row span {{ color: #64748B; }}
 
-        .neighbor-tag {
+        .neighbor-tag {{
             display: inline-block;
             background: #DCFCE7;
             color: #15803D;
@@ -2761,51 +2189,51 @@ window.addEventListener('load', function() {{
             margin: 2px;
             cursor: pointer;
             transition: background 0.15s;
-        }
-        .neighbor-tag:hover { background: #BBF7D0; }
+        }}
+        .neighbor-tag:hover {{ background: #BBF7D0; }}
 
-        .quiz-status-header {
+        .quiz-status-header {{
             background: linear-gradient(135deg, #10B981, #059669);
             color: white;
             padding: 9px 12px;
             border-radius: 8px;
             margin-bottom: 10px;
             text-align: center;
-        }
-        .quiz-status-header h4 { margin: 0; font-size: 13px; font-weight: 700; }
-        #quiz-progress { font-size: 11.5px; opacity: 0.9; margin-top: 2px; }
+        }}
+        .quiz-status-header h4 {{ margin: 0; font-size: 13px; font-weight: 700; }}
+        #quiz-progress {{ font-size: 11.5px; opacity: 0.9; margin-top: 2px; }}
 
-        .timer-flex {
+        .timer-flex {{
             display: flex;
             justify-content: space-between;
             font-size: 11.5px;
             color: #475569;
             margin-bottom: 4px;
-        }
-        .timer-track {
+        }}
+        .timer-track {{
             width: 100%;
             height: 6px;
             background: #E2E8F0;
             border-radius: 3px;
             overflow: hidden;
-        }
-        #timer-bar {
+        }}
+        #timer-bar {{
             width: 100%;
             height: 100%;
             background: #10B981;
             transition: width 1s linear, background 0.3s;
-        }
+        }}
 
-        .question-text {
+        .question-text {{
             font-size: 13px;
             font-weight: 700;
             color: #1E293B;
             margin: 0 0 10px 0;
             text-align: center;
             line-height: 1.4;
-        }
+        }}
 
-        .quiz-option {
+        .quiz-option {{
             display: block;
             width: 100%;
             padding: 9px 12px;
@@ -2819,30 +2247,30 @@ window.addEventListener('load', function() {{
             text-align: left;
             transition: all 0.15s ease;
             box-sizing: border-box;
-        }
-        .quiz-option:hover {
+        }}
+        .quiz-option:hover {{
             background: #F1F5F9;
             border-color: #CBD5E1;
-        }
-        .quiz-option.selected {
+        }}
+        .quiz-option.selected {{
             border-color: #3B82F6 !important;
             background: #EFF6FF !important;
             color: #1D4ED8 !important;
             font-weight: 600;
-        }
-        .quiz-option.correct {
+        }}
+        .quiz-option.correct {{
             background: #DCFCE7 !important;
             border-color: #86EFAC !important;
             color: #15803D !important;
             font-weight: 600;
-        }
-        .quiz-option.incorrect {
+        }}
+        .quiz-option.incorrect {{
             background: #FEE2E2 !important;
             border-color: #FCA5A5 !important;
             color: #B91C1C !important;
-        }
+        }}
 
-        .center-quiz-instruction {
+        .center-quiz-instruction {{
             padding: 10px;
             background: #F8FAFC;
             border: 1px dashed #CBD5E1;
@@ -2851,26 +2279,26 @@ window.addEventListener('load', function() {{
             text-align: center;
             font-size: 12px;
             line-height: 1.4;
-        }
-        .center-quiz-instruction span {
+        }}
+        .center-quiz-instruction span {{
             font-size: 11px;
             color: #64748B;
             display: block;
             margin-top: 4px;
-        }
+        }}
 
-        .feedback-box {
+        .feedback-box {{
             padding: 9px 12px;
             border-radius: 7px;
             margin-top: 10px;
             text-align: center;
             font-weight: 700;
             font-size: 12.5px;
-        }
-        .feedback-box.success { background: #DCFCE7; color: #15803D; border: 1px solid #86EFAC; }
-        .feedback-box.error { background: #FEE2E2; color: #B91C1C; border: 1px solid #FCA5A5; }
+        }}
+        .feedback-box.success {{ background: #DCFCE7; color: #15803D; border: 1px solid #86EFAC; }}
+        .feedback-box.error {{ background: #FEE2E2; color: #B91C1C; border: 1px solid #FCA5A5; }}
 
-        .hint-container {
+        .hint-container {{
             background: #FEF3C7;
             border: 1px solid #FDE68A;
             border-radius: 7px;
@@ -2879,9 +2307,9 @@ window.addEventListener('load', function() {{
             font-size: 11.5px;
             color: #92400E;
             line-height: 1.3;
-        }
+        }}
 
-        .score-card {
+        .score-card {{
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
             padding: 8px 12px;
@@ -2891,10 +2319,10 @@ window.addEventListener('load', function() {{
             font-weight: 700;
             font-size: 13px;
             color: #1E293B;
-        }
-        .score-sub { font-size: 11px; color: #64748B; font-weight: 500; margin-top: 2px; }
+        }}
+        .score-sub {{ font-size: 11px; color: #64748B; font-weight: 500; margin-top: 2px; }}
 
-        .mobile-collapse-trigger {
+        .mobile-collapse-trigger {{
             display: none;
             width: 100%;
             background: #F1F5F9;
@@ -2907,31 +2335,31 @@ window.addEventListener('load', function() {{
             cursor: pointer;
             margin-bottom: 8px;
             text-align: center;
-        }
+        }}
 
-        @media (max-width: 768px) {
-            .mobile-collapse-trigger {
+        @media (max-width: 768px) {{
+            .mobile-collapse-trigger {{
                 display: block;
-            }
+            }}
 
-            .top-nav-buttons {
+            .top-nav-buttons {{
                 top: 8px;
                 left: 8px;
                 right: 8px;
                 justify-content: flex-end;
                 gap: 5px;
-            }
-            .nav-top-btn, .help-circle-btn {
+            }}
+            .nav-top-btn, .help-circle-btn {{
                 padding: 6px 9px;
                 font-size: 11px;
                 height: 32px;
-            }
-            .help-circle-btn {
+            }}
+            .help-circle-btn {{
                 width: 32px;
                 font-size: 14px;
-            }
+            }}
 
-            .app-card {
+            .app-card {{
                 position: fixed;
                 top: auto;
                 bottom: 0;
@@ -2943,48 +2371,302 @@ window.addEventListener('load', function() {{
                 padding: 12px 14px;
                 z-index: 1001;
                 box-shadow: 0 -4px 22px rgba(0,0,0,0.18);
-            }
+            }}
 
-            .app-card.collapsed {
+            .app-card.collapsed {{
                 max-height: 46px;
                 overflow: hidden;
                 padding-top: 7px;
                 background: rgba(255, 255, 255, 0.95);
-            }
-            .app-card.collapsed > *:not(.mobile-collapse-trigger) {
+            }}
+            .app-card.collapsed > *:not(.mobile-collapse-trigger) {{
                 display: none !important;
-            }
+            }}
 
-            body.ui-collapsed #top-nav-panel {
+            body.ui-collapsed #top-nav-panel {{
                 opacity: 0 !important;
                 pointer-events: none !important;
                 transform: translateY(-20px);
-            }
-            body.ui-collapsed .leaflet-control-layers {
+            }}
+            body.ui-collapsed .leaflet-control-layers {{
                 opacity: 0 !important;
                 pointer-events: none !important;
-            }
+            }}
 
-            .leaflet-bottom.leaflet-left {
+            .leaflet-bottom.leaflet-left {{
                 bottom: 50vh !important;
                 margin-left: 6px !important;
-            }
-            .leaflet-control-layers {
+            }}
+            .leaflet-control-layers {{
                 border-radius: 8px !important;
                 background: rgba(255, 255, 255, 0.95) !important;
                 transition: opacity 0.25s ease;
-            }
+            }}
 
-            div[style*="top: 14px; left: 60px;"] {
+            div[style*="top: 14px; left: 60px;"] {{
                 display: none !important;
-            }
-        }
+            }}
+        }}
         </style>
         '''
         self.map.get_root().html.add_child(folium.Element(quiz_html))
 
+    def add_choropleth_layer(self):
+        """Аналитический слой: раскраска районов по численности населения (Choropleth)."""
+        if self.districts_gdf is None or self.districts_gdf.empty:
+            print("Внимание: Нет данных о районах для Choropleth-слоя.")
+            return
+
+        gdf = self.districts_gdf.copy()
+        gdf['is_district_layer'] = 0
+        gdf['is_choropleth'] = 1
+
+        # --- Вычисляем население для каждого полигона ---
+        try:
+            metric_gdf = gdf.to_crs('EPSG:6933')
+        except Exception:
+            metric_gdf = gdf
+
+        populations = []
+        for idx, row in gdf.iterrows():
+            name = str(row.get('display_name', '')).lower().replace('\u0301', '').replace('e', 'е').replace('ё', 'е')
+            population = None
+
+            for key, val in KNOWN_POPULATION.items():
+                if key in name:
+                    population = val
+                    break
+
+            if population is None:
+                # Если субъект РФ не найден в словаре по корню, возвращаем 0 (серый полигон)
+                
+                    area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if idx in metric_gdf.index else 0
+                    if 'область' in name:
+                        population = int(area_sq_km * 20)
+                    elif 'республика' in name:
+                        population = int(area_sq_km * 10)
+                    elif 'край' in name:
+                        population = int(area_sq_km * 5)
+                    elif 'округ' in name or 'аок' in name:
+                        population = int(area_sq_km * 1)
+                    else:
+                        population = int(area_sq_km * 25)
+
+            populations.append(population)
+
+        gdf['population'] = populations
+
+        # --- Рассчитываем границы для 6-ступенчатого градиента ---
+        import numpy as np
+        pop_values = sorted([p for p in populations if p and p > 0])
+        if not pop_values:
+            return
+
+        # 6 квантильных интервалов для плавного распределения цветов
+        q_levels = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+        thresholds = [float(np.quantile(pop_values, q)) for q in q_levels]
+
+        # Палитра ColorBrewer YlOrRd: светло-желтый -> янтарный -> оранжевый -> темно-красный
+        colors = ['#FFFFCC', '#FED976', '#FEB24C', '#FD8D3C', '#E31A1C', '#800026']
+
+        def get_color(pop):
+            if pop is None or pop <= 0:
+                return '#E2E8F0'
+            if len(pop_values) == 1:
+                return colors[2]
+            if pop <= thresholds[1]:
+                return colors[0]
+            elif pop <= thresholds[2]:
+                return colors[1]
+            elif pop <= thresholds[3]:
+                return colors[2]
+            elif pop <= thresholds[4]:
+                return colors[3]
+            elif pop <= thresholds[5]:
+                return colors[4]
+            else:
+                return colors[5]
+
+        def style_function(feature):
+            pop = feature['properties'].get('population', 0)
+            return {
+                'color': '#475569',
+                'weight': 1.5,
+                'fillColor': get_color(pop),
+                'fillOpacity': 0.72,
+                'dashArray': None
+            }
+
+        def highlight_function(feature):
+            return {
+                'weight': 3,
+                'color': '#0F172A',
+                'fillOpacity': 0.90
+            }
+
+        # Форматирование отображаемого населения
+        gdf['pop_display'] = gdf['population'].apply(
+            lambda p: f"{p:,.0f} чел.".replace(',', ' ') if (p and p > 0) else 'Нет данных'
+        )
+
+        tooltip = folium.GeoJsonTooltip(
+            fields=['display_name', 'pop_display'],
+            aliases=['Территория:', 'Население:'],
+            style="background: white; border: 1px solid #CBD5E1; padding: 6px 10px; "
+                  "font-weight: 700; font-size: 12px; border-radius: 6px; "
+                  "box-shadow: 0 2px 8px rgba(0,0,0,0.12);"
+        )
+
+        folium.GeoJson(
+            gdf,
+            name='Население',
+            style_function=style_function,
+            highlight_function=highlight_function,
+            tooltip=tooltip,
+            show=False,           # Отдельный отключаемый слой (выключен по умолчанию)
+            interactive=True
+        ).add_to(self.map)
+
+        self._choropleth_added = True
+        print(f"  ✓ Choropleth-слой населения добавлен ({len(pop_values)} полигонов)")
+
+    def add_economy_layer(self):
+        """Аналитический слой: раскраска районов по объему ВРП (Choropleth)."""
+        if self.districts_gdf is None or self.districts_gdf.empty:
+            print("Внимание: Нет данных о районах для слоя ВРП (Экономика).")
+            return
+
+        gdf = self.districts_gdf.copy()
+        gdf['is_district_layer'] = 0
+        gdf['is_choropleth'] = 1
+        gdf['is_economy'] = 1
+
+        try:
+            metric_gdf = gdf.to_crs('EPSG:6933')
+        except Exception:
+            metric_gdf = gdf
+
+        grps = []
+        for idx, row in gdf.iterrows():
+            name = str(row.get('display_name', '')).lower().replace('\u0301', '').replace('e', 'е').replace('ё', 'е')
+            
+            # Население для резервного расчета
+            population = None
+            for key, val in KNOWN_POPULATION.items():
+                if key in name:
+                    population = val
+                    break
+
+            if population is None:
+                
+                    area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if idx in metric_gdf.index else 0
+                    if 'область' in name:
+                        population = int(area_sq_km * 20)
+                    elif 'республика' in name:
+                        population = int(area_sq_km * 10)
+                    elif 'край' in name:
+                        population = int(area_sq_km * 5)
+                    elif 'округ' in name or 'аок' in name:
+                        population = int(area_sq_km * 1)
+                    else:
+                        population = int(area_sq_km * 25)
+
+            # ВРП
+            grp = None
+            for key, val in KNOWN_ECONOMY.items():
+                if key in name:
+                    grp = float(val)
+                    break
+
+            if grp is None:
+                if population == 0:
+                    grp = 0.0
+                elif population > 500_000:
+                    grp = round(population * 1.2 / 1000, 1)
+                else:
+                    grp = round(population * 0.85 / 1000, 1)
+            else:
+                grp = round(grp, 1)
+
+            grps.append(grp)
+
+        gdf['grp'] = grps
+
+        import numpy as np
+        grp_values = sorted([g for g in grps if g and g > 0])
+        if not grp_values:
+            return
+
+        # 6 квантильных интервалов для плавного распределения цветов
+        q_levels = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+        thresholds = [float(np.quantile(grp_values, q)) for q in q_levels]
+
+        # 6-ступенчатая зеленая палитра ColorBrewer Greens: от светло-зеленого к темно-зеленому
+        colors = ['#EDF8E9', '#BAE4B3', '#74C476', '#31A354', '#006D2C', '#005A32']
+
+        def get_color(g):
+            if g is None or g <= 0:
+                return '#E2E8F0'
+            if len(grp_values) == 1:
+                return colors[2]
+            if g <= thresholds[1]:
+                return colors[0]
+            elif g <= thresholds[2]:
+                return colors[1]
+            elif g <= thresholds[3]:
+                return colors[2]
+            elif g <= thresholds[4]:
+                return colors[3]
+            elif g <= thresholds[5]:
+                return colors[4]
+            else:
+                return colors[5]
+
+        def style_function(feature):
+            g = feature['properties'].get('grp', 0)
+            return {
+                'color': '#334155',
+                'weight': 1.5,
+                'fillColor': get_color(g),
+                'fillOpacity': 0.72,
+                'dashArray': None
+            }
+
+        def highlight_function(feature):
+            return {
+                'weight': 3,
+                'color': '#064E3B',
+                'fillOpacity': 0.90
+            }
+
+        # Форматирование отображаемого ВРП
+        gdf['grp_display'] = gdf['grp'].apply(
+            lambda g: f"{g:,.1f} млрд ₽".replace(',', ' ').replace('.', ',') if (g and g > 0) else 'Нет данных'
+        )
+
+        tooltip = folium.GeoJsonTooltip(
+            fields=['display_name', 'grp_display'],
+            aliases=['Территория:', 'ВРП:'],
+            style="background: white; border: 1px solid #CBD5E1; padding: 6px 10px; "
+                  "font-weight: 700; font-size: 12px; border-radius: 6px; "
+                  "box-shadow: 0 2px 8px rgba(0,0,0,0.12);"
+        )
+
+        folium.GeoJson(
+            gdf,
+            name='Экономика (ВРП)',
+            style_function=style_function,
+            highlight_function=highlight_function,
+            tooltip=tooltip,
+            show=False,           # Отдельный отключаемый слой (выключен по умолчанию)
+            interactive=True
+        ).add_to(self.map)
+
+        self._economy_added = True
+        print(f"  ✓ Слой экономической аналитики (ВРП) добавлен ({len(grp_values)} полигонов)")
+
     def add_legend(self):
-        legend_html = '''
+        legend_html = f'''
         <div style="
             position: fixed;
             top: 14px; left: 60px;
@@ -3003,11 +2685,11 @@ window.addEventListener('load', function() {{
             <h4 style="margin: 0 0 10px 0; color: #1E293B; font-size: 14px; font-weight: 700;">Легенда карты</h4>
             <div style="display: flex; align-items: center; margin-bottom: 6px;">
                 <i class="fa fa-star" style="color: #FF9800; font-size: 12px; margin-right: 8px;"></i>
-                <span>Райцентры</span>
+                <span>Центры</span>
             </div>
             <div style="display: flex; align-items: center; margin-bottom: 6px;">
                 <div style="width: 18px; height: 3px; background: #2E8B57; margin-right: 8px; border-radius: 2px;"></div>
-                <span>Границы районов</span>
+                <span>Границы</span>
             </div>
             <div style="display: flex; align-items: center; margin-bottom: 6px;">
                 <div style="width: 18px; height: 3px; background: #0284C7; margin-right: 8px; border-radius: 2px;"></div>
@@ -3017,10 +2699,79 @@ window.addEventListener('load', function() {{
                 <div style="width: 18px; height: 14px; background: #38BDF8; border: 1px solid #0284C7; margin-right: 8px; opacity: 0.8; border-radius: 2px;"></div>
                 <span>Водоемы</span>
             </div>
+            <div id="choropleth-legend-block" style="display: none; border-top: 1px solid #E2E8F0; padding-top: 8px; margin-top: 6px;">
+                <div style="font-size: 11.5px; font-weight: 700; color: #1E293B; margin-bottom: 5px; display: flex; align-items: center; justify-content: space-between;">
+                    <span>📊 Население районов</span>
+                </div>
+                <div style="display: flex; height: 11px; border-radius: 4px; overflow: hidden; margin-bottom: 4px; border: 1px solid #CBD5E1;">
+                    <div style="flex: 1; background: #FFFFCC;" title="Мин."></div>
+                    <div style="flex: 1; background: #FED976;"></div>
+                    <div style="flex: 1; background: #FEB24C;"></div>
+                    <div style="flex: 1; background: #FD8D3C;"></div>
+                    <div style="flex: 1; background: #E31A1C;"></div>
+                    <div style="flex: 1; background: #800026;" title="Макс."></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 9.5px; color: #64748B;">
+                    <span>Меньше</span>
+                    <span>Больше</span>
+                </div>
+            </div>
+            <div id="economy-legend-block" style="display: none; border-top: 1px solid #E2E8F0; padding-top: 8px; margin-top: 6px;">
+                <div style="font-size: 11.5px; font-weight: 700; color: #1E293B; margin-bottom: 5px; display: flex; align-items: center; justify-content: space-between;">
+                    <span>💰 ВРП (Экономика)</span>
+                </div>
+                <div style="display: flex; height: 11px; border-radius: 4px; overflow: hidden; margin-bottom: 4px; border: 1px solid #CBD5E1;">
+                    <div style="flex: 1; background: #EDF8E9;" title="Мин."></div>
+                    <div style="flex: 1; background: #BAE4B3;"></div>
+                    <div style="flex: 1; background: #74C476;"></div>
+                    <div style="flex: 1; background: #31A354;"></div>
+                    <div style="flex: 1; background: #006D2C;"></div>
+                    <div style="flex: 1; background: #005A32;" title="Макс."></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 9.5px; color: #64748B;">
+                    <span>Меньше</span>
+                    <span>Больше</span>
+                </div>
+            </div>
             <div style="border-top: 1px solid #E2E8F0; padding-top: 8px; font-size: 11px; color: #94A3B8; text-align: center;">
-                Ростовская область
+                {self.title}
             </div>
         </div>
+
+        <script>
+        (function() {{
+            function syncChoroplethLegend() {{
+                const labels = document.querySelectorAll('.leaflet-control-layers-overlays label');
+                let isPopChecked = false;
+                let isEconChecked = false;
+                labels.forEach(label => {{
+                    const inp = label.querySelector('input[type="checkbox"]');
+                    if (label.textContent.includes('Население') || label.textContent.includes('Choropleth')) {{
+                        if (inp && inp.checked) isPopChecked = true;
+                    }}
+                    if (label.textContent.includes('Экономика') || label.textContent.includes('ВРП')) {{
+                        if (inp && inp.checked) isEconChecked = true;
+                    }}
+                }});
+                const popBlock = document.getElementById('choropleth-legend-block');
+                if (popBlock) {{
+                    popBlock.style.display = isPopChecked ? 'block' : 'none';
+                }}
+                const econBlock = document.getElementById('economy-legend-block');
+                if (econBlock) {{
+                    econBlock.style.display = isEconChecked ? 'block' : 'none';
+                }}
+            }}
+
+            window.addEventListener('load', function() {{
+                const ctrl = document.querySelector('.leaflet-control-layers');
+                if (ctrl) {{
+                    ctrl.addEventListener('change', syncChoroplethLegend);
+                }}
+                syncChoroplethLegend();
+            }});
+        }})();
+        </script>
         '''
         self.map.get_root().html.add_child(folium.Element(legend_html))
 
@@ -3031,7 +2782,13 @@ window.addEventListener('load', function() {{
     def add_fullscreen(self):
         plugins.Fullscreen().add_to(self.map)
 
-    def save(self, filename='rostov_quiz_map.html'):
+    def save(self, filename=None, open_browser=False):
+        if filename is None:
+            filename = self.output_filename
+        if not getattr(self, '_choropleth_added', False):
+            self.add_choropleth_layer()
+        if not getattr(self, '_economy_added', False):
+            self.add_economy_layer()
         folium.LayerControl(collapsed=False, position='bottomleft').add_to(self.map)
         self.add_quiz_controls()
         self.add_legend()
@@ -3106,8 +2863,44 @@ window.addEventListener('load', function() {{
             padding-bottom: 4px;
         }
 
-        .leaflet-control-layers-base {
-            display: none !important;
+        .leaflet-control-layers-base label {
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            margin-bottom: 3px !important;
+            cursor: pointer !important;
+            font-size: 11.5px !important;
+        }
+
+        .leaflet-control-layers-separator {
+            border-top: 1px solid #E2E8F0 !important;
+            margin: 6px 0 !important;
+        }
+
+        .chart-tab-group {
+            display: inline-flex;
+            gap: 2px;
+            background: #E2E8F0;
+            padding: 2px;
+            border-radius: 6px;
+        }
+
+        .chart-tab {
+            border: none;
+            background: transparent;
+            font-size: 9.5px;
+            font-weight: 700;
+            color: #475569;
+            padding: 2px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .chart-tab.active {
+            background: #ffffff;
+            color: #0F172A;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
         }
         </style>
         """
@@ -3118,8 +2911,9 @@ window.addEventListener('load', function() {{
         </div>
         """
 
+        chart_js_cdn = '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>'
         if '</head>' in html:
-            html = html.replace('</head>', custom_css_js + '</head>', 1)
+            html = html.replace('</head>', chart_js_cdn + '\n' + custom_css_js + '</head>', 1)
         else:
             html = custom_css_js + html
 
@@ -3131,28 +2925,153 @@ window.addEventListener('load', function() {{
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(html)
 
-        try:
-            webbrowser.open(f'file://{os.path.abspath(filename)}')
-        except Exception:
-            pass
+        if open_browser:
+            try:
+                webbrowser.open(f'file://{os.path.abspath(filename)}')
+            except Exception:
+                pass
 
         return filename
 
+def generate_region_map(region_name, region_districts, clipped_rivers=None, clipped_lakes=None, clipped_cities=None, open_browser=False):
+    atlas = InteractiveAtlas(
+        region_name=region_name,
+        region_districts=region_districts,
+        clipped_rivers=clipped_rivers,
+        clipped_lakes=clipped_lakes,
+        clipped_cities=clipped_cities
+    )
+    atlas.add_districts()
+    atlas.add_water_bodies()
+    atlas.add_rivers()
+    atlas.add_district_centers()
+    output_file = atlas.save(open_browser=open_browser)
+    return output_file
+
+
+def build_configured_region(region_key, open_browser=False):
+    if region_key not in REGIONS_CONFIG:
+        raise ValueError(f"Unknown region key: {region_key}")
+    cfg = REGIONS_CONFIG[region_key]
+    print(f"\n🗺️  Сборка детальной карты: {cfg['title']} ({region_key})...")
+    atlas = InteractiveAtlas(region_key=region_key)
+    atlas.add_districts()
+    atlas.add_water_bodies()
+    atlas.add_rivers()
+    atlas.add_district_centers()
+    output_file = atlas.save(open_browser=open_browser)
+    return output_file
+
 
 def main():
-    print("=" * 60)
-    print("ГЕНЕРАЦИЯ КАРТЫ С ПОЛНОЙ БАЗОЙ 55 РАЙОНОВ И ЧИСТЫМ ИНТЕРФЕЙСОМ")
-    print("=" * 60)
+    import sys
+    print("=" * 65)
+    print("  🚀 GEOATLAS: ГИБРИДНЫЙ КАРТОГРАФИЧЕСКИЙ ДВИЖОК")
+    print("=" * 65)
 
-    rostov_map = RostovMap()
-    rostov_map.add_water_bodies(os.path.join(BASE_PATH, SHAPEFILES['water_bodies']))
-    rostov_map.add_rivers(os.path.join(BASE_PATH, SHAPEFILES['rivers']))
-    rostov_map.add_districts(os.path.join(BASE_PATH, SHAPEFILES['districts']))
-    rostov_map.add_district_centers(os.path.join(BASE_PATH, SHAPEFILES['district_centers']))
+    args = [a for a in sys.argv[1:] if not a.startswith('-')]
+    flags = [a for a in sys.argv[1:] if a.startswith('-')]
+    do_all = '--all' in flags
 
-    output_file = rostov_map.save('rostov_quiz_map.html')
-    print("\nКарта успешно обновлена!")
-    return output_file
+    target = args[0].lower() if args else None
+
+    generated_files = []
+
+    # 1. Если указан конкретный регион из REGIONS_CONFIG (rostov, krasnodar, russia/rf)
+    if target in REGIONS_CONFIG or target in ['rf', 'российская федерация', 'россия']:
+        key = 'russia' if target in ['rf', 'российская федерация', 'россия'] else target
+        out = build_configured_region(key, open_browser=True)
+        generated_files.append((REGIONS_CONFIG[key]['title'], out))
+
+    # 2. Если аргументов нет (запуск по умолчанию): строим 3 базовые детальные карты!
+    elif target is None and not do_all:
+        print("\n⚙️  Запуск в стандартном режиме: генерация 3 ключевых карт (Ростов, Краснодар, РФ)...")
+        for key in ['rostov', 'krasnodar', 'russia']:
+            try:
+                out = build_configured_region(key, open_browser=False)
+                generated_files.append((REGIONS_CONFIG[key]['title'], out))
+            except Exception as e:
+                print(f" ❌ Ошибка при сборке {key}: {e}")
+
+    # 3. Если передан фильтр для нарезки из russia_unified или флаг --all:
+    else:
+        # Сначала строим 3 детальные карты, если флаг --all
+        if do_all:
+            print("\n⚙️  Генерация ключевых детальных карт...")
+            for key in ['rostov', 'krasnodar', 'russia']:
+                try:
+                    out = build_configured_region(key, open_browser=False)
+                    generated_files.append((REGIONS_CONFIG[key]['title'], out))
+                except Exception as e:
+                    print(f" ❌ Ошибка при сборке {key}: {e}")
+
+        # Читаем unified shapefiles для остальных регионов
+        base_shp_dir = os.path.join(BASE_DIR, 'Py_Geo', 'shape', 'russia_unified')
+        districts_shp = os.path.join(base_shp_dir, 'districts.shp')
+        rivers_shp = os.path.join(base_shp_dir, 'rivers.shp')
+        lakes_shp = os.path.join(base_shp_dir, 'lakes.shp')
+        cities_shp = os.path.join(base_shp_dir, 'cities.shp')
+
+        if os.path.exists(districts_shp):
+            print("\n📦 Загрузка единых SHP-файлов для автоматической нарезки регионов...")
+            districts = gpd.read_file(districts_shp)
+            rivers = gpd.read_file(rivers_shp) if os.path.exists(rivers_shp) else None
+            lakes = gpd.read_file(lakes_shp) if os.path.exists(lakes_shp) else None
+            cities = gpd.read_file(cities_shp) if os.path.exists(cities_shp) else None
+
+            if 'NAME_2' in districts.columns:
+                districts = districts[districts['NAME_2'].astype(str).str.lower() != 'water body'].copy()
+            districts['geometry'] = districts['geometry'].apply(clean_geom)
+
+            if districts.crs is None or districts.crs.to_string() != 'EPSG:4326':
+                districts = districts.to_crs('EPSG:4326') if districts.crs else districts.set_crs('EPSG:4326')
+            if rivers is not None and rivers.crs != districts.crs:
+                rivers = rivers.to_crs(districts.crs)
+            if lakes is not None and lakes.crs != districts.crs:
+                lakes = lakes.to_crs(districts.crs)
+            if cities is not None and cities.crs != districts.crs:
+                cities = cities.to_crs(districts.crs)
+
+            region_col = 'NAME_1'
+            unique_regions = [r for r in districts[region_col].dropna().unique() if str(r).strip()]
+
+            if target:
+                matched = [
+                    r for r in unique_regions
+                    if target in str(r).lower() or target in slugify_name(r).lower() or target in REGION_TRANSLATIONS.get(r, '').lower()
+                ]
+                if matched:
+                    unique_regions = matched
+
+            # Исключаем Ростов и Краснодар из нарезки, так как у них свои детальные шейпы
+            if not target:
+                unique_regions = [r for r in unique_regions if slugify_name(r) not in ['rostov', 'krasnodar']]
+
+            for idx, region_name in enumerate(unique_regions, 1):
+                ru_name = REGION_TRANSLATIONS.get(region_name, region_name)
+                print(f"[{idx}/{len(unique_regions)}] Нарезка региона: {ru_name} ('{region_name}')...", end="", flush=True)
+                try:
+                    reg_districts = districts[districts[region_col] == region_name].copy()
+                    if reg_districts.empty:
+                        print(" Пропущен")
+                        continue
+                    boundary = reg_districts.union_all() if hasattr(reg_districts, 'union_all') else reg_districts.unary_union
+                    boundary = clean_geom(boundary)
+
+                    c_rivers = gpd.clip(rivers, boundary) if rivers is not None else None
+                    c_lakes = gpd.clip(lakes, boundary) if lakes is not None else None
+                    c_cities = gpd.clip(cities, boundary) if cities is not None else None
+
+                    out = generate_region_map(region_name, reg_districts, c_rivers, c_lakes, c_cities, open_browser=bool(target))
+                    generated_files.append((ru_name, out))
+                    print(f" ✓ {out}")
+                except Exception as e:
+                    print(f" ❌ Ошибка: {e}")
+
+    print("\n" + "=" * 65)
+    print(f"  🎉 УСПЕШНО СГЕНЕРИРОВАНО КАРТ: {len(generated_files)}")
+    print("=" * 65)
+    return generated_files
 
 
 if __name__ == "__main__":

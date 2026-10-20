@@ -43,6 +43,10 @@ class ResultSubmit(BaseModel):
     max_score: int
     accuracy: int
     time_spent: str
+    is_exam: bool = False
+    exam_token: str = ""
+    violations: int = 0
+    exam_status: str = "Сдано"
 
 def load_results():
     if os.path.exists(RESULTS_FILE):
@@ -108,7 +112,11 @@ def save_quiz_result(res: ResultSubmit):
         "score": res.score,
         "max_score": res.max_score,
         "accuracy": res.accuracy,
-        "time_spent": res.time_spent
+        "time_spent": res.time_spent,
+        "is_exam": res.is_exam,
+        "exam_token": res.exam_token,
+        "violations": res.violations,
+        "exam_status": res.exam_status
     }
     save_result_to_file(data)
     return {"status": "ok"}
@@ -120,132 +128,81 @@ def get_leaderboard():
     return sorted_res[:25]
 
 @app.get("/admin", response_class=HTMLResponse)
+@app.get("/admin.html", response_class=HTMLResponse)
 def admin_panel(username: str = Depends(check_admin)):
     results = load_results()
+    admin_path = os.path.join(os.path.dirname(__file__), "admin.html")
+    if os.path.exists(admin_path):
+        with open(admin_path, "r", encoding="utf-8") as f:
+            template = f.read()
+        results_json = json.dumps(results, ensure_ascii=False)
+        rendered = template.replace("__SERVER_RESULTS_JSON__", results_json)
+        return HTMLResponse(content=rendered)
+
     total_tests = len(results)
     avg_accuracy = round(sum(r.get("accuracy", 0) for r in results) / total_tests, 1) if total_tests else 0
-    
-    groups_stat = {}
-    for r in results:
-        grp = r.get("group", "Не указана")
-        groups_stat.setdefault(grp, []).append(r.get("accuracy", 0))
-    
-    groups_rows = ""
-    for grp, accs in groups_stat.items():
-        g_avg = round(sum(accs) / len(accs), 1)
-        groups_rows += f"<tr><td><b>{grp}</b></td><td>{len(accs)}</td><td><div style='background:#E2E8F0; border-radius:4px; overflow:hidden;'><div style='background:#10B981; width:{g_avg}%; height:8px;'></div></div> {g_avg}%</td></tr>"
+    return HTMLResponse(f"<h2>Институт наук о Земле ЮФУ</h2><p>Всего сдано тестов: {total_tests}, средняя точность: {avg_accuracy}%</p>")
 
-    rows = ""
-    for r in reversed(results):
-        rows += f"""
-        <tr>
-            <td>{r.get('date')}</td>
-            <td><b>{r.get('name')}</b><br><small style="color:#64748B;">{r.get('email')}</small></td>
-            <td>{r.get('group')}</td>
-            <td><span class="type-tag">{r.get('quiz_type')}</span></td>
-            <td><b>{r.get('score')}/{r.get('max_score')}</b></td>
-            <td><span class="badge">{r.get('accuracy')}%</span></td>
-            <td>{r.get('time_spent')}</td>
-        </tr>
-        """
-
-    return f"""
-    <!DOCTYPE html>
-    <html lang="ru">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Панель преподавателя | Геоатлас ЮФУ</title>
-        <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F8FAFC; margin: 0; padding: 20px; color: #1E293B; }}
-            .container {{ max-width: 1100px; margin: 0 auto; }}
-            .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #E2E8F0; padding-bottom: 16px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }}
-            .card-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px; }}
-            .stat-card {{ background: white; padding: 16px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; }}
-            .stat-val {{ font-size: 26px; font-weight: 800; color: #0284C7; margin-top: 4px; }}
-            .table-wrap {{ overflow-x: auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; margin-bottom: 20px; }}
-            table {{ width: 100%; border-collapse: collapse; }}
-            th, td {{ padding: 10px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #F1F5F9; white-space: nowrap; }}
-            th {{ background: #F8FAFC; color: #64748B; font-weight: 700; }}
-            .badge {{ background: #DCFCE7; color: #166534; font-weight: 700; padding: 3px 8px; border-radius: 6px; }}
-            .type-tag {{ background: #E0F2FE; color: #0369A1; padding: 3px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 600; }}
-            .btn {{ text-decoration: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; display: inline-block; cursor: pointer; border: none; }}
-            .btn-primary {{ background: #10B981; color: white; }}
-            .btn-back {{ background: #0284C7; color: white; }}
-            .actions-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <div>
-                    <h2 style="margin: 0; font-size: 20px;">🎓 Панель преподавателя</h2>
-                    <p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px;">Институт наук о Земле ЮФУ — Мониторинг успеваемости</p>
-                </div>
-                <a href="/" class="btn btn-back">← На карту атласа</a>
-            </div>
-
-            <div class="card-grid">
-                <div class="stat-card">
-                    <div style="font-size: 12px; color: #64748B; font-weight: 600;">Всего сданных тестов</div>
-                    <div class="stat-val">{total_tests}</div>
-                </div>
-                <div class="stat-card">
-                    <div style="font-size: 12px; color: #64748B; font-weight: 600;">Средняя результативность</div>
-                    <div class="stat-val">{avg_accuracy}%</div>
-                </div>
-                <div class="stat-card">
-                    <div style="font-size: 12px; color: #64748B; font-weight: 600;">Активных групп</div>
-                    <div class="stat-val">{len(groups_stat)}</div>
-                </div>
-            </div>
-
-            <h3 style="font-size: 15px; margin-bottom: 10px;">Сводка по учебным группам</h3>
-            <div class="table-wrap">
-                <table>
-                    <tr><th>Академическая группа</th><th>Попыток</th><th>Успеваемость</th></tr>
-                    {groups_rows if groups_rows else "<tr><td colspan='3' style='text-align: center; color: #94A3B8;'>Пока нет данных</td></tr>"}
-                </table>
-            </div>
-
-            <div class="actions-bar">
-                <h3 style="font-size: 15px; margin: 0;">Журнал тестирований</h3>
-                <a href="/admin/export-csv" class="btn btn-primary">📥 Экспорт ведомости в CSV</a>
-            </div>
-            <div class="table-wrap">
-                <table>
-                    <tr><th>Дата</th><th>Студент</th><th>Группа</th><th>Вид теста</th><th>Баллы</th><th>% успеха</th><th>Время</th></tr>
-                    {rows if rows else "<tr><td colspan='7' style='text-align: center; color: #94A3B8;'>Журнал пуст</td></tr>"}
-                </table>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+@app.get("/api/admin/results")
+def get_admin_results(username: str = Depends(check_admin)):
+    return load_results()
 
 @app.get("/admin/export-csv", response_class=PlainTextResponse)
 def export_csv(username: str = Depends(check_admin)):
     results = load_results()
     output = io.StringIO()
+    # Add BOM for Excel Russian character support
+    output.write('\ufeff')
     writer = csv.writer(output, delimiter=';')
-    writer.writerow(['Дата', 'ФИО студента', 'Email', 'Группа', 'Тип теста', 'Баллы', 'Макс баллов', 'Успешность (%)', 'Затраченное время'])
+    writer.writerow([
+        'Дата', 'ФИО студента', 'Email', 'Группа', 'Категория/Тема', 'Режим',
+        'Статус сдачи', 'Нарушений фокуса', 'Цифровой токен сдачи',
+        'Баллы', 'Макс баллов', 'Успешность (%)', 'Затраченное время'
+    ])
     
     for r in results:
+        is_exam = bool(r.get('is_exam', False))
+        status_text = r.get('exam_status', 'Сдано' if is_exam else 'Пройдено')
         writer.writerow([
-            r.get('date'), r.get('name'), r.get('email'), r.get('group'),
-            r.get('quiz_type'), r.get('score'), r.get('max_score'),
-            r.get('accuracy'), r.get('time_spent')
+            r.get('date', ''),
+            r.get('name', 'Анонимно'),
+            r.get('email', '-'),
+            r.get('group', '-'),
+            r.get('quiz_type', 'Общий'),
+            'Контрольная (Экзамен)' if is_exam else 'Обычная викторина',
+            status_text,
+            r.get('violations', 0),
+            r.get('exam_token', '-'),
+            r.get('score', 0),
+            r.get('max_score', 0),
+            r.get('accuracy', 0),
+            r.get('time_spent', '-')
         ])
     
     response = PlainTextResponse(output.getvalue(), media_type="text/csv; charset=utf-8")
-    response.headers["Content-Disposition"] = "attachment; filename=vedomost_ufuv_geos.csv"
+    response.headers["Content-Disposition"] = "attachment; filename=vedomost_sfedu_geos.csv"
     return response
 
 @app.get("/")
 def get_index():
-    if not os.path.exists("rostov_quiz_map.html"):
-        return HTMLResponse("<h2>Карта еще не сгенерирована. Запустите 'python main.py' локально и закоммитьте rostov_quiz_map.html</h2>", status_code=503)
-    return FileResponse("rostov_quiz_map.html")
+    if os.path.exists("index.html"):
+        return FileResponse("index.html")
+    if os.path.exists("rostov_quiz_map.html"):
+        return FileResponse("rostov_quiz_map.html")
+    return HTMLResponse("<h2>Карта еще не сгенерирована. Запустите 'python main.py' локально.</h2>", status_code=503)
+
+@app.get("/quiz.js")
+def get_quiz_js():
+    if os.path.exists("quiz.js"):
+        return FileResponse("quiz.js", media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="quiz.js не найден")
+
+@app.get("/{file_name}.html")
+def get_html_page(file_name: str):
+    file_path = f"{file_name}.html"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    raise HTTPException(status_code=404, detail=f"Страница {file_name}.html не найдена")
 
 if __name__ == "__main__":
     import uvicorn

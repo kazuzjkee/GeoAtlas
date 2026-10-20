@@ -4,15 +4,65 @@ from folium import plugins
 import os
 import json
 import webbrowser
+from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point
 
-BASE_PATH = 'Py_Geo/shape/'
+# ==========================================
+# НАСТРОЙКИ РЕГИОНОВ (УНИВЕРСАЛЬНЫЙ ДВИЖОК)
+# ==========================================
 
-SHAPEFILES = {
-    'districts': 'raion.shp',
-    'district_centers': 'raicentr.shp',
-    'rivers': 'water-line.shp',
-    'water_bodies': 'water-polygon.shp'
+REGIONS_CONFIG = {
+    'rostov': {
+        'path': 'Py_Geo/shape/',
+        'title': 'Ростовская область',
+        'center': [48.0, 40.5],
+        'zoom': 8,
+        'files': {
+            'districts': 'raion.shp',
+            'district_centers': 'raicentr.shp',
+            'rivers': 'water-line.shp',
+            'water_bodies': 'water-polygon.shp'
+        }
+    },
+    'krasnodar': {
+        'path': 'Py_Geo/shape/krasnodar/',
+        'title': 'Краснодарский край',
+        'center': [45.03, 38.97],
+        'zoom': 7,
+        'files': {
+            'districts': 'boundary-3857.shp', 
+            'district_centers': 'settlement-point.shp',
+            'rivers': 'water-line.shp',
+            'water_bodies': 'water-polygon.shp'
+        }
+    },
+    'russia': {
+        'path': 'Py_Geo/shape/russia/',
+        'title': 'Российская Федерация',
+        'center': [61.5, 95.0],
+        'zoom': 3,
+        'files': {
+            # Читаем НОВЫЙ эталонный файл границ GADM:
+            'districts': 'gadm41_RUS_1.shp',
+            'district_centers': 'Cities.shp',
+            'rivers': 'Rivers.shp',
+            'water_bodies': 'Lakes.shp'
+        }
+    }
 }
+
+# ---------------------------------------------------------
+# ВЫБОР РЕГИОНА ДЛЯ ГЕНЕРАЦИИ
+# ---------------------------------------------------------
+ACTIVE_REGION = 'russia'  
+
+CFG = REGIONS_CONFIG[ACTIVE_REGION]
+BASE_PATH = CFG['path']
+SHAPEFILES = CFG['files']
+MAP_CENTER = CFG['center']
+INITIAL_ZOOM = CFG['zoom']
+REGION_TITLE = CFG['title']
+OUTPUT_FILENAME = f"{ACTIVE_REGION}_quiz_map.html"
+CARTO_KEY = 'cb1_3wsm_1_6bdccfe40c07a69c4fce7b68'
 
 STYLES = {
     'districts': {
@@ -36,33 +86,31 @@ STYLES = {
 }
 
 LAYER_NAMES = {
-    'districts': 'Районы',
+    'districts': 'Территории',
     'rivers': 'Реки',
     'water_bodies': 'Водоемы'
 }
 
-MAP_CENTER = [48.0, 40.5]
-INITIAL_ZOOM = 8
-CARTO_KEY = 'cb1_3wsm_1_6bdccfe40c07a69c4fce7b68'
-
+# ==========================================
+# ВСТРОЕННАЯ БАЗА ДАННЫХ НАСЕЛЕНИЯ
+# ==========================================
 KNOWN_POPULATION = {
-    'Ростов-на-Дону': 1140000, 'Таганрог': 245000, 'Шахты': 226000, 'Волгодонск': 168000,
-    'Новочеркасск': 163000, 'Батайск': 126000, 'Новошахтинск': 103000, 'Каменск-Шахтинский': 86000,
-    'Азов': 81000, 'Гуково': 62000, 'Донецк': 46000, 'Зверево': 19000, 'Аксайский': 121000,
-    'Азовский': 106000, 'Белокалитвинский': 91000, 'Сальский': 101000, 'Мясниковский': 52000,
-    'Красносулинский': 74000, 'Миллеровский': 63000, 'Морозовский': 37000, 'Зерноградский': 51000,
-    'Семикаракорский': 48000, 'Октябрьский': 70000, 'Неклиновский': 87000, 'Каменский': 41000,
-    'Багаевский': 33000, 'Константиновский': 31000, 'Цимлянский': 33000, 'Шолоховский': 25000,
-    'Чертковский': 30000, 'Тацинский': 34000, 'Орловский': 36000, 'Пролетарский': 33000,
-    'Матвеево-Курганский': 39000, 'Песчанокопский': 27000, 'Ремонтненский': 17000, 'Заветинский': 15000,
-    'Дубовский': 21000, 'Зимовниковский': 34000, 'Кагальницкий': 28000, 'Кашарский': 22000,
-    'Куйбышевский': 13000, 'Мартыновский': 34000, 'Милютинский': 12000, 'Обливский': 17000,
-    'Родионово-Несветайский': 22000, 'Советский': 6000, 'Тарасовский': 27000, 'Усть-Донецкий': 28000,
-    'Целинский': 29000, 'Боковский': 14000, 'Верхнедонской': 17000, 'Веселовский': 25000, 'Волгодонской': 33000
+    # Города федерального значения
+    'москва': 13104177, 'санкт-петербург': 5597763, 'севастополь': 561374,
+    # Крупнейшие регионы
+    'московская': 8594454, 'краснодарский': 5833000, 'свердловская': 4239161,
+    'ростовская': 4132800, 'башкортостан': 4077600, 'татарстан': 4001625,
+    'челябинская': 3396739, 'нижегородская': 3060335, 'самарская': 3128043,
+    'дагестан': 3232224, 'красноярский': 2846000, 'ставропольский': 2886000,
+    'новосибирская': 2794266, 'кемеровская': 2547684, 'пермский': 2508352,
+    'волгоградская': 2449781, 'саратовская': 2385163, 'иркутская': 2330537,
+    'алтайский': 2268179, 'воронежская': 2273417, 'оренбургская': 1921908,
+    'омская': 1832064, 'приморский': 1820076, 'тюменская': 1608111,
+    # Добавьте сюда любые другие регионы по необходимости
 }
 
 
-class RostovMap:
+class InteractiveAtlas:
     def __init__(self):
         self.map = folium.Map(
             location=MAP_CENTER,
@@ -77,29 +125,124 @@ class RostovMap:
         self.centers_gdf = None
         self.rivers_gdf = None
 
-    def _extract_valid_name(self, row, preferred_order=['NAME_RU', 'NAME', 'name']):
+    def _fix_antimeridian(self, geom):
+        if geom is None or geom.is_empty or not geom.is_valid:
+            return geom
+            
+        try:
+            if geom.geom_type == 'Polygon':
+                exterior = [(x + 360 if x < 0 else x, y) for x, y in geom.exterior.coords]
+                interiors = [[(x + 360 if x < 0 else x, y) for x, y in interior.coords] for interior in geom.interiors]
+                return Polygon(exterior, interiors)
+            elif geom.geom_type == 'MultiPolygon':
+                return MultiPolygon([self._fix_antimeridian(p) for p in geom.geoms])
+            elif geom.geom_type == 'LineString':
+                return LineString([(x + 360 if x < 0 else x, y) for x, y in geom.coords])
+            elif geom.geom_type == 'MultiLineString':
+                return MultiLineString([self._fix_antimeridian(ls) for ls in geom.geoms])
+            elif geom.geom_type == 'Point':
+                return Point(geom.x + 360 if geom.x < 0 else geom.x, geom.y)
+        except Exception:
+            pass
+            
+        return geom
+
+    # БРОНЕБОЙНЫЙ ПРЕДОХРАНИТЕЛЬ с поддержкой GADM
+    def _safe_to_crs(self, gdf):
+        if gdf is None or gdf.empty:
+            return gdf
+            
+        try:
+            if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
+                gdf = gdf.to_crs('EPSG:4326')
+            elif not gdf.crs:
+                b = gdf.total_bounds
+                if (-360 <= b[0] <= 360) and (-90 <= b[1] <= 90) and (-360 <= b[2] <= 360) and (-90 <= b[3] <= 90):
+                    gdf = gdf.set_crs('EPSG:4326')
+                else:
+                    gdf = gdf.set_crs('EPSG:3857').to_crs('EPSG:4326')
+        except Exception as e:
+            print(f"[*] Внимание: Перехвачена ошибка CRS. Применяем жесткий фикс...")
+            b = gdf.total_bounds
+            is_degrees = (-360 <= b[0] <= 360) and (-90 <= b[1] <= 90) and \
+                         (-360 <= b[2] <= 360) and (-90 <= b[3] <= 90)
+            
+            if is_degrees:
+                gdf = gdf.set_crs('EPSG:4326', allow_override=True)
+            else:
+                try:
+                    gdf = gdf.set_crs('EPSG:3857', allow_override=True).to_crs('EPSG:4326')
+                except Exception:
+                    gdf = gdf.set_crs('EPSG:4326', allow_override=True)
+                    
+        # Очистка геометрии
+        gdf = gdf.dropna(subset=['geometry'])
+        bounds = gdf.bounds
+        gdf = gdf[~bounds.isna().any(axis=1)]
+        gdf = gdf[gdf.geometry.is_valid]
+        gdf = gdf[~gdf.geometry.is_empty]
+        
+        # Фикс Чукотки
+        gdf.geometry = gdf.geometry.apply(self._fix_antimeridian)
+        
+        # Упрощение геометрии (КРИТИЧНО ДЛЯ GADM ФАЙЛОВ, чтобы браузер не упал)
+        if ACTIVE_REGION == 'russia':
+            try:
+                # 0.015 градуса дает идеальный баланс: визуально границы точные, но весят в 10 раз меньше
+                gdf.geometry = gdf.geometry.simplify(0.015, preserve_topology=True)
+            except Exception:
+                pass
+                
+        return gdf
+
+    # ДОБАВЛЕНО 'NAME_1' ДЛЯ НОВЫХ ФАЙЛОВ GADM
+    def _extract_valid_name(self, row, preferred_order=['NL_NAME_1', 'NAME_1', 'NAME_RWIN', 'NAME_RU', 'NAME', 'name', 'REGION_NAM', 'NM_RU']):
         for col in preferred_order:
-            if col in row and row[col] is not None:
+            if col in row.index and row[col] is not None:
                 val = str(row[col]).strip()
-                if val and val.lower() not in ['none', 'nan', 'null', '']:
-                    return val
+                
+                # Игнорируем текстовые "NA", "NaN", "Null" и прочий системный мусор
+                if val and val.lower() not in ['none', 'nan', 'null', '', 'na', 'n/a', '<null>']:
+                    
+                    # Косметический словарь перевода для регионов, у которых в GADM нет русского имени
+                    translations = {
+                        'Moscow City': 'Москва',
+                        'Moskva': 'Москва',
+                        'Moscow': 'Москва',
+                        'Saint Petersburg': 'Санкт-Петербург',
+                        'St. Petersburg': 'Санкт-Петербург',
+                        'Sankt-Peterburg': 'Санкт-Петербург',
+                        'City of St. Petersburg': 'Санкт-Петербург',
+                        'Sevastopol': 'Севастополь',
+                        'Sevastopol City': 'Севастополь'
+                    }
+                    
+                    # Возвращаем перевод, если он есть, иначе оригинальное имя
+                    return translations.get(val, val)
         return ''
 
     def _clean_river_name(self, name):
         if not name or str(name).lower() in ['none', 'nan', 'null', '']:
             return ''
         n = str(name).strip().replace('река ', '').replace('р. ', '').replace('р.', '').replace('"', '').strip()
-        for key in ['Маныч', 'Северский Донец', 'Калитва', 'Тузлов', 'Сал']:
+        for key in ['Маныч', 'Северский Донец', 'Калитва', 'Тузлов', 'Сал', 'Волга', 'Обь', 'Енисей', 'Лена', 'Амур']:
             if key in n:
                 return key
         return n
 
     def add_districts(self, shp_path):
-        gdf = gpd.read_file(shp_path)
-        if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
-            gdf = gdf.to_crs('EPSG:4326')
+        if not os.path.exists(shp_path): 
+            print(f"Внимание: Файл {shp_path} не найден.")
+            return None
         
-        gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME_RU', 'NAME', 'name']), axis=1)
+        gdf = gpd.read_file(shp_path)
+        gdf = self._safe_to_crs(gdf)
+        
+        gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r), axis=1)
+        
+        # МАГИЧЕСКАЯ МЕТКА: навсегда отделяет территории от гидрографии
+        gdf['is_district_layer'] = 1
+        
         self.districts_gdf = gdf
 
         tooltip = folium.GeoJsonTooltip(
@@ -118,18 +261,21 @@ class RostovMap:
         return gdf
 
     def add_water_bodies(self, shp_path):
+        if not os.path.exists(shp_path): return None
+        
         gdf = gpd.read_file(shp_path)
-        if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
-            gdf = gdf.to_crs('EPSG:4326')
+        gdf = self._safe_to_crs(gdf)
 
-        gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME', 'NAME_RU', 'name']), axis=1)
+        gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r), axis=1)
 
         for idx, row in gdf.iterrows():
             val = row['display_name']
             if not val or val.lower() in ['none', 'nan', 'null', '']:
                 bounds = row.geometry.bounds
-                if bounds[0] > 41.3 and bounds[1] > 47.3:
+                if bounds[0] > 41.3 and bounds[1] > 47.3 and bounds[2] < 45.0 and bounds[3] < 48.0:
                     gdf.at[idx, 'display_name'] = 'Цимлянское водохранилище'
+                elif bounds[0] > 100.0 and bounds[1] > 51.0 and bounds[2] < 110.0 and bounds[3] < 56.0:
+                    gdf.at[idx, 'display_name'] = 'Озеро Байкал'
                 else:
                     gdf.at[idx, 'display_name'] = 'Водоем'
 
@@ -144,16 +290,17 @@ class RostovMap:
             name=LAYER_NAMES['water_bodies'],
             style_function=lambda x: STYLES['water_bodies'],
             tooltip=tooltip,
-            interactive=False
+            interactive=True
         ).add_to(self.map)
         return gdf
 
     def add_rivers(self, shp_path):
+        if not os.path.exists(shp_path): return None
+        
         gdf = gpd.read_file(shp_path)
-        if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
-            gdf = gdf.to_crs('EPSG:4326')
+        gdf = self._safe_to_crs(gdf)
 
-        gdf['raw_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME_RU', 'NAME', 'name']), axis=1)
+        gdf['raw_name'] = gdf.apply(lambda r: self._extract_valid_name(r), axis=1)
         gdf['clean_name'] = gdf['raw_name'].apply(self._clean_river_name)
 
         named = gdf[gdf['clean_name'] != ''].dissolve(by='clean_name').reset_index()
@@ -175,29 +322,52 @@ class RostovMap:
             name=LAYER_NAMES['rivers'],
             style_function=lambda x: STYLES['rivers'],
             tooltip=tooltip,
-            interactive=False
+            interactive=True
         ).add_to(self.map)
 
         return all_rivers
 
     def add_district_centers(self, shp_path):
+        if not os.path.exists(shp_path): return None
+        
         gdf = gpd.read_file(shp_path)
-        if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
-            gdf = gdf.to_crs('EPSG:4326')
+        
+        # 1. Оставляем только областные центры
+        if 'CAPITAL' in gdf.columns:
+            gdf = gdf[gdf['CAPITAL'].astype(str).str.strip().str.lower().isin(['c', 'с'])]
+        
+        gdf = self._safe_to_crs(gdf)
         self.centers_gdf = gdf
 
-        gdf['clean_name'] = gdf.apply(lambda r: self._extract_valid_name(r, ['NAME', 'NAME_RU', 'name']), axis=1)
+        # 2. Жестко извлекаем имя города, проверяя колонку NAME_RWIN
+        def get_city_name(row):
+            # Проверяем все возможные названия колонок, начиная с NAME_RWIN
+            for col in ['NAME_RWIN', 'NAME', 'name', 'NAME_RU', 'NL_NAME_1', 'CITY_NAME']:
+                if col in row.index and row[col] is not None:
+                    val = str(row[col]).strip()
+                    if val and val.lower() not in ['none', 'nan', 'null', '']:
+                        return val
+            return ''
+
+        gdf['clean_name'] = gdf.apply(get_city_name, axis=1)
 
         point_gdf = gdf[gdf.geometry.type == 'Point']
         if len(point_gdf) == 0:
             point_gdf = gdf.copy()
             point_gdf['geometry'] = point_gdf.geometry.centroid
 
-        feature_group = folium.FeatureGroup(name="Райцентры")
+        feature_group = folium.FeatureGroup(name="Центры")
         for idx, row in point_gdf.iterrows():
             lon, lat = (row.geometry.x, row.geometry.y) if hasattr(row.geometry, 'x') else (row.geometry.centroid.x, row.geometry.centroid.y)
-            name = row['clean_name'] if row['clean_name'] else f"Центр {idx}"
-            status = str(row.get('OFFICIAL_S', '')).replace('ru:', '') if row.get('OFFICIAL_S') else 'центр'
+            
+            # Если имя все равно не нашлось, пишем ID
+            name = row['clean_name']
+            if not name:
+                name = f"Центр {idx}"
+                
+            # Пробуем достать статус (г, пгт и т.д.)
+            status = str(row.get('STATUS', 'центр')).replace('ru:', '') 
+            
             folium.Marker(
                 location=[lat, lon],
                 popup=f"<b>{name}</b><br>Тип: {status}",
@@ -213,12 +383,20 @@ class RostovMap:
 
         valid_gdf = self.districts_gdf[self.districts_gdf.geometry.is_valid & ~self.districts_gdf.geometry.is_empty].copy()
         valid_gdf = valid_gdf[valid_gdf['display_name'] != ''].copy()
-        metric_gdf = valid_gdf.to_crs('EPSG:3857')
+        
+        try:
+            metric_gdf = valid_gdf.to_crs('EPSG:3857')
+        except Exception:
+            metric_gdf = valid_gdf
+            
         neighbors_data = []
 
         centers_wgs = None
         if self.centers_gdf is not None:
-            centers_wgs = self.centers_gdf.to_crs('EPSG:4326')
+            try:
+                centers_wgs = self.centers_gdf.to_crs('EPSG:4326')
+            except:
+                centers_wgs = self.centers_gdf
 
         for idx, row in valid_gdf.iterrows():
             current_geom = row.geometry
@@ -227,7 +405,7 @@ class RostovMap:
             intersecting_rows = valid_gdf[valid_gdf.geometry.intersects(buffered_geom)]
             neighbor_names = [str(n) for n in intersecting_rows['display_name'].tolist() if str(n) != current_name and str(n).strip()]
             
-            center_name = "г. Ростов-на-Дону (Областной центр)" if 'Ростов-на-Дону' in current_name else "Райцентр"
+            center_name = "Административный центр"
             if centers_wgs is not None:
                 matched_c = centers_wgs[centers_wgs.geometry.within(current_geom)]
                 if not matched_c.empty:
@@ -236,15 +414,29 @@ class RostovMap:
                     status_clean = str(status).replace('ru:', '') if status else ''
                     center_name = f"{c_val} ({status_clean})" if status_clean else str(c_val)
 
-            area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if idx in metric_gdf.index else 500
+            area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if idx in metric_gdf.index else 0
 
+            # === УМНЫЙ ПОИСК НАСЕЛЕНИЯ ===
             population = None
+            search_name = current_name.lower()
+            
+            # 1. Ищем точное вхождение в нашей базе
             for key, val in KNOWN_POPULATION.items():
-                if key in current_name:
+                if key in search_name:
                     population = val
                     break
+                    
+            # 2. Математический резерв (если региона нет в базе)
             if population is None:
-                population = int(area_sq_km * 20)
+                if 'область' in search_name or 'край' in search_name or 'республика' in search_name:
+                    # Для крупных регионов: средняя плотность по РФ
+                    population = int(area_sq_km * 35)
+                elif 'округ' in search_name:
+                    # Для северных округов (ЯНАО, ХМАО, Чукотка) плотность очень низкая
+                    population = int(area_sq_km * 2)
+                else:
+                    # Для муниципальных районов (как в Ростове)
+                    population = int(area_sq_km * 25)
 
             neighbors_data.append({
                 'name': current_name,
@@ -264,8 +456,12 @@ class RostovMap:
             (self.rivers_gdf['clean_name'] != 'Водоток')
         ].copy()
 
-        metric_rivers = named_rivers.to_crs('EPSG:3857')
-        named_rivers['length_km'] = (metric_rivers.geometry.length / 1000).round(1)
+        try:
+            metric_rivers = named_rivers.to_crs('EPSG:3857')
+            named_rivers['length_km'] = (metric_rivers.geometry.length / 1000).round(1)
+        except Exception:
+            named_rivers['length_km'] = 0.0
+            
         top_rivers = named_rivers.sort_values(by='length_km', ascending=False).head(35)
 
         return [{"name": str(r['clean_name']), "length": float(r['length_km'])} for _, r in top_rivers.iterrows()]
@@ -287,7 +483,14 @@ class RostovMap:
                     "lon": lon
                 })
 
+        if self.districts_gdf is not None and not self.districts_gdf.empty:
+            bounds = self.districts_gdf.total_bounds
+            region_bounds = [[bounds[1], bounds[0]], [bounds[3], bounds[2]]]
+        else:
+            region_bounds = [[MAP_CENTER[0]-1, MAP_CENTER[1]-1], [MAP_CENTER[0]+1, MAP_CENTER[1]+1]]
+
         js_code = f'''
+const REGION_BOUNDS = {json.dumps(region_bounds)};
 const EMBEDDED_DISTRICTS = {json.dumps(districts_data, ensure_ascii=False)};
 const EMBEDDED_CENTERS = {json.dumps(centers_data, ensure_ascii=False)};
 const EMBEDDED_NEIGHBORS = {json.dumps(neighbors_data, ensure_ascii=False)};
@@ -401,7 +604,7 @@ function restoreAllRiverStyles() {{
 function resetMapView() {{
     const map = getMapObject();
     if (map) {{
-        try {{ map.setView([{MAP_CENTER[0]}, {MAP_CENTER[1]}], {INITIAL_ZOOM}); }} catch(e) {{}}
+        try {{ map.fitBounds(REGION_BOUNDS, {{padding: [15, 15]}}); }} catch(e) {{}}
     }}
 }}
 
@@ -415,16 +618,16 @@ function setQuizLayers(quizMode) {{
 
             if (quizMode === 'center') {{
                 if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
-                if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
+                if (text.includes('Районы') || text.includes('Райцентры') || text.includes('Территории') || text.includes('Центры')) {{ if (!input.checked) input.click(); }}
             }} else if (quizMode === 'district' || quizMode === 'neighbor' || quizMode === 'study_districts') {{
                 if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
-                if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
+                if (text.includes('Районы') || text.includes('Райцентры') || text.includes('Территории') || text.includes('Центры')) {{ if (!input.checked) input.click(); }}
             }} else if (quizMode === 'river' || quizMode === 'study_rivers') {{
-                if (text.includes('Районы') || text.includes('Райцентры')) {{ if (!input.checked) input.click(); }}
+                if (text.includes('Районы') || text.includes('Райцентры') || text.includes('Территории') || text.includes('Центры')) {{ if (!input.checked) input.click(); }}
                 if (text.includes('Реки') || text.includes('Водоемы')) {{ if (!input.checked) input.click(); }}
             }} else if (quizMode === 'study_centers') {{
                 if (text.includes('Реки') || text.includes('Водоемы')) {{ if (input.checked) input.click(); }}
-                if (text.includes('Райцентры') || text.includes('Районы')) {{ if (!input.checked) input.click(); }}
+                if (text.includes('Райцентры') || text.includes('Районы') || text.includes('Территории') || text.includes('Центры')) {{ if (!input.checked) input.click(); }}
             }} else {{
                 if (!input.checked) input.click();
             }}
@@ -595,11 +798,11 @@ function renderStudyItem() {{
 
         contentEl.innerHTML = `
             <h3 class="study-title">${{item.name}}</h3>
-            <div class="info-row"><span>Райцентр:</span><strong>${{item.center || '—'}}</strong></div>
+            <div class="info-row"><span>Центр:</span><strong>${{item.center || '—'}}</strong></div>
             <div class="info-row"><span>Население:</span><strong>~${{popFormatted}}</strong></div>
             <div class="info-row"><span>Площадь:</span><strong>~${{item.area}} км²</strong></div>
             <div style="margin-top: 8px;">
-                <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит с районами:</span>
+                <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит:</span>
                 <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${{neighborsHtml}}</div>
             </div>
         `;
@@ -609,7 +812,7 @@ function renderStudyItem() {{
         contentEl.innerHTML = `
             <h3 class="study-title">Река ${{item.name}}</h3>
             <div class="info-row"><span>Тип:</span><strong>Водный объект / Водоток</strong></div>
-            <div class="info-row"><span>Протяженность в РО:</span><strong>~${{item.length}} км</strong></div>
+            <div class="info-row"><span>Протяженность в регионе:</span><strong>~${{item.length}} км</strong></div>
             <div class="hint-small" style="margin-top: 8px;">Русло выделено красной линией на карте</div>
         `;
         highlightRiverOnMapByName(item.name);
@@ -617,7 +820,7 @@ function renderStudyItem() {{
     }} else if (studyCategory === 'centers') {{
         contentEl.innerHTML = `
             <h3 class="study-title">${{item.name}}</h3>
-            <div class="info-row"><span>Статус:</span><strong>${{item.status || 'райцентр'}}</strong></div>
+            <div class="info-row"><span>Статус:</span><strong>${{item.status || 'центр'}}</strong></div>
             <div class="info-row"><span>Координаты:</span><strong>${{item.lat.toFixed(3)}}°, ${{item.lon.toFixed(3)}}°</strong></div>
             <div class="hint-small" style="margin-top: 8px;">Объект отмечен пульсирующим маркером</div>
         `;
@@ -684,7 +887,7 @@ function exitStudyMode() {{
 function startDistrictQuiz() {{
     currentQuiz = 'district';
     quizStartTime = Date.now();
-    setBasemapVisible(false); // Для районов скрываем подложку
+    setBasemapVisible(false);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -696,7 +899,7 @@ function startDistrictQuiz() {{
     document.getElementById('quiz-mode').style.display = 'block';
     document.getElementById('results-mode').style.display = 'none';
 
-    document.getElementById('quiz-title').textContent = 'Угадай район по очертаниям';
+    document.getElementById('quiz-title').textContent = 'Узнать территорию по силуэту';
     document.getElementById('hint-button').style.display = 'block';
     loadDistrictQuiz();
 }}
@@ -704,7 +907,7 @@ function startDistrictQuiz() {{
 function startNeighborQuiz() {{
     currentQuiz = 'neighbor';
     quizStartTime = Date.now();
-    setBasemapVisible(false); // Для соседей скрываем подложку
+    setBasemapVisible(false);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -716,7 +919,7 @@ function startNeighborQuiz() {{
     document.getElementById('quiz-mode').style.display = 'block';
     document.getElementById('results-mode').style.display = 'none';
 
-    document.getElementById('quiz-title').textContent = 'Районы-соседи';
+    document.getElementById('quiz-title').textContent = 'Топология и соседи (тест)';
     document.getElementById('hint-button').style.display = 'none';
     loadNeighborQuiz();
 }}
@@ -724,7 +927,7 @@ function startNeighborQuiz() {{
 function startCenterQuiz() {{
     currentQuiz = 'center';
     quizStartTime = Date.now();
-    setBasemapVisible(true); // Для центров подложка ВКЛЮЧЕНА
+    setBasemapVisible(true);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -736,7 +939,7 @@ function startCenterQuiz() {{
     document.getElementById('quiz-mode').style.display = 'block';
     document.getElementById('results-mode').style.display = 'none';
 
-    document.getElementById('quiz-title').textContent = 'Найди райцентр на карте';
+    document.getElementById('quiz-title').textContent = 'Найти центр на карте';
     document.getElementById('hint-button').style.display = 'block';
     loadCenterQuiz();
 }}
@@ -748,7 +951,7 @@ function startRiverQuiz() {{
     }}
     currentQuiz = 'river';
     quizStartTime = Date.now();
-    setBasemapVisible(true); // Для рек подложка ВКЛЮЧЕНА
+    setBasemapVisible(true);
     closeInfoCard();
     clearMarkers();
     resetActiveHighlight();
@@ -761,7 +964,7 @@ function startRiverQuiz() {{
     document.getElementById('quiz-mode').style.display = 'block';
     document.getElementById('results-mode').style.display = 'none';
 
-    document.getElementById('quiz-title').textContent = 'Угадай реку по руслу';
+    document.getElementById('quiz-title').textContent = 'Определить реку по руслу';
     document.getElementById('hint-button').style.display = 'block';
     loadRiverQuiz();
 }}
@@ -789,7 +992,7 @@ function generateDistrictQuestions(data) {{
             type: 'district',
             correctAnswer: correct.name,
             options: options,
-            hint: `Площадь района: ~${{Math.round(Math.random() * 2000 + 500)}} км²`,
+            hint: `Площадь: ~${{Math.round(Math.random() * 2000 + 500)}} км²`,
             districtName: correct.name
         }});
     }}
@@ -812,7 +1015,7 @@ function generateCenterQuestions(data) {{
             correctAnswer: correct.name,
             correctLat: correct.lat,
             correctLon: correct.lon,
-            hint: `Статус поселения: ${{correct.status || 'районный центр'}}`,
+            hint: `Статус поселения: ${{correct.status || 'центр'}}`,
             centerName: correct.name
         }});
     }}
@@ -830,7 +1033,7 @@ function generateNeighborQuestions(data) {{
     const allNames = validPool.map(d => d.name);
 
     if (validPool.length === 0) {{
-        alert('Недостаточно данных о топологии районов');
+        alert('Недостаточно данных о топологии');
         exitQuizDirectly();
         return;
     }}
@@ -897,7 +1100,7 @@ function generateRiverQuestions(data) {{
             correctAnswer: correct.name,
             options: options,
             riverName: correct.name,
-            hint: `Длина русла в пределах области: ~${{correct.length}} км`
+            hint: `Длина русла: ~${{correct.length}} км`
         }});
     }}
     shuffleArray(quizData);
@@ -929,7 +1132,7 @@ function showQuestion() {{
     if (optionsContainer) optionsContainer.innerHTML = '';
 
     if (question.type === 'district') {{
-        qTextEl.textContent = 'Угадайте район по очертаниям:';
+        qTextEl.textContent = 'Угадайте территорию по силуэту:';
         question.options.forEach(option => {{
             const button = document.createElement('button');
             button.className = 'quiz-option';
@@ -940,7 +1143,7 @@ function showQuestion() {{
         highlightDistrictOnMapByName(question.districtName);
 
     }} else if (question.type === 'neighbor') {{
-        qTextEl.textContent = `С каким районом НЕ граничит ${{question.districtName}}?`;
+        qTextEl.textContent = `С какой территорией НЕ граничит ${{question.districtName}}?`;
         question.options.forEach(option => {{
             const button = document.createElement('button');
             button.className = 'quiz-option';
@@ -964,7 +1167,7 @@ function showQuestion() {{
     }} else if (question.type === 'center') {{
         qTextEl.textContent = `Найдите на карте: ${{question.correctAnswer}}`;
         if (optionsContainer) {{
-            optionsContainer.innerHTML = '<div class="center-quiz-instruction">Кликните на карту в точке нахождения объекта<br><span>до 5 км: +3 очка | до 15 км: +2 | до 30 км: +1</span></div>';
+            optionsContainer.innerHTML = '<div class="center-quiz-instruction">Кликните на карту в точке нахождения объекта<br><span>до 15 км: +3 очка | до 40 км: +2 | до 100 км: +1</span></div>';
         }}
         window.currentQuestionData = question;
         setupMapClickListener(question);
@@ -1065,21 +1268,21 @@ function handleMapClick(lat, lon, question) {{
     let message = '';
     let badgeType = 'error';
 
-    if (distance <= 5) {{
+    if (distance <= 15) {{
         pointsAwarded = 3;
-        message = `Идеально! (${{distance.toFixed(1)}} км) +3 очка!`;
+        message = `Идеально! (${{distance.toFixed(0)}} км) +3 очка!`;
         badgeType = 'success';
-    }} else if (distance <= 15) {{
+    }} else if (distance <= 40) {{
         pointsAwarded = 2;
-        message = `Хорошо! (${{distance.toFixed(1)}} км) +2 очка!`;
+        message = `Хорошо! (${{distance.toFixed(0)}} км) +2 очка!`;
         badgeType = 'success';
-    }} else if (distance <= 30) {{
+    }} else if (distance <= 100) {{
         pointsAwarded = 1;
-        message = `Близко (${{distance.toFixed(1)}} км) +1 очко!`;
+        message = `Близко (${{distance.toFixed(0)}} км) +1 очко!`;
         badgeType = 'success';
     }} else {{
         pointsAwarded = 0;
-        message = `Мимо! (${{distance.toFixed(1)}} км от цели)`;
+        message = `Мимо! (${{distance.toFixed(0)}} км от цели)`;
         badgeType = 'error';
     }}
 
@@ -1125,8 +1328,8 @@ function handleMapClick(lat, lon, question) {{
     }}).addTo(map);
 
     map.fitBounds([
-        [Math.min(lat, correctLat) - 0.1, Math.min(lon, correctLon) - 0.1],
-        [Math.max(lat, correctLat) + 0.1, Math.max(lon, correctLon) + 0.1]
+        [Math.min(lat, correctLat) - 0.5, Math.min(lon, correctLon) - 0.5],
+        [Math.max(lat, correctLat) + 0.5, Math.max(lon, correctLon) + 0.5]
     ]);
 
     showFeedback(message, badgeType);
@@ -1169,7 +1372,7 @@ function showHint() {{
         const ht = document.getElementById('hint-text');
         const hc = document.getElementById('hint-container');
         if (ht) ht.textContent = question.hint;
-        if (hc) hc.style.display = 'block';
+        if (hc) ht.style.display = 'block';
     }}
 }}
 
@@ -1214,24 +1417,28 @@ function highlightDistrictOnMapByName(districtName) {{
     map.eachLayer(function(layer) {{
         if (layer.feature && layer.feature.properties && !targetLayer) {{
             const props = layer.feature.properties;
-            if (props.ADMIN_LVL === '6' || props.ADMIN_LVL === 6 || props.oktmo) {{
-                const pName = props.display_name || props.NAME_RU || props.NAME || '';
-                if (normalizeDistrictName(pName) === targetNorm) {{
-                    targetLayer = layer;
-                }}
+            
+            // СТРОГИЙ ФИЛЬТР: Если это не территория (нет нашей метки), пропускаем!
+            if (props.is_district_layer !== 1) return;
+
+            const pName = props.display_name || props.NAME_1 || props.NAME_RU || props.NAME || '';
+            if (normalizeDistrictName(pName) === targetNorm) {{
+                targetLayer = layer;
             }}
         }}
     }});
 
+    // Запасной поиск по частичному совпадению
     if (!targetLayer) {{
         map.eachLayer(function(layer) {{
             if (layer.feature && layer.feature.properties && !targetLayer) {{
                 const props = layer.feature.properties;
-                if (props.ADMIN_LVL === '6' || props.ADMIN_LVL === 6 || props.oktmo) {{
-                    const pSimple = (props.display_name || props.NAME_RU || props.NAME || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
-                    if (pSimple === targetSimple || pSimple.includes(targetSimple) || targetSimple.includes(pSimple)) {{
-                        targetLayer = layer;
-                    }}
+                
+                if (props.is_district_layer !== 1) return;
+
+                const pName = (props.display_name || props.NAME_1 || props.NAME_RU || props.NAME || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+                if (pName === targetSimple || pName.includes(targetSimple) || targetSimple.includes(pName)) {{
+                    targetLayer = layer;
                 }}
             }}
         }});
@@ -1247,7 +1454,6 @@ function highlightDistrictOnMapByName(districtName) {{
                 fillOpacity: 0.5,
                 dashArray: null
             }});
-            // Зум с отдалением: максимальный зум ограничен 9, чтобы район был виден в контексте области
             map.fitBounds(targetLayer.getBounds(), {{ maxZoom: 9, padding: [50, 50] }});
         }} catch(e) {{}}
     }}
@@ -1268,7 +1474,7 @@ function highlightRiverOnMapByName(riverName) {{
             const gType = layer.feature.geometry.type || '';
             if (gType.includes('LineString')) {{
                 const props = layer.feature.properties || {{}};
-                const pName = (props.clean_name || props.display_name || props.name || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+                const pName = (props.clean_name || props.display_name || props.name || props.NAME_RU || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
                 if (pName && pName === target) {{
                     highlightedRiverLayers.push(layer);
                     try {{
@@ -1324,17 +1530,13 @@ function showDistrictInfoCard(districtName) {{
             <button onclick="closeInfoCard()" class="close-card-btn">&times;</button>
         </div>
         <div class="info-card-body">
-            <div class="info-row"><span>Райцентр:</span><strong>${{district.center}}</strong></div>
+            <div class="info-row"><span>Центр:</span><strong>${{district.center}}</strong></div>
             <div class="info-row"><span>Население:</span><strong>~${{popFormatted}}</strong></div>
             <div class="info-row"><span>Площадь:</span><strong>~${{district.area}} км²</strong></div>
             <div style="margin-top: 8px;">
-                <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит с районами:</span>
+                <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит с:</span>
                 <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${{neighborsHtml}}</div>
             </div>
-            <!-- КНОПКА ВОЗВРАТА К ВИДУ ВСЕЙ ОБЛАСТИ -->
-            <button onclick="resetMapView()" class="btn btn-secondary" style="margin-top: 10px; font-size: 11.5px; padding: 6px;">
-                🌍 Показать всю область
-            </button>
         </div>
     `;
     card.style.display = 'block';
@@ -1356,17 +1558,14 @@ function setupDistrictClickListeners() {{
     map.eachLayer(function(layer) {{
         if (layer.feature && layer.feature.properties) {{
             const props = layer.feature.properties;
-            const isDistrictPoly = (props.ADMIN_LVL === '6' || props.ADMIN_LVL === 6 || props.oktmo);
-            if (isDistrictPoly) {{
-                const name = props.display_name || props.NAME_RU || props.NAME;
-                if (name) {{
-                    layer.off('click');
-                    layer.on('click', function(e) {{
-                        if (currentQuiz === null) {{
-                            showDistrictInfoCard(name);
-                        }}
-                    }});
-                }}
+            const name = props.display_name || props.NAME_1 || props.NAME_RU || props.NAME || props.REGION_NAM || props.NM_RU;
+            if (name && (layer.feature.geometry.type.includes('Polygon'))) {{
+                layer.off('click');
+                layer.on('click', function(e) {{
+                    if (currentQuiz === null) {{
+                        showDistrictInfoCard(name);
+                    }}
+                }});
             }}
         }}
     }});
@@ -1426,10 +1625,10 @@ function showResults() {{
 
     const accuracy = maxPossibleScore > 0 ? Math.round((score / maxPossibleScore) * 100) : 0;
     let message = '', emoji = '';
-    if (accuracy >= 85) {{ message = 'Превосходно! Отличное пространственное знание области!'; emoji = '🏆'; }}
-    else if (accuracy >= 65) {{ message = 'Хорошо! Вы уверенно ориентируетесь на карте.'; emoji = '👍'; }}
-    else if (accuracy >= 45) {{ message = 'Удовлетворительно, рекомендуем повторить номенклатуру.'; emoji = '📚'; }}
-    else {{ message = 'Попробуйте ещё раз, практика даст результат!'; emoji = '💪'; }}
+    if (accuracy >= 85) {{ message = 'Превосходно!'; emoji = '🏆'; }}
+    else if (accuracy >= 65) {{ message = 'Хорошо!'; emoji = '👍'; }}
+    else if (accuracy >= 45) {{ message = 'Удовлетворительно.'; emoji = '📚'; }}
+    else {{ message = 'Попробуйте ещё раз!'; emoji = '💪'; }}
 
     const studentInfo = getCurrentStudentInfo();
     const studentLine = studentInfo ? `<p style="margin: 4px 0; font-size: 13px; color: #0284C7;">Студент: <strong>${{studentInfo.name}}</strong> (${{studentInfo.group}})</p>` : '';
@@ -1564,7 +1763,7 @@ function getLbContentHtml() {{
     let filtersHtml = `
     <div class="lb-filters">
         <button onclick="switchLbFilter('all')" class="lb-filter-chip ${{currentLbFilter==='all'?'active':''}}">Все тесты</button>
-        <button onclick="switchLbFilter('district')" class="lb-filter-chip ${{currentLbFilter==='district'?'active':''}}">Районы</button>
+        <button onclick="switchLbFilter('district')" class="lb-filter-chip ${{currentLbFilter==='district'?'active':''}}">Территории</button>
         <button onclick="switchLbFilter('neighbor')" class="lb-filter-chip ${{currentLbFilter==='neighbor'?'active':''}}">Соседи</button>
         <button onclick="switchLbFilter('river')" class="lb-filter-chip ${{currentLbFilter==='river'?'active':''}}">Реки</button>
         <button onclick="switchLbFilter('center')" class="lb-filter-chip ${{currentLbFilter==='center'?'active':''}}">Центры</button>
@@ -1591,8 +1790,8 @@ function getLbContentHtml() {{
         if (!student) {{
             return `
             <div style="padding: 30px 10px; text-align: center;">
-                <p style="color: #64748B; font-size: 13.5px; margin-bottom: 15px;">Чтобы просматривать личную статистику и историю, авторизуйтесь через корпоративную почту ЮФУ.</p>
-                <button onclick="closeLeaderboardModal(); openAuthModal();" class="btn-start">Войти через ЮФУ</button>
+                <p style="color: #64748B; font-size: 13.5px; margin-bottom: 15px;">Чтобы просматривать личную статистику и историю, авторизуйтесь через корпоративную почту.</p>
+                <button onclick="closeLeaderboardModal(); openAuthModal();" class="btn-start">Войти</button>
             </div>`;
         }}
 
@@ -1717,11 +1916,6 @@ async function requestSfeduCode() {{
         return;
     }}
 
-    if (!email.toLowerCase().endsWith('@sfedu.ru') && !email.toLowerCase().endsWith('.sfedu.ru')) {{
-        showAuthError('Разрешены только адреса @sfedu.ru');
-        return;
-    }}
-
     try {{
         const res = await fetch('/api/auth/send-code', {{
             method: 'POST',
@@ -1737,7 +1931,7 @@ async function requestSfeduCode() {{
         errBox.style.display = 'none';
 
         if (data.dev_code) {{
-            alert(`[Демо/ЮФУ] Ваш проверочный код: ${{data.dev_code}}`);
+            alert(`Ваш проверочный код: ${{data.dev_code}}`);
         }}
     }} catch(e) {{
         showAuthError(e.message || 'Ошибка соединения с сервером');
@@ -1777,7 +1971,7 @@ function showAuthError(msg) {{
 }}
 
 function logoutStudent() {{
-    if (confirm('Выйти из профиля студента ЮФУ?')) {{
+    if (confirm('Выйти из профиля студента?')) {{
         localStorage.removeItem('sfeduStudent');
         updateStudentHeader();
     }}
@@ -1802,7 +1996,7 @@ function updateStudentHeader() {{
         if (profileBox) {{
             profileBox.style.display = 'flex';
             document.getElementById('student-badge-name').textContent = student.name;
-            document.getElementById('student-badge-group').textContent = `${{student.group}} | ЮФУ`;
+            document.getElementById('student-badge-group').textContent = `${{student.group}}`;
         }}
     }} else {{
         if (authBtn) authBtn.style.display = 'flex';
@@ -1810,9 +2004,12 @@ function updateStudentHeader() {{
     }}
 }}
 
+/* ИНИЦИАЛИЗАЦИЯ И ПРОВЕРКА ТЕМЫ */
 window.addEventListener('load', function() {{
+    resetMapView();
     setTimeout(setupDistrictClickListeners, 400);
     updateStudentHeader();
+
     if (!localStorage.getItem('rostovMapHideWelcome')) {{
         setTimeout(openWelcomeModal, 400);
     }}
@@ -1821,13 +2018,16 @@ window.addEventListener('load', function() {{
 
         self.map.get_root().html.add_child(folium.Element(f"<script>{js_code}</script>"))
 
-        quiz_html = '''
+        quiz_html = f'''
         <div class="top-nav-buttons" id="top-nav-panel">
+            <button class="nav-top-btn" onclick="resetMapView()" style="background: linear-gradient(135deg, #EFF6FF, #DBEAFE); border-color: #93C5FD; color: #1D4ED8;" title="Показать всю карту">
+                <span>🌍 Вся карта</span>
+            </button>
             <button class="nav-top-btn admin-btn" onclick="window.open('/admin', '_blank')" title="Панель преподавателя">
                 <span>📊 Преподавателю</span>
             </button>
-            <button id="auth-top-btn" class="nav-top-btn auth-btn" onclick="openAuthModal()" title="Вход для студентов ЮФУ">
-                <span>🎓 Вход ЮФУ</span>
+            <button id="auth-top-btn" class="nav-top-btn auth-btn" onclick="openAuthModal()" title="Авторизация">
+                <span>🎓 Вход</span>
             </button>
             <div id="student-profile-badge" class="student-badge" style="display: none;">
                 <div class="badge-avatar">🎓</div>
@@ -1842,7 +2042,6 @@ window.addEventListener('load', function() {{
         </div>
 
         <div id="quiz-controls" class="app-card">
-            <!-- Кнопка мобильной шторки -->
             <button id="panel-collapse-btn" class="mobile-collapse-trigger" onclick="togglePanelCollapse()">
                 ▼ Свернуть панель к карте
             </button>
@@ -1857,7 +2056,7 @@ window.addEventListener('load', function() {{
                     Обучающий режим
                 </div>
                 <div class="study-pick-grid">
-                    <button onclick="startStudyMode('districts')" class="btn btn-study-action">🗺️ Районы</button>
+                    <button onclick="startStudyMode('districts')" class="btn btn-study-action">🗺️ Территории</button>
                     <button onclick="startStudyMode('rivers')" class="btn btn-study-action">🌊 Реки</button>
                     <button onclick="startStudyMode('centers')" class="btn btn-study-action">📍 Центры</button>
                 </div>
@@ -1867,19 +2066,19 @@ window.addEventListener('load', function() {{
                 </div>
 
                 <button onclick="startDistrictQuiz()" class="btn btn-district">
-                    Угадай район по очертаниям
+                    Узнать территорию по силуэту
                 </button>
 
                 <button onclick="startNeighborQuiz()" class="btn btn-neighbor">
-                    Районы-соседи (пространственный тест)
+                    Топология и соседи (тест)
                 </button>
 
                 <button onclick="startRiverQuiz()" class="btn btn-river">
-                    Угадай реку по руслу
+                    Определить реку по руслу
                 </button>
 
                 <button onclick="startCenterQuiz()" class="btn btn-center">
-                    Найди райцентр на карте
+                    Найти центр на карте
                 </button>
 
                 <div class="timer-setting-box">
@@ -1900,7 +2099,7 @@ window.addEventListener('load', function() {{
             <!-- РЕЖИМ ОБУЧЕНИЯ (МУЛЬТИКАТЕГОРИИ) -->
             <div id="study-mode" style="display: none;">
                 <div class="study-category-bar">
-                    <button id="study-tab-districts" onclick="switchStudyCategory('districts')" class="study-cat-tab">🗺️ Районы</button>
+                    <button id="study-tab-districts" onclick="switchStudyCategory('districts')" class="study-cat-tab">🗺️ Территории</button>
                     <button id="study-tab-rivers" onclick="switchStudyCategory('rivers')" class="study-cat-tab">🌊 Реки</button>
                     <button id="study-tab-centers" onclick="switchStudyCategory('centers')" class="study-cat-tab">📍 Центры</button>
                 </div>
@@ -1983,8 +2182,8 @@ window.addEventListener('load', function() {{
             <div class="auth-card">
                 <div class="auth-header">
                     <div>
-                        <h3>Вход через профиль ЮФУ</h3>
-                        <p style="margin: 2px 0 0 0; font-size: 11.5px; color: #64748B;">Студенческая почта @sfedu.ru</p>
+                        <h3>Вход в профиль</h3>
+                        <p style="margin: 2px 0 0 0; font-size: 11.5px; color: #64748B;">Студенческая почта</p>
                     </div>
                     <button onclick="closeAuthModal()" class="close-card-btn">&times;</button>
                 </div>
@@ -1993,8 +2192,8 @@ window.addEventListener('load', function() {{
 
                 <div id="auth-step-1">
                     <div class="form-group">
-                        <label>Корпоративная почта ЮФУ:</label>
-                        <input type="email" id="auth-email" placeholder="ivanov@sfedu.ru" class="auth-input">
+                        <label>Корпоративная почта:</label>
+                        <input type="email" id="auth-email" placeholder="ivanov@example.ru" class="auth-input">
                     </div>
                     <div class="form-group">
                         <label>ФИО студента:</label>
@@ -2030,7 +2229,7 @@ window.addEventListener('load', function() {{
         <div id="welcome-modal" class="welcome-overlay" style="display: none;">
             <div class="welcome-card">
                 <div class="welcome-badge">Географический атлас</div>
-                <h2 class="welcome-title">Ростовская область</h2>
+                <h2 class="welcome-title">{REGION_TITLE}</h2>
                 <p class="welcome-subtitle">Интерактивный картографический комплекс и система тестирования пространственных знаний</p>
                 
                 <div class="welcome-grid">
@@ -2038,7 +2237,7 @@ window.addEventListener('load', function() {{
                         <div class="feature-icon" style="background: #E8F5E9; color: #2E7D32;">🎓</div>
                         <div class="feature-content">
                             <h4>Режим обучения</h4>
-                            <p>Пошаговое изучение номенклатуры области: районов, русел рек и административных центров с автофокусом карты.</p>
+                            <p>Пошаговое изучение номенклатуры области: территорий, русел рек и административных центров с автофокусом карты.</p>
                         </div>
                     </div>
                     <div class="welcome-feature">
@@ -2052,14 +2251,14 @@ window.addEventListener('load', function() {{
                         <div class="feature-icon" style="background: #E0F7FA; color: #00796B;">🧩</div>
                         <div class="feature-content">
                             <h4>Топология и границы</h4>
-                            <p>Проверка знания смежности районов («Районы-соседи») и узнавания силуэтов муниципальных образований.</p>
+                            <p>Проверка знания смежности территорий («Районы-соседи») и узнавания силуэтов муниципальных образований.</p>
                         </div>
                     </div>
                     <div class="welcome-feature">
                         <div class="feature-icon" style="background: #EFF6FF; color: #1D4ED8;">🎯</div>
                         <div class="feature-content">
                             <h4>Поиск центров с точностью</h4>
-                            <p>Проверка топографической ориентации. Укажите кликом райцентр на карте и получите баллы в зависимости от погрешности.</p>
+                            <p>Проверка топографической ориентации. Укажите кликом центр на карте и получите баллы в зависимости от погрешности.</p>
                         </div>
                     </div>
                 </div>
@@ -2075,7 +2274,7 @@ window.addEventListener('load', function() {{
         </div>
 
         <style>
-        .leaflet-tooltip {
+        .leaflet-tooltip {{
             background-color: #ffffff !important;
             border: 1px solid #CBD5E1 !important;
             border-radius: 6px !important;
@@ -2087,22 +2286,22 @@ window.addEventListener('load', function() {{
             font-weight: 700 !important;
             color: #1E293B !important;
             line-height: 1.2 !important;
-        }
+        }}
 
-        .leaflet-tooltip table {
+        .leaflet-tooltip table {{
             margin: 0 !important;
             border-collapse: collapse !important;
-        }
-        .leaflet-tooltip table th {
+        }}
+        .leaflet-tooltip table th {{
             display: none !important;
-        }
-        .leaflet-tooltip table td {
+        }}
+        .leaflet-tooltip table td {{
             padding: 0 !important;
             margin: 0 !important;
             text-align: center !important;
-        }
+        }}
 
-        .top-nav-buttons {
+        .top-nav-buttons {{
             position: fixed;
             top: 14px;
             right: 330px;
@@ -2111,9 +2310,9 @@ window.addEventListener('load', function() {{
             align-items: center;
             gap: 8px;
             transition: opacity 0.25s ease, transform 0.25s ease;
-        }
+        }}
 
-        .nav-top-btn {
+        .nav-top-btn {{
             background: rgba(255, 255, 255, 0.96);
             backdrop-filter: blur(8px);
             border: 1px solid rgba(0, 0, 0, 0.08);
@@ -2128,26 +2327,26 @@ window.addEventListener('load', function() {{
             cursor: pointer;
             box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
             transition: all 0.2s ease;
-        }
-        .nav-top-btn:hover {
+        }}
+        .nav-top-btn:hover {{
             transform: translateY(-1px);
             background: #ffffff;
             box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-        }
+        }}
 
-        .admin-btn {
+        .admin-btn {{
             background: linear-gradient(135deg, #F0FDF4, #DCFCE7);
             border-color: #86EFAC;
             color: #166534;
-        }
+        }}
 
-        .leaderboard-top-btn {
+        .leaderboard-top-btn {{
             background: linear-gradient(135deg, #FFF7ED, #FFEDD5);
             border-color: #FDBA74;
             color: #C2410C;
-        }
+        }}
 
-        .student-badge {
+        .student-badge {{
             background: rgba(255, 255, 255, 0.96);
             backdrop-filter: blur(8px);
             border: 1px solid #BAE6FD;
@@ -2157,8 +2356,8 @@ window.addEventListener('load', function() {{
             align-items: center;
             gap: 8px;
             box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-        }
-        .badge-avatar {
+        }}
+        .badge-avatar {{
             width: 26px;
             height: 26px;
             background: #E0F2FE;
@@ -2167,11 +2366,11 @@ window.addEventListener('load', function() {{
             align-items: center;
             justify-content: center;
             font-size: 13px;
-        }
-        .badge-info { display: flex; flex-direction: column; text-align: left; }
-        .badge-name { font-size: 11.5px; font-weight: 700; color: #0369A1; line-height: 1.2; }
-        .badge-group { font-size: 10px; color: #64748B; }
-        .badge-logout {
+        }}
+        .badge-info {{ display: flex; flex-direction: column; text-align: left; }}
+        .badge-name {{ font-size: 11.5px; font-weight: 700; color: #0369A1; line-height: 1.2; }}
+        .badge-group {{ font-size: 10px; color: #64748B; }}
+        .badge-logout {{
             background: none;
             border: none;
             font-size: 16px;
@@ -2179,10 +2378,10 @@ window.addEventListener('load', function() {{
             cursor: pointer;
             margin-left: 4px;
             line-height: 1;
-        }
-        .badge-logout:hover { color: #EF4444; }
+        }}
+        .badge-logout:hover {{ color: #EF4444; }}
 
-        .help-circle-btn {
+        .help-circle-btn {{
             width: 38px;
             height: 38px;
             border-radius: 50%;
@@ -2199,23 +2398,23 @@ window.addEventListener('load', function() {{
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
-        }
-        .help-circle-btn:hover {
+        }}
+        .help-circle-btn:hover {{
             transform: scale(1.05);
             background: white;
             color: #10B981;
             box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
-        }
+        }}
 
-        .lb-main-tabs {
+        .lb-main-tabs {{
             display: flex;
             background: #F1F5F9;
             padding: 4px;
             border-radius: 12px;
             margin-bottom: 14px;
             gap: 4px;
-        }
-        .lb-tab-btn {
+        }}
+        .lb-tab-btn {{
             flex: 1;
             background: transparent;
             border: none;
@@ -2226,31 +2425,31 @@ window.addEventListener('load', function() {{
             border-radius: 9px;
             cursor: pointer;
             transition: all 0.2s ease;
-        }
-        .lb-tab-btn.active {
+        }}
+        .lb-tab-btn.active {{
             background: #ffffff;
             color: #0F172A;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
+        }}
 
-        .lb-content-fade {
+        .lb-content-fade {{
             transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
             opacity: 1;
             transform: translateY(0);
-        }
-        .fade-anim {
+        }}
+        .fade-anim {{
             opacity: 0;
             transform: translateY(6px);
-        }
+        }}
 
-        .lb-filters {
+        .lb-filters {{
             display: flex;
             gap: 6px;
             justify-content: center;
             margin-bottom: 12px;
             flex-wrap: wrap;
-        }
-        .lb-filter-chip {
+        }}
+        .lb-filter-chip {{
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
             padding: 5px 12px;
@@ -2260,27 +2459,27 @@ window.addEventListener('load', function() {{
             color: #475569;
             cursor: pointer;
             transition: all 0.15s ease;
-        }
-        .lb-filter-chip:hover { background: #F1F5F9; }
-        .lb-filter-chip.active {
+        }}
+        .lb-filter-chip:hover {{ background: #F1F5F9; }}
+        .lb-filter-chip.active {{
             background: #10B981;
             color: white;
             border-color: #10B981;
-        }
+        }}
 
-        .lb-table-wrap {
+        .lb-table-wrap {{
             max-height: 300px;
             overflow-y: auto;
             border-radius: 10px;
             border: 1px solid #E2E8F0;
-        }
-        .lb-styled-table {
+        }}
+        .lb-styled-table {{
             width: 100%;
             border-collapse: collapse;
             font-size: 12px;
             text-align: center;
-        }
-        .lb-styled-table th {
+        }}
+        .lb-styled-table th {{
             background: #F8FAFC;
             color: #475569;
             padding: 8px 6px;
@@ -2288,15 +2487,15 @@ window.addEventListener('load', function() {{
             position: sticky;
             top: 0;
             z-index: 2;
-        }
-        .lb-styled-table td {
+        }}
+        .lb-styled-table td {{
             padding: 7px 6px;
             border-bottom: 1px solid #F1F5F9;
             color: #334155;
-        }
-        .lb-styled-table tr:hover { background: #F8FAFC; }
+        }}
+        .lb-styled-table tr:hover {{ background: #F8FAFC; }}
 
-        .auth-card {
+        .auth-card {{
             background: #ffffff;
             border-radius: 18px;
             max-width: 440px;
@@ -2306,19 +2505,19 @@ window.addEventListener('load', function() {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             box-sizing: border-box;
             animation: welcomeIn 0.25s ease-out;
-        }
+        }}
 
-        .auth-header {
+        .auth-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #E2E8F0;
             padding-bottom: 12px;
             margin-bottom: 14px;
-        }
-        .auth-header h3 { margin: 0; font-size: 15px; color: #0F172A; }
+        }}
+        .auth-header h3 {{ margin: 0; font-size: 15px; color: #0F172A; }}
 
-        .auth-error {
+        .auth-error {{
             background: #FEE2E2;
             color: #B91C1C;
             padding: 8px 12px;
@@ -2326,20 +2525,20 @@ window.addEventListener('load', function() {{
             font-size: 12px;
             margin-bottom: 12px;
             border: 1px solid #FCA5A5;
-        }
+        }}
 
-        .form-group {
+        .form-group {{
             margin-bottom: 12px;
             text-align: left;
-        }
-        .form-group label {
+        }}
+        .form-group label {{
             display: block;
             font-size: 11.5px;
             color: #475569;
             font-weight: 600;
             margin-bottom: 4px;
-        }
-        .auth-input {
+        }}
+        .auth-input {{
             width: 100%;
             padding: 9px 12px;
             border-radius: 8px;
@@ -2348,17 +2547,17 @@ window.addEventListener('load', function() {{
             box-sizing: border-box;
             outline: none;
             transition: border-color 0.2s;
-        }
-        .auth-input:focus { border-color: #0284C7; }
-        .code-input {
+        }}
+        .auth-input:focus {{ border-color: #0284C7; }}
+        .code-input {{
             text-align: center;
             letter-spacing: 6px;
             font-size: 20px;
             font-weight: 800;
             color: #0284C7;
-        }
+        }}
 
-        .welcome-overlay {
+        .welcome-overlay {{
             position: fixed;
             inset: 0;
             background: rgba(15, 23, 42, 0.55);
@@ -2369,13 +2568,13 @@ window.addEventListener('load', function() {{
             justify-content: center;
             padding: 16px;
             transition: opacity 0.25s ease;
-        }
-        .welcome-overlay.fade-out {
+        }}
+        .welcome-overlay.fade-out {{
             opacity: 0;
             pointer-events: none;
-        }
+        }}
 
-        .welcome-card {
+        .welcome-card {{
             background: #ffffff;
             border-radius: 18px;
             max-width: 640px;
@@ -2388,14 +2587,14 @@ window.addEventListener('load', function() {{
             max-height: calc(100vh - 40px);
             overflow-y: auto;
             box-sizing: border-box;
-        }
+        }}
 
-        @keyframes welcomeIn {
-            from { opacity: 0; transform: scale(0.96) translateY(10px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
-        }
+        @keyframes welcomeIn {{
+            from {{ opacity: 0; transform: scale(0.96) translateY(10px); }}
+            to {{ opacity: 1; transform: scale(1) translateY(0); }}
+        }}
 
-        .welcome-badge {
+        .welcome-badge {{
             display: inline-block;
             background: #DCFCE7;
             color: #15803D;
@@ -2406,31 +2605,31 @@ window.addEventListener('load', function() {{
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 8px;
-        }
+        }}
 
-        .welcome-title {
+        .welcome-title {{
             margin: 0 0 6px 0;
             font-size: 24px;
             color: #0F172A;
             font-weight: 800;
             letter-spacing: -0.4px;
-        }
+        }}
 
-        .welcome-subtitle {
+        .welcome-subtitle {{
             margin: 0 0 22px 0;
             font-size: 13.5px;
             color: #64748B;
             line-height: 1.45;
-        }
+        }}
 
-        .welcome-grid {
+        .welcome-grid {{
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 14px;
             margin-bottom: 24px;
-        }
+        }}
 
-        .welcome-feature {
+        .welcome-feature {{
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
             border-radius: 12px;
@@ -2438,9 +2637,9 @@ window.addEventListener('load', function() {{
             display: flex;
             gap: 12px;
             align-items: flex-start;
-        }
+        }}
 
-        .feature-icon {
+        .feature-icon {{
             width: 36px;
             height: 36px;
             border-radius: 10px;
@@ -2449,23 +2648,23 @@ window.addEventListener('load', function() {{
             justify-content: center;
             font-size: 17px;
             flex-shrink: 0;
-        }
+        }}
 
-        .feature-content h4 {
+        .feature-content h4 {{
             margin: 0 0 3px 0;
             font-size: 13px;
             color: #1E293B;
             font-weight: 700;
-        }
+        }}
 
-        .feature-content p {
+        .feature-content p {{
             margin: 0;
             font-size: 11.5px;
             color: #64748B;
             line-height: 1.35;
-        }
+        }}
 
-        .welcome-footer {
+        .welcome-footer {{
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -2473,23 +2672,23 @@ window.addEventListener('load', function() {{
             border-top: 1px solid #E2E8F0;
             flex-wrap: wrap;
             gap: 12px;
-        }
+        }}
 
-        .welcome-checkbox {
+        .welcome-checkbox {{
             display: flex;
             align-items: center;
             font-size: 12px;
             color: #64748B;
             cursor: pointer;
             user-select: none;
-        }
+        }}
 
-        .welcome-checkbox input {
+        .welcome-checkbox input {{
             margin-right: 8px;
             cursor: pointer;
-        }
+        }}
 
-        .btn-start {
+        .btn-start {{
             background: linear-gradient(135deg, #10B981, #059669);
             color: white;
             border: none;
@@ -2500,13 +2699,13 @@ window.addEventListener('load', function() {{
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
             transition: all 0.2s ease;
-        }
-        .btn-start:hover {
+        }}
+        .btn-start:hover {{
             transform: translateY(-1px);
             box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
-        }
+        }}
 
-        .app-card {
+        .app-card {{
             position: fixed;
             top: 14px;
             right: 14px;
@@ -2523,18 +2722,18 @@ window.addEventListener('load', function() {{
             overflow-y: auto;
             box-sizing: border-box;
             transition: max-height 0.25s cubic-bezier(0.16, 1, 0.3, 1), padding 0.25s ease;
-        }
+        }}
 
-        .panel-header h3 {
+        .panel-header h3 {{
             margin: 0 0 12px 0;
             color: #1E293B;
             text-align: center;
             font-size: 15px;
             font-weight: 700;
             letter-spacing: -0.2px;
-        }
+        }}
 
-        .btn {
+        .btn {{
             display: block;
             width: 100%;
             border: none;
@@ -2548,21 +2747,21 @@ window.addEventListener('load', function() {{
             box-shadow: 0 2px 4px rgba(0,0,0,0.06);
             color: white;
             box-sizing: border-box;
-        }
+        }}
 
-        .btn:hover {
+        .btn:hover {{
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.12);
-        }
+        }}
 
-        .study-pick-grid {
+        .study-pick-grid {{
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 5px;
             margin-bottom: 8px;
-        }
+        }}
 
-        .btn-study-action {
+        .btn-study-action {{
             background: linear-gradient(135deg, #6366F1, #4F46E5);
             font-weight: 700;
             font-size: 11.5px;
@@ -2570,20 +2769,20 @@ window.addEventListener('load', function() {{
             margin-bottom: 0;
             box-shadow: 0 3px 8px rgba(99, 102, 241, 0.25);
             text-align: center;
-        }
-        .btn-study-action:hover {
+        }}
+        .btn-study-action:hover {{
             background: linear-gradient(135deg, #4F46E5, #4338CA);
-        }
+        }}
 
-        .study-category-bar {
+        .study-category-bar {{
             display: flex;
             background: #F1F5F9;
             padding: 3px;
             border-radius: 10px;
             margin-bottom: 10px;
             gap: 4px;
-        }
-        .study-cat-tab {
+        }}
+        .study-cat-tab {{
             flex: 1;
             border: none;
             background: transparent;
@@ -2594,23 +2793,23 @@ window.addEventListener('load', function() {{
             color: #64748B;
             cursor: pointer;
             transition: all 0.15s;
-        }
-        .study-cat-tab.active {
+        }}
+        .study-cat-tab.active {{
             background: white;
             color: #4F46E5;
             box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-        }
+        }}
 
-        .btn-district { background: linear-gradient(135deg, #10B981, #059669); }
-        .btn-neighbor { background: linear-gradient(135deg, #0D9488, #0F766E); }
-        .btn-river { background: linear-gradient(135deg, #0EA5E9, #0284C7); }
-        .btn-center { background: linear-gradient(135deg, #3B82F6, #2563EB); }
-        .btn-primary { background: #10B981; }
-        .btn-secondary { background: #64748B; }
-        .btn-warning { background: #F59E0B; }
-        .btn-danger { background: #EF4444; }
+        .btn-district {{ background: linear-gradient(135deg, #10B981, #059669); }}
+        .btn-neighbor {{ background: linear-gradient(135deg, #0D9488, #0F766E); }}
+        .btn-river {{ background: linear-gradient(135deg, #0EA5E9, #0284C7); }}
+        .btn-center {{ background: linear-gradient(135deg, #3B82F6, #2563EB); }}
+        .btn-primary {{ background: #10B981; }}
+        .btn-secondary {{ background: #64748B; }}
+        .btn-warning {{ background: #F59E0B; }}
+        .btn-danger {{ background: #EF4444; }}
 
-        .btn-confirm {
+        .btn-confirm {{
             display: block;
             width: 100%;
             border: none;
@@ -2625,14 +2824,14 @@ window.addEventListener('load', function() {{
             box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
             transition: all 0.2s ease;
             box-sizing: border-box;
-        }
-        .btn-confirm:hover {
+        }}
+        .btn-confirm:hover {{
             transform: translateY(-1px);
             box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
             background: linear-gradient(135deg, #1D4ED8, #1E40AF);
-        }
+        }}
 
-        .study-status-header {
+        .study-status-header {{
             background: linear-gradient(135deg, #6366F1, #4F46E5);
             color: white;
             padding: 9px 12px;
@@ -2641,18 +2840,18 @@ window.addEventListener('load', function() {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-        }
-        .study-status-header h4 { margin: 0; font-size: 13px; font-weight: 700; }
-        #study-counter-val { font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.25); padding: 2px 7px; border-radius: 6px; }
+        }}
+        .study-status-header h4 {{ margin: 0; font-size: 13px; font-weight: 700; }}
+        #study-counter-val {{ font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.25); padding: 2px 7px; border-radius: 6px; }}
 
-        .study-card-body {
+        .study-card-body {{
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
             border-radius: 10px;
             padding: 12px;
             margin-bottom: 12px;
-        }
-        .study-title {
+        }}
+        .study-title {{
             margin: 0 0 10px 0;
             font-size: 15px;
             color: #1E293B;
@@ -2660,36 +2859,36 @@ window.addEventListener('load', function() {{
             text-align: center;
             border-bottom: 1.5px solid #CBD5E1;
             padding-bottom: 6px;
-        }
-        .study-nav-grid {
+        }}
+        .study-nav-grid {{
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 6px;
-        }
+        }}
 
-        .timer-setting-box {
+        .timer-setting-box {{
             margin: 8px 0;
             padding: 8px 10px;
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
             border-radius: 8px;
-        }
+        }}
 
-        .checkbox-container {
+        .checkbox-container {{
             display: flex;
             align-items: center;
             font-size: 12px;
             cursor: pointer;
             color: #334155;
             user-select: none;
-        }
+        }}
 
-        .checkbox-container input {
+        .checkbox-container input {{
             margin-right: 8px;
             cursor: pointer;
-        }
+        }}
 
-        .hint-small {
+        .hint-small {{
             margin-top: 8px;
             padding: 8px;
             background: #F1F5F9;
@@ -2698,32 +2897,32 @@ window.addEventListener('load', function() {{
             color: #64748B;
             text-align: center;
             line-height: 1.3;
-        }
+        }}
 
-        .district-info-box {
+        .district-info-box {{
             display: none;
             margin-top: 10px;
             padding: 12px;
             background: #F0FDF4;
             border: 1px solid #BBF7D0;
             border-radius: 10px;
-        }
+        }}
 
-        .info-card-header {
+        .info-card-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1.5px solid #86EFAC;
             padding-bottom: 6px;
             margin-bottom: 8px;
-        }
+        }}
 
-        .info-card-header strong {
+        .info-card-header strong {{
             color: #166534;
             font-size: 13.5px;
-        }
+        }}
 
-        .close-card-btn {
+        .close-card-btn {{
             background: none;
             border: none;
             font-size: 18px;
@@ -2731,19 +2930,19 @@ window.addEventListener('load', function() {{
             color: #94A3B8;
             line-height: 1;
             padding: 0;
-        }
-        .close-card-btn:hover { color: #334155; }
+        }}
+        .close-card-btn:hover {{ color: #334155; }}
 
-        .info-row {
+        .info-row {{
             display: flex;
             justify-content: space-between;
             font-size: 12px;
             margin-bottom: 4px;
             color: #334155;
-        }
-        .info-row span { color: #64748B; }
+        }}
+        .info-row span {{ color: #64748B; }}
 
-        .neighbor-tag {
+        .neighbor-tag {{
             display: inline-block;
             background: #DCFCE7;
             color: #15803D;
@@ -2753,51 +2952,51 @@ window.addEventListener('load', function() {{
             margin: 2px;
             cursor: pointer;
             transition: background 0.15s;
-        }
-        .neighbor-tag:hover { background: #BBF7D0; }
+        }}
+        .neighbor-tag:hover {{ background: #BBF7D0; }}
 
-        .quiz-status-header {
+        .quiz-status-header {{
             background: linear-gradient(135deg, #10B981, #059669);
             color: white;
             padding: 9px 12px;
             border-radius: 8px;
             margin-bottom: 10px;
             text-align: center;
-        }
-        .quiz-status-header h4 { margin: 0; font-size: 13px; font-weight: 700; }
-        #quiz-progress { font-size: 11.5px; opacity: 0.9; margin-top: 2px; }
+        }}
+        .quiz-status-header h4 {{ margin: 0; font-size: 13px; font-weight: 700; }}
+        #quiz-progress {{ font-size: 11.5px; opacity: 0.9; margin-top: 2px; }}
 
-        .timer-flex {
+        .timer-flex {{
             display: flex;
             justify-content: space-between;
             font-size: 11.5px;
             color: #475569;
             margin-bottom: 4px;
-        }
-        .timer-track {
+        }}
+        .timer-track {{
             width: 100%;
             height: 6px;
             background: #E2E8F0;
             border-radius: 3px;
             overflow: hidden;
-        }
-        #timer-bar {
+        }}
+        #timer-bar {{
             width: 100%;
             height: 100%;
             background: #10B981;
             transition: width 1s linear, background 0.3s;
-        }
+        }}
 
-        .question-text {
+        .question-text {{
             font-size: 13px;
             font-weight: 700;
             color: #1E293B;
             margin: 0 0 10px 0;
             text-align: center;
             line-height: 1.4;
-        }
+        }}
 
-        .quiz-option {
+        .quiz-option {{
             display: block;
             width: 100%;
             padding: 9px 12px;
@@ -2811,30 +3010,30 @@ window.addEventListener('load', function() {{
             text-align: left;
             transition: all 0.15s ease;
             box-sizing: border-box;
-        }
-        .quiz-option:hover {
+        }}
+        .quiz-option:hover {{
             background: #F1F5F9;
             border-color: #CBD5E1;
-        }
-        .quiz-option.selected {
+        }}
+        .quiz-option.selected {{
             border-color: #3B82F6 !important;
             background: #EFF6FF !important;
             color: #1D4ED8 !important;
             font-weight: 600;
-        }
-        .quiz-option.correct {
+        }}
+        .quiz-option.correct {{
             background: #DCFCE7 !important;
             border-color: #86EFAC !important;
             color: #15803D !important;
             font-weight: 600;
-        }
-        .quiz-option.incorrect {
+        }}
+        .quiz-option.incorrect {{
             background: #FEE2E2 !important;
             border-color: #FCA5A5 !important;
             color: #B91C1C !important;
-        }
+        }}
 
-        .center-quiz-instruction {
+        .center-quiz-instruction {{
             padding: 10px;
             background: #F8FAFC;
             border: 1px dashed #CBD5E1;
@@ -2843,26 +3042,26 @@ window.addEventListener('load', function() {{
             text-align: center;
             font-size: 12px;
             line-height: 1.4;
-        }
-        .center-quiz-instruction span {
+        }}
+        .center-quiz-instruction span {{
             font-size: 11px;
             color: #64748B;
             display: block;
             margin-top: 4px;
-        }
+        }}
 
-        .feedback-box {
+        .feedback-box {{
             padding: 9px 12px;
             border-radius: 7px;
             margin-top: 10px;
             text-align: center;
             font-weight: 700;
             font-size: 12.5px;
-        }
-        .feedback-box.success { background: #DCFCE7; color: #15803D; border: 1px solid #86EFAC; }
-        .feedback-box.error { background: #FEE2E2; color: #B91C1C; border: 1px solid #FCA5A5; }
+        }}
+        .feedback-box.success {{ background: #DCFCE7; color: #15803D; border: 1px solid #86EFAC; }}
+        .feedback-box.error {{ background: #FEE2E2; color: #B91C1C; border: 1px solid #FCA5A5; }}
 
-        .hint-container {
+        .hint-container {{
             background: #FEF3C7;
             border: 1px solid #FDE68A;
             border-radius: 7px;
@@ -2871,9 +3070,9 @@ window.addEventListener('load', function() {{
             font-size: 11.5px;
             color: #92400E;
             line-height: 1.3;
-        }
+        }}
 
-        .score-card {
+        .score-card {{
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
             padding: 8px 12px;
@@ -2883,10 +3082,10 @@ window.addEventListener('load', function() {{
             font-weight: 700;
             font-size: 13px;
             color: #1E293B;
-        }
-        .score-sub { font-size: 11px; color: #64748B; font-weight: 500; margin-top: 2px; }
+        }}
+        .score-sub {{ font-size: 11px; color: #64748B; font-weight: 500; margin-top: 2px; }}
 
-        .mobile-collapse-trigger {
+        .mobile-collapse-trigger {{
             display: none;
             width: 100%;
             background: #F1F5F9;
@@ -2899,31 +3098,31 @@ window.addEventListener('load', function() {{
             cursor: pointer;
             margin-bottom: 8px;
             text-align: center;
-        }
+        }}
 
-        @media (max-width: 768px) {
-            .mobile-collapse-trigger {
+        @media (max-width: 768px) {{
+            .mobile-collapse-trigger {{
                 display: block;
-            }
+            }}
 
-            .top-nav-buttons {
+            .top-nav-buttons {{
                 top: 8px;
                 left: 8px;
                 right: 8px;
                 justify-content: flex-end;
                 gap: 5px;
-            }
-            .nav-top-btn, .help-circle-btn {
+            }}
+            .nav-top-btn, .help-circle-btn {{
                 padding: 6px 9px;
                 font-size: 11px;
                 height: 32px;
-            }
-            .help-circle-btn {
+            }}
+            .help-circle-btn {{
                 width: 32px;
                 font-size: 14px;
-            }
+            }}
 
-            .app-card {
+            .app-card {{
                 position: fixed;
                 top: auto;
                 bottom: 0;
@@ -2935,48 +3134,48 @@ window.addEventListener('load', function() {{
                 padding: 12px 14px;
                 z-index: 1001;
                 box-shadow: 0 -4px 22px rgba(0,0,0,0.18);
-            }
+            }}
 
-            .app-card.collapsed {
+            .app-card.collapsed {{
                 max-height: 46px;
                 overflow: hidden;
                 padding-top: 7px;
                 background: rgba(255, 255, 255, 0.95);
-            }
-            .app-card.collapsed > *:not(.mobile-collapse-trigger) {
+            }}
+            .app-card.collapsed > *:not(.mobile-collapse-trigger) {{
                 display: none !important;
-            }
+            }}
 
-            body.ui-collapsed #top-nav-panel {
+            body.ui-collapsed #top-nav-panel {{
                 opacity: 0 !important;
                 pointer-events: none !important;
                 transform: translateY(-20px);
-            }
-            body.ui-collapsed .leaflet-control-layers {
+            }}
+            body.ui-collapsed .leaflet-control-layers {{
                 opacity: 0 !important;
                 pointer-events: none !important;
-            }
+            }}
 
-            .leaflet-bottom.leaflet-left {
+            .leaflet-bottom.leaflet-left {{
                 bottom: 50vh !important;
                 margin-left: 6px !important;
-            }
-            .leaflet-control-layers {
+            }}
+            .leaflet-control-layers {{
                 border-radius: 8px !important;
                 background: rgba(255, 255, 255, 0.95) !important;
                 transition: opacity 0.25s ease;
-            }
+            }}
 
-            div[style*="top: 14px; left: 60px;"] {
+            div[style*="top: 14px; left: 60px;"] {{
                 display: none !important;
-            }
-        }
+            }}
+        }}
         </style>
         '''
         self.map.get_root().html.add_child(folium.Element(quiz_html))
 
     def add_legend(self):
-        legend_html = '''
+        legend_html = f'''
         <div style="
             position: fixed;
             top: 14px; left: 60px;
@@ -2995,11 +3194,11 @@ window.addEventListener('load', function() {{
             <h4 style="margin: 0 0 10px 0; color: #1E293B; font-size: 14px; font-weight: 700;">Легенда карты</h4>
             <div style="display: flex; align-items: center; margin-bottom: 6px;">
                 <i class="fa fa-star" style="color: #FF9800; font-size: 12px; margin-right: 8px;"></i>
-                <span>Райцентры</span>
+                <span>Центры</span>
             </div>
             <div style="display: flex; align-items: center; margin-bottom: 6px;">
                 <div style="width: 18px; height: 3px; background: #2E8B57; margin-right: 8px; border-radius: 2px;"></div>
-                <span>Границы районов</span>
+                <span>Границы</span>
             </div>
             <div style="display: flex; align-items: center; margin-bottom: 6px;">
                 <div style="width: 18px; height: 3px; background: #0284C7; margin-right: 8px; border-radius: 2px;"></div>
@@ -3010,7 +3209,7 @@ window.addEventListener('load', function() {{
                 <span>Водоемы</span>
             </div>
             <div style="border-top: 1px solid #E2E8F0; padding-top: 8px; font-size: 11px; color: #94A3B8; text-align: center;">
-                Ростовская область
+                {REGION_TITLE}
             </div>
         </div>
         '''
@@ -3023,7 +3222,7 @@ window.addEventListener('load', function() {{
     def add_fullscreen(self):
         plugins.Fullscreen().add_to(self.map)
 
-    def save(self, filename='rostov_quiz_map.html'):
+    def save(self, filename=OUTPUT_FILENAME):
         folium.LayerControl(collapsed=False, position='bottomleft').add_to(self.map)
         self.add_quiz_controls()
         self.add_legend()
@@ -3133,17 +3332,28 @@ window.addEventListener('load', function() {{
 
 def main():
     print("=" * 60)
-    print("ГЕНЕРАЦИЯ КАРТЫ С ПОЛНОЙ БАЗОЙ 55 РАЙОНОВ И ЧИСТЫМ ИНТЕРФЕЙСОМ")
+    print(f"ГЕНЕРАЦИЯ КАРТЫ С ПОЛНОЙ БАЗОЙ И ЧИСТЫМ ИНТЕРФЕЙСОМ ({REGION_TITLE})")
     print("=" * 60)
 
-    rostov_map = RostovMap()
-    rostov_map.add_water_bodies(os.path.join(BASE_PATH, SHAPEFILES['water_bodies']))
-    rostov_map.add_rivers(os.path.join(BASE_PATH, SHAPEFILES['rivers']))
-    rostov_map.add_districts(os.path.join(BASE_PATH, SHAPEFILES['districts']))
-    rostov_map.add_district_centers(os.path.join(BASE_PATH, SHAPEFILES['district_centers']))
+    atlas = InteractiveAtlas()
+    
+    water_bodies_path = os.path.join(BASE_PATH, SHAPEFILES['water_bodies'])
+    if os.path.exists(water_bodies_path):
+        atlas.add_water_bodies(water_bodies_path)
+        
+    rivers_path = os.path.join(BASE_PATH, SHAPEFILES['rivers'])
+    if os.path.exists(rivers_path):
+        atlas.add_rivers(rivers_path)
+        
+    districts_path = os.path.join(BASE_PATH, SHAPEFILES['districts'])
+    if os.path.exists(districts_path):
+        atlas.add_districts(districts_path)
+        
+    centers_path = os.path.join(BASE_PATH, SHAPEFILES['district_centers'])
+    if os.path.exists(centers_path):
+        atlas.add_district_centers(centers_path)
 
-    output_file = rostov_map.save('rostov_quiz_map.html')
-    print("\nКарта успешно обновлена!")
+    output_file = atlas.save()
     return output_file
 
 

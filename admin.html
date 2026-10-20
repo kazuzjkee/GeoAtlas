@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель преподавателя | Институт наук о Земле ЮФУ</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+    <style>
+        :root {
+            --primary: #0284C7;
+            --primary-dark: #0369A1;
+            --primary-sfedu: #003366;
+            --accent-exam: #7C3AED;
+            --accent-exam-bg: #F5F3FF;
+            --success: #10B981;
+            --success-bg: #DCFCE7;
+            --success-text: #166534;
+            --warning: #F59E0B;
+            --warning-bg: #FEF3C7;
+            --warning-text: #92400E;
+            --danger: #EF4444;
+            --danger-bg: #FEE2E2;
+            --danger-text: #991B1B;
+            --bg: #F8FAFC;
+            --surface: #FFFFFF;
+            --border: #E2E8F0;
+            --text-main: #0F172A;
+            --text-muted: #64748B;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text-main);
+            line-height: 1.5;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1380px;
+            margin: 0 auto;
+        }
+
+        /* Top Header */
+        .portal-header {
+            background: linear-gradient(135deg, #002B49 0%, #004B87 100%);
+            color: white;
+            padding: 20px 28px;
+            border-radius: 18px;
+            box-shadow: 0 10px 25px -5px rgba(0, 43, 73, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .header-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .sfedu-emblem {
+            width: 52px;
+            height: 52px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            border: 1.5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            flex-shrink: 0;
+        }
+
+        .portal-title {
+            font-size: 21px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+        }
+
+        .portal-subtitle {
+            font-size: 13px;
+            color: #BAE6FD;
+            font-weight: 500;
+            margin-top: 2px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 9px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+        }
+
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.18);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.28);
+            transform: translateY(-1px);
+        }
+
+        .btn-export {
+            background: #10B981;
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        .btn-export:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        /* KPI Cards Grid */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .kpi-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 18px 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+        }
+
+        .kpi-info-label {
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .kpi-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--text-main);
+            margin-top: 4px;
+            line-height: 1.1;
+        }
+
+        .kpi-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .kpi-icon-blue { background: #E0F2FE; color: #0284C7; }
+        .kpi-icon-purple { background: #EDE9FE; color: #7C3AED; }
+        .kpi-icon-green { background: #DCFCE7; color: #10B981; }
+        .kpi-icon-amber { background: #FEF3C7; color: #D97706; }
+        .kpi-icon-red { background: #FEE2E2; color: #DC2626; }
+
+        /* Groups Performance Block */
+        .section-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 16px 22px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            background: #FAFBFD;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .group-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 18px 22px;
+        }
+
+        .group-chip {
+            background: #F8FAFC;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px 14px;
+            min-width: 200px;
+            flex: 1;
+        }
+
+        .group-chip-name {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #0F172A;
+        }
+
+        .group-chip-stat {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin: 6px 0 4px 0;
+        }
+
+        .progress-bar-bg {
+            background: #E2E8F0;
+            border-radius: 999px;
+            height: 6px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #10B981, #059669);
+            transition: width 0.5s ease;
+        }
+
+        /* Filter Toolbar */
+        .toolbar {
+            padding: 16px 22px;
+            background: white;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1;
+            min-width: 260px;
+            max-width: 420px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 9px 14px 9px 36px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 13px;
+            outline: none;
+            background: #F8FAFC;
+            transition: all 0.2s;
+        }
+        .search-input:focus {
+            background: white;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+        .filter-pills {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .pill-btn {
+            background: #F1F5F9;
+            color: #475569;
+            border: 1px solid transparent;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pill-btn:hover {
+            background: #E2E8F0;
+            color: #1E293B;
+        }
+        .pill-btn.active {
+            background: #0284C7;
+            color: white;
+        }
+        .pill-btn.active-exam {
+            background: #7C3AED;
+            color: white;
+        }
+        .pill-btn.active-danger {
+            background: #DC2626;
+            color: white;
+        }
+
+        .pill-counter {
+            background: rgba(0, 0, 0, 0.12);
+            padding: 1px 6px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .pill-btn.active .pill-counter {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+        }
+
+        /* Journal Table */
+        .table-responsive {
+            overflow-x: auto;
+            width: 100%;
+        }
+
+        table.journal-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        table.journal-table th {
+            background: #FAFBFD;
+            color: #475569;
+            font-weight: 700;
+            padding: 12px 16px;
+            border-bottom: 2px solid var(--border);
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        table.journal-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #F1F5F9;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        table.journal-table tr:hover {
+            background: #F8FAFC;
+        }
+
+        /* Badges */
+        .mode-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 9px;
+            border-radius: 6px;
+            font-size: 11.5px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .mode-exam {
+            background: var(--accent-exam-bg);
+            color: var(--accent-exam);
+            border: 1px solid #DDD6FE;
+        }
+        .mode-quiz {
+            background: #E0F2FE;
+            color: #0369A1;
+            border: 1px solid #BAE6FD;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 7px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .status-green {
+            background: var(--success-bg);
+            color: var(--success-text);
+            border: 1px solid #86EFAC;
+        }
+        .status-yellow {
+            background: var(--warning-bg);
+            color: var(--warning-text);
+            border: 1px solid #FCD34D;
+        }
+        .status-red {
+            background: var(--danger-bg);
+            color: var(--danger-text);
+            border: 1px solid #FCA5A5;
+            animation: pulseAlert 2s infinite ease-in-out;
+        }
+
+        @keyframes pulseAlert {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* Token badge */
+        .token-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            background: #F1F5F9;
+            border: 1px solid #CBD5E1;
+            color: #1E293B;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11.5px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+
+        .token-copy-icon {
+            cursor: pointer;
+            color: #64748B;
+            transition: color 0.15s;
+            font-size: 13px;
+        }
+        .token-copy-icon:hover {
+            color: var(--primary);
+        }
+
+        /* Accuracy Badge */
+        .acc-pill {
+            display: inline-block;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        .acc-high { background: #DCFCE7; color: #166534; }
+        .acc-mid { background: #FEF3C7; color: #92400E; }
+        .acc-low { background: #FEE2E2; color: #991B1B; }
+
+        /* Empty state */
+        .empty-placeholder {
+            text-align: center;
+            padding: 48px 20px;
+            color: var(--text-muted);
+        }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #0F172A;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+            display: none;
+            z-index: 9999;
+            align-items: center;
+            gap: 8px;
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .portal-header { padding: 16px; }
+            .kpi-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <header class="portal-header">
+        <div class="header-title-wrap">
+            <div class="sfedu-emblem">🎓</div>
+            <div>
+                <h1 class="portal-title">Институт наук о Земле ЮФУ — Панель преподавателя</h1>
+                <p class="portal-subtitle">Электронная ведомость проверочных работ, контрольных срезов и мониторинг успеваемости</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <a href="/" class="btn btn-glass" title="Вернуться к интерактивному атласу">
+                <span>←</span> <span>На карту атласа</span>
+            </a>
+            <button onclick="location.reload()" class="btn btn-glass" title="Обновить журнал">
+                <span>🔄</span> <span>Обновить</span>
+            </button>
+            <a href="/admin/export-csv" class="btn btn-export" title="Скачать электронную ведомость в формате Excel/CSV">
+                <span>📥</span> <span>Экспорт ведомости CSV</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Top KPI Summary Cards -->
+    <section class="kpi-grid">
+        <div class="kpi-card">
+            <div>
+                <div class="kpi-info-label">Всего попыток сдачи</div>
+                <div class="kpi-value" id="kpi-total-tests">0</div>
+            </div>
+            <div class="kpi-icon kpi-icon-blue">📊</div>
+        </div>
+
+        <div class="kpi-card">
+            <div>
+                <div class="kpi-info-label">Контрольных срезов</div>
+                <div class="kpi-value" id="kpi-exam-tests" style="color: #7C3AED;">0</div>
+            </div>
+            <div class="kpi-icon kpi-icon-purple">📝</div>
+        </div>
+
+        <div class="kpi-card">
+            <div>
+                <div class="kpi-info-label">Средняя успеваемость</div>
+                <div class="kpi-value" id="kpi-avg-accuracy" style="color: #10B981;">0%</div>
+            </div>
+            <div class="kpi-icon kpi-icon-green">🎯</div>
+        </div>
+
+        <div class="kpi-card">
+            <div>
+                <div class="kpi-info-label">Нарушений фокуса</div>
+                <div class="kpi-value" id="kpi-total-violations">0</div>
+            </div>
+            <div class="kpi-icon kpi-icon-red" id="kpi-violations-icon">⚠️</div>
+        </div>
+    </section>
+
+    <!-- Academic Groups Card -->
+    <section class="section-card">
+        <div class="section-header">
+            <div class="section-title">
+                <span>👥</span> <span>Сводка по учебным группам ЮФУ</span>
+            </div>
+            <span style="font-size: 12px; color: var(--text-muted);" id="groups-count-label">0 групп</span>
+        </div>
+        <div class="group-chips" id="group-chips-container">
+            <div style="color: var(--text-muted); font-size: 13px;">Данные по группам загружаются...</div>
+        </div>
+    </section>
+
+    <!-- Main Results Journal Section -->
+    <section class="section-card">
+        <div class="section-header">
+            <div class="section-title">
+                <span>📋</span> <span>Журнал тестирований и контрольных работ</span>
+            </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="toolbar">
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" class="search-input" placeholder="Поиск по ФИО, группе, email, токену..." oninput="handleSearchChange()">
+            </div>
+
+            <div class="filter-pills">
+                <button class="pill-btn active" id="filter-all" onclick="setFilter('all')">
+                    Все <span class="pill-counter" id="cnt-all">0</span>
+                </button>
+                <button class="pill-btn" id="filter-exams" onclick="setFilter('exams')">
+                    📝 Контрольные <span class="pill-counter" id="cnt-exams">0</span>
+                </button>
+                <button class="pill-btn" id="filter-quizzes" onclick="setFilter('quizzes')">
+                    🎓 Викторины <span class="pill-counter" id="cnt-quizzes">0</span>
+                </button>
+                <button class="pill-btn" id="filter-violations" onclick="setFilter('violations')">
+                    ⚠️ С нарушениями <span class="pill-counter" id="cnt-violations">0</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Journal Table -->
+        <div class="table-responsive">
+            <table class="journal-table">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Студент</th>
+                        <th>Академическая группа</th>
+                        <th>Категория / Тема</th>
+                        <th>Режим</th>
+                        <th>Статус сдачи</th>
+                        <th>Цифровой токен сдачи</th>
+                        <th>Баллы</th>
+                        <th>Успешность</th>
+                        <th>Время</th>
+                    </tr>
+                </thead>
+                <tbody id="journalTableBody">
+                    <!-- Rows rendered dynamically via JS -->
+                </tbody>
+            </table>
+        </div>
+        <div id="emptyPlaceholder" class="empty-placeholder" style="display: none;">
+            <div style="font-size: 32px; margin-bottom: 8px;">📂</div>
+            <div style="font-size: 15px; font-weight: 700; color: #334155;">Результатов не найдено</div>
+            <div style="font-size: 13px;">Попробуйте сбросить поисковый запрос или переключить фильтры выше.</div>
+        </div>
+    </section>
+</div>
+
+<!-- Floating Toast Notification -->
+<div id="toast">
+    <span>📋</span> <span id="toast-text">Код скопирован</span>
+</div>
+
+<!-- Injected Server Results -->
+<script id="server-results-data" type="application/json">
+__SERVER_RESULTS_JSON__
+</script>
+
+<script>
+    let allResults = [];
+    let activeFilter = 'all';
+    let searchQuery = '';
+
+    function initData() {
+        try {
+            const raw = document.getElementById('server-results-data').textContent.trim();
+            if (raw && raw !== '__SERVER_RESULTS_JSON__') {
+                allResults = JSON.parse(raw);
+            }
+        } catch (e) {
+            console.error('Ошибка парсинга данных сервера:', e);
+            allResults = [];
+        }
+
+        // Sort descending by date (most recent first)
+        // If results is empty, try to check localStorage
+        if (allResults.length === 0) {
+            try {
+                const local = localStorage.getItem('rostovQuizResults');
+                if (local) {
+                    const parsed = JSON.parse(local);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        allResults = parsed.map(r => ({
+                            date: r.date,
+                            name: r.student || 'Анонимно',
+                            email: '-',
+                            group: r.group || 'Не указана',
+                            quiz_type: r.type,
+                            score: r.score,
+                            max_score: r.maxScore,
+                            accuracy: r.accuracy,
+                            time_spent: r.time_spent,
+                            is_exam: !!r.is_exam,
+                            exam_token: r.exam_token || '',
+                            violations: r.violations || 0,
+                            exam_status: r.exam_status || 'Сдано'
+                        }));
+                    }
+                }
+            } catch (e) {}
+        }
+
+        updateKPIs();
+        renderGroups();
+        renderTable();
+    }
+
+    function updateKPIs() {
+        const total = allResults.length;
+        const exams = allResults.filter(r => r.is_exam).length;
+        const quizzes = total - exams;
+        const totalViolations = allResults.reduce((sum, r) => sum + (parseInt(r.violations) || 0), 0);
+        const avgAcc = total > 0 ? Math.round(allResults.reduce((sum, r) => sum + (parseInt(r.accuracy) || 0), 0) / total) : 0;
+
+        const violatingTests = allResults.filter(r => (parseInt(r.violations) || 0) > 0 || (r.exam_status && r.exam_status.includes('Подозрение'))).length;
+
+        document.getElementById('kpi-total-tests').textContent = total;
+        document.getElementById('kpi-exam-tests').textContent = exams;
+        document.getElementById('kpi-avg-accuracy').textContent = `${avgAcc}%`;
+        document.getElementById('kpi-total-violations').textContent = totalViolations;
+
+        const vIcon = document.getElementById('kpi-violations-icon');
+        if (vIcon) {
+            if (totalViolations > 0) {
+                vIcon.className = 'kpi-icon kpi-icon-red';
+            } else {
+                vIcon.className = 'kpi-icon kpi-icon-green';
+                vIcon.textContent = '✓';
+            }
+        }
+
+        document.getElementById('cnt-all').textContent = total;
+        document.getElementById('cnt-exams').textContent = exams;
+        document.getElementById('cnt-quizzes').textContent = quizzes;
+        document.getElementById('cnt-violations').textContent = violatingTests;
+    }
+
+    function renderGroups() {
+        const container = document.getElementById('group-chips-container');
+        if (!container) return;
+
+        const groups = {};
+        allResults.forEach(r => {
+            const grp = r.group && r.group.trim() !== '-' ? r.group.trim() : 'Не указана';
+            if (!groups[grp]) {
+                groups[grp] = { count: 0, exams: 0, accuracies: [] };
+            }
+            groups[grp].count++;
+            if (r.is_exam) groups[grp].exams++;
+            groups[grp].accuracies.push(parseInt(r.accuracy) || 0);
+        });
+
+        const groupKeys = Object.keys(groups);
+        document.getElementById('groups-count-label').textContent = `${groupKeys.length} групп`;
+
+        if (groupKeys.length === 0) {
+            container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">Пока нет сданных работ по группам.</div>';
+            return;
+        }
+
+        let html = '';
+        groupKeys.forEach(grp => {
+            const data = groups[grp];
+            const avg = Math.round(data.accuracies.reduce((a, b) => a + b, 0) / data.accuracies.length);
+            html += `
+                <div class="group-chip">
+                    <div class="group-chip-name">${escapeHtml(grp)}</div>
+                    <div class="group-chip-stat">
+                        <span>Попыток: <b>${data.count}</b> (Экз: ${data.exams})</span>
+                        <span style="font-weight: 700; color: ${avg >= 65 ? '#10B981' : avg >= 40 ? '#D97706' : '#DC2626'}">${avg}%</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" style="width: ${avg}%;"></div>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    function setFilter(filterType) {
+        activeFilter = filterType;
+        ['all', 'exams', 'quizzes', 'violations'].forEach(f => {
+            const btn = document.getElementById(`filter-${f}`);
+            if (btn) {
+                btn.className = (f === filterType) ? (f === 'exams' ? 'pill-btn active-exam' : f === 'violations' ? 'pill-btn active-danger' : 'pill-btn active') : 'pill-btn';
+            }
+        });
+        renderTable();
+    }
+
+    function handleSearchChange() {
+        searchQuery = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+        renderTable();
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('journalTableBody');
+        const empty = document.getElementById('emptyPlaceholder');
+        if (!tbody) return;
+
+        // Apply filters
+        let filtered = allResults.slice().reverse(); // recent first
+
+        if (activeFilter === 'exams') {
+            filtered = filtered.filter(r => r.is_exam);
+        } else if (activeFilter === 'quizzes') {
+            filtered = filtered.filter(r => !r.is_exam);
+        } else if (activeFilter === 'violations') {
+            filtered = filtered.filter(r => (parseInt(r.violations) || 0) > 0 || (r.exam_status && (r.exam_status.includes('Подозрение') || r.exam_status.includes('замечанием') || r.exam_status.includes('Аннулировано'))));
+        }
+
+        if (searchQuery) {
+            filtered = filtered.filter(r => {
+                const searchStr = `${r.name || ''} ${r.group || ''} ${r.email || ''} ${r.quiz_type || ''} ${r.exam_token || ''} ${r.exam_status || ''}`.toLowerCase();
+                return searchStr.includes(searchQuery);
+            });
+        }
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '';
+            if (empty) empty.style.display = 'block';
+            return;
+        }
+
+        if (empty) empty.style.display = 'none';
+
+        let html = '';
+        filtered.forEach(r => {
+            const isExam = !!r.is_exam;
+            const violations = parseInt(r.violations) || 0;
+            const statusRaw = r.exam_status || (isExam ? 'Сдано' : 'Пройдено');
+
+            // Determine status badge style
+            let statusBadge = '';
+            if (statusRaw.includes('Подозрение') || statusRaw.includes('Аннулировано') || violations >= 2) {
+                statusBadge = `<span class="status-badge status-red" title="Зафиксировано ${violations} ухода со вкладки">🚨 Подозрение на списывание (${violations})</span>`;
+            } else if (statusRaw.includes('Время истекло')) {
+                statusBadge = `<span class="status-badge status-yellow">⏳ Время истекло</span>`;
+            } else if (statusRaw.includes('Завершено досрочно')) {
+                statusBadge = `<span class="status-badge status-yellow">⚠️ Завершено досрочно</span>`;
+            } else if (statusRaw.includes('замечанием') || violations === 1) {
+                statusBadge = `<span class="status-badge status-yellow" title="1 уход с вкладки">⚠️ С замечанием (1)</span>`;
+            } else {
+                statusBadge = `<span class="status-badge status-green">✓ ${escapeHtml(statusRaw)}</span>`;
+            }
+
+            // Mode badge
+            const modeBadge = isExam 
+                ? `<span class="mode-badge mode-exam">📝 Экзамен</span>` 
+                : `<span class="mode-badge mode-quiz">🎓 Викторина</span>`;
+
+            // Token
+            let tokenHtml = '<span style="color: #94A3B8;">—</span>';
+            if (r.exam_token && r.exam_token !== '-') {
+                tokenHtml = `
+                    <span class="token-badge">
+                        <span>${escapeHtml(r.exam_token)}</span>
+                        <span class="token-copy-icon" onclick="copyToken('${escapeHtml(r.exam_token)}')" title="Скопировать токен">📋</span>
+                    </span>
+                `;
+            }
+
+            // Accuracy styling
+            const acc = parseInt(r.accuracy) || 0;
+            const accClass = acc >= 65 ? 'acc-high' : acc >= 40 ? 'acc-mid' : 'acc-low';
+
+            html += `
+                <tr>
+                    <td style="color: var(--text-muted); font-size: 12px;">${escapeHtml(r.date || '')}</td>
+                    <td>
+                        <div style="font-weight: 700; color: #0F172A;">${escapeHtml(r.name || 'Анонимно')}</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(r.email || '')}</div>
+                    </td>
+                    <td><span style="font-weight: 600; color: #334155;">${escapeHtml(r.group || '—')}</span></td>
+                    <td><span style="color: #0369A1; font-weight: 600;">${escapeHtml(r.quiz_type || 'Общий')}</span></td>
+                    <td>${modeBadge}</td>
+                    <td>${statusBadge}</td>
+                    <td>${tokenHtml}</td>
+                    <td><b>${r.score}</b> / <span style="color: var(--text-muted);">${r.max_score}</span></td>
+                    <td><span class="acc-pill ${accClass}">${acc}%</span></td>
+                    <td style="color: var(--text-muted); font-size: 12px;">⏱ ${escapeHtml(r.time_spent || '—')}</td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function copyToken(token) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(token).then(() => {
+                showToast(`Токен ${token} скопирован!`);
+            }).catch(() => {
+                prompt('Скопируйте токен:', token);
+            });
+        } else {
+            prompt('Скопируйте токен:', token);
+        }
+    }
+
+    function showToast(text) {
+        const toast = document.getElementById('toast');
+        const toastText = document.getElementById('toast-text');
+        if (toast && toastText) {
+            toastText.textContent = text;
+            toast.style.display = 'flex';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 2500);
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    window.addEventListener('DOMContentLoaded', initData);
+</script>
+
+</body>
+</html>
