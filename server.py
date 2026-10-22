@@ -169,7 +169,7 @@ def export_csv(username: str = Depends(check_admin)):
             r.get('email', '-'),
             r.get('group', '-'),
             r.get('quiz_type', 'Общий'),
-            'Контрольная (Экзамен)' if is_exam else 'Обычная викторина',
+            'Контрольная (Экзамен)' if is_exam else ('Пазл (Сборка региона)' if 'Пазл' in str(r.get('quiz_type', '')) else 'Обычная викторина'),
             status_text,
             r.get('violations', 0),
             r.get('exam_token', '-'),

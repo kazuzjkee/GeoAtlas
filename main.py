@@ -1124,12 +1124,98 @@ class InteractiveAtlas:
         else:
             region_bounds = [[self.center[0]-1, self.center[1]-1], [self.center[0]+1, self.center[1]+1]]
 
+        puzzle_districts = []
+        region_outline_geojson = None
+
+        if self.districts_gdf is not None and not self.districts_gdf.empty:
+            import shapely.geometry
+            valid_districts = self.districts_gdf[self.districts_gdf.geometry.is_valid & ~self.districts_gdf.geometry.is_empty].copy()
+            valid_districts = valid_districts[valid_districts['display_name'] != ''].copy()
+
+            try:
+                if hasattr(valid_districts, 'union_all'):
+                    region_union = valid_districts.union_all()
+                else:
+                    region_union = valid_districts.unary_union
+                if region_union is not None and not region_union.is_empty:
+                    simplified_union = region_union.simplify(0.003, preserve_topology=True)
+                    region_outline_geojson = shapely.geometry.mapping(simplified_union)
+            except Exception:
+                region_outline_geojson = None
+
+            neighbor_lookup = {d['name']: d for d in neighbors_data}
+
+            # Топологический расчет соседства районов для режима конструктора
+            district_list = []
+            for idx, row in valid_districts.iterrows():
+                if row.geometry is not None and not row.geometry.is_empty:
+                    d_name = str(row.get('NL_NAME_2') or row.get('display_name') or row.get('NAME_2') or row.get('NAME_RU') or row.get('NAME') or f"Район {idx}")
+                    district_list.append((idx, row.geometry, d_name))
+
+            district_neighbors_map = {}
+            for idx, geom, d_name in district_list:
+                b_geom = geom.buffer(0.006)
+                n_ids = []
+                n_names = []
+                for other_idx, other_geom, other_name in district_list:
+                    if other_idx != idx and other_geom.intersects(b_geom):
+                        n_ids.append(f"dist_{other_idx}")
+                        n_names.append(other_name)
+                n_info = neighbor_lookup.get(d_name, {})
+                for ext_name in n_info.get('neighbors', []):
+                    if ext_name and ext_name not in n_names:
+                        n_names.append(str(ext_name))
+                district_neighbors_map[idx] = {
+                    "neighbor_ids": n_ids,
+                    "neighbor_names": n_names
+                }
+
+            for idx, row in valid_districts.iterrows():
+                geom = row.geometry
+                if geom is None or geom.is_empty:
+                    continue
+
+                d_name = str(row.get('NL_NAME_2') or row.get('display_name') or row.get('NAME_2') or row.get('NAME_RU') or row.get('NAME') or f"Район {idx}")
+
+                try:
+                    simp_geom = geom.simplify(0.002, preserve_topology=True)
+                    if simp_geom is None or simp_geom.is_empty:
+                        simp_geom = geom
+                except Exception:
+                    simp_geom = geom
+
+                geojson_geom = shapely.geometry.mapping(simp_geom)
+                centroid = geom.centroid
+                c_lat = round(float(centroid.y), 5)
+                c_lon = round(float(centroid.x), 5)
+                b = geom.bounds
+                bounds = [[round(b[1], 5), round(b[0], 5)], [round(b[3], 5), round(b[2], 5)]]
+
+                n_info = neighbor_lookup.get(d_name, {})
+                center_info = n_info.get('center', '')
+                area_info = n_info.get('area', 0)
+                n_map = district_neighbors_map.get(idx, {"neighbor_ids": [], "neighbor_names": []})
+
+                puzzle_districts.append({
+                    "id": f"dist_{idx}",
+                    "name": d_name,
+                    "center": center_info,
+                    "area": area_info,
+                    "centroid": [c_lat, c_lon],
+                    "bounds": bounds,
+                    "geojson": geojson_geom,
+                    "neighbor_ids": n_map["neighbor_ids"],
+                    "neighbors": n_map["neighbor_names"]
+                })
+
         dynamic_js = f'''
 const REGION_BOUNDS = {json.dumps(region_bounds)};
 const EMBEDDED_DISTRICTS = {json.dumps(districts_data, ensure_ascii=False)};
 const EMBEDDED_CENTERS = {json.dumps(centers_data, ensure_ascii=False)};
 const EMBEDDED_NEIGHBORS = {json.dumps(neighbors_data, ensure_ascii=False)};
 const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
+const EMBEDDED_PUZZLE_DATA = {json.dumps(puzzle_districts, ensure_ascii=False)};
+const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=False)};
 '''
 
         quiz_js_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'quiz.js')
@@ -1140,13 +1226,13 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
 
         quiz_html = f'''
         <div class="top-nav-buttons" id="top-nav-panel">
-            <button class="nav-top-btn" onclick="resetMapView()" style="background: linear-gradient(135deg, #EFF6FF, #DBEAFE); border-color: #93C5FD; color: #1D4ED8;" title="Показать всю карту">
+            <button class="btn btn-secondary nav-top-btn reset-map-btn" onclick="resetMapView()" title="Показать всю карту">
                 <span>🌍 Вся карта</span>
             </button>
-            <button class="nav-top-btn admin-btn" onclick="window.open('/admin', '_blank')" title="Панель преподавателя">
+            <button class="btn btn-secondary nav-top-btn admin-btn" onclick="window.open('/admin', '_blank')" title="Панель преподавателя">
                 <span>📊 Преподавателю</span>
             </button>
-            <button id="auth-top-btn" class="nav-top-btn auth-btn" onclick="goToMainAuth()" title="Авторизация через главное меню">
+            <button id="auth-top-btn" class="btn btn-primary nav-top-btn auth-btn" onclick="goToMainAuth()" title="Авторизация через главное меню">
                 <span>🎓 Войти через Главное меню</span>
             </button>
             <div id="student-profile-badge" class="student-badge" style="display: none;">
@@ -1157,16 +1243,20 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
                 </div>
                 <button onclick="logoutStudent()" class="badge-logout" title="Выйти">&times;</button>
             </div>
-            <button class="nav-top-btn leaderboard-top-btn" onclick="showLeaderboard()" title="Глобальная таблица лидеров и профиль">🏆 Топ лидеров</button>
-            <button class="help-circle-btn" onclick="openWelcomeModal()" title="О проекте и справка">?</button>
+            <button class="btn btn-secondary nav-top-btn leaderboard-top-btn" onclick="showLeaderboard()" title="Глобальная таблица лидеров и профиль">🏆 Топ лидеров</button>
+            <button class="btn btn-secondary help-circle-btn" onclick="openWelcomeModal()" title="О проекте и справка">?</button>
         </div>
 
         <div id="quiz-controls" class="app-card">
-            <button id="panel-collapse-btn" class="mobile-collapse-trigger" onclick="togglePanelCollapse()">
-                ▼ Свернуть панель к карте
-            </button>
-
             <div class="panel-header">
+                <div class="panel-header-bar">
+                    <div class="panel-institution-badge">ЮФУ • Институт наук о Земле</div>
+                    <button id="panel-collapse-btn" class="mobile-collapse-trigger btn-icon" onclick="togglePanelCollapse()" aria-label="Свернуть/развернуть панель" title="Свернуть панель к карте">
+                        <svg class="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                </div>
                 <h3>Учебно-картографический атлас</h3>
             </div>
 
@@ -1185,25 +1275,31 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
                     Проверка знаний (Викторины)
                 </div>
 
-                <button onclick="openExamModal()" class="btn btn-exam" id="btn-open-exam" style="background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%); color: white; font-weight: 800; border: none; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35); margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    <span>📝 Режим контрольной (Экзамен)</span>
-                </button>
+                <div class="btn-group-vertical">
+                    <button onclick="openExamModal()" class="btn btn-exam btn-block" id="btn-open-exam">
+                        <span>📝 Режим контрольной (Экзамен)</span>
+                    </button>
 
-                <button onclick="startDistrictQuiz()" class="btn btn-district">
-                    Узнать территорию по силуэту
-                </button>
+                    <button onclick="startPuzzleMode()" class="btn btn-puzzle btn-block" id="btn-start-puzzle">
+                        <span>🧩 Собрать регион (Пазл)</span>
+                    </button>
 
-                <button onclick="startNeighborQuiz()" class="btn btn-neighbor">
-                    Топология и соседи (тест)
-                </button>
+                    <button onclick="startDistrictQuiz()" class="btn btn-district btn-block">
+                        Узнать территорию по силуэту
+                    </button>
 
-                <button onclick="startRiverQuiz()" class="btn btn-river">
-                    Определить реку по руслу
-                </button>
+                    <button onclick="startNeighborQuiz()" class="btn btn-neighbor btn-block">
+                        Топология и соседи (тест)
+                    </button>
 
-                <button onclick="startCenterQuiz()" class="btn btn-center">
-                    Найти центр на карте
-                </button>
+                    <button onclick="startRiverQuiz()" class="btn btn-river btn-block">
+                        Определить реку по руслу
+                    </button>
+
+                    <button onclick="startCenterQuiz()" class="btn btn-center btn-block">
+                        Найти центр на карте
+                    </button>
+                </div>
 
                 <div class="timer-setting-box">
                     <label class="checkbox-container">
@@ -1240,12 +1336,84 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
                     <button onclick="prevStudyItem()" class="btn btn-secondary">← Назад</button>
                     <button onclick="nextStudyItem()" class="btn btn-primary">Вперед →</button>
                 </div>
-                <button onclick="randomStudyItem()" class="btn btn-secondary" style="margin-top: 6px;">
-                    🎲 Случайный объект
-                </button>
-                <button onclick="exitStudyMode()" class="btn btn-danger" style="margin-top: 8px;">
-                    Выйти в меню
-                </button>
+                <div class="btn-group-vertical" style="margin-top: 8px;">
+                    <button onclick="randomStudyItem()" class="btn btn-secondary btn-block">
+                        🎲 Случайный объект
+                    </button>
+                    <button onclick="exitStudyMode()" class="btn btn-danger btn-block">
+                        Выйти в меню
+                    </button>
+                </div>
+            </div>
+
+            <!-- РЕЖИМ ПАЗЛА (СОБЕРИ РЕГИОН) -->
+            <div id="puzzle-mode" style="display: none;">
+                <div class="puzzle-header">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <h4 style="margin: 0; font-size: 15px; color: #0F172A; display: flex; align-items: center; gap: 6px;">
+                            <span>🧩</span> <span>Собери регион</span>
+                        </h4>
+                        <span id="puzzle-timer-text" style="font-weight: 800; font-size: 13px; color: #0284C7;">⏱ 00:00</span>
+                    </div>
+
+                    <div class="puzzle-progress-wrap">
+                        <div style="display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+                            <span id="puzzle-progress-text">Собрано: 0 из 0</span>
+                            <span id="puzzle-percent-text">0%</span>
+                        </div>
+                        <div class="puzzle-progress-track">
+                            <div id="puzzle-progress-bar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; color: #64748B; margin-top: 6px; padding: 0 2px;">
+                        <span>Ошибок: <b id="puzzle-mistakes-text" style="color: #EF4444;">0</b></span>
+                        <span>Точность: <b id="puzzle-accuracy-text" style="color: #10B981;">100%</b></span>
+                    </div>
+                </div>
+
+                <div id="puzzle-active-piece-card" class="puzzle-target-card" draggable="true" title="Перетащите эту деталь на карту">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 10px; font-weight: 800; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Текущая деталь:
+                        </span>
+                        <span id="puzzle-active-badge" class="puzzle-type-badge">район</span>
+                    </div>
+
+                    <div id="puzzle-active-preview" class="puzzle-active-preview-wrap">
+                        <!-- SVG силуэт активного района -->
+                    </div>
+
+                    <div id="puzzle-active-name" style="font-size: 15px; font-weight: 800; color: #0F172A; margin-bottom: 2px; text-align: center;">
+                        Загрузка...
+                    </div>
+                    <div id="puzzle-active-info" style="font-size: 11px; color: #475569; margin-bottom: 6px; text-align: center;">
+                        Центр: — | Площадь: —
+                    </div>
+                    <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 5px 8px; font-size: 11px; color: #166534; font-weight: 600; text-align: center;">
+                        🖐️ Перетащите силуэт на карту или кликните по слоту
+                    </div>
+                </div>
+
+                <div style="margin: 10px 0 6px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 12px; font-weight: 700; color: #334155;">Силуэты деталей (выберите любую):</span>
+                    <button onclick="skipCurrentPuzzlePiece()" class="btn btn-secondary btn-sm btn-puzzle-skip" title="Пропустить и взять следующую деталь">
+                        ⏭ Другая
+                    </button>
+                </div>
+
+                <div id="puzzle-tray-container" class="puzzle-tray-list">
+                    <!-- Список районов в случайном порядке -->
+                </div>
+
+                <div class="btn-group-vertical" style="margin-top: 10px;">
+                    <button onclick="hintPuzzleSlot()" class="btn btn-warning btn-block" id="puzzle-hint-btn">
+                        💡 Подсказка (-1 попытка)
+                    </button>
+                    <button onclick="exitPuzzleMode()" class="btn btn-danger btn-block">
+                        Завершить сборку
+                    </button>
+                </div>
             </div>
 
             <!-- РЕЖИМ ТЕСТИРОВАНИЯ (QUIZ) -->
@@ -1281,13 +1449,14 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
                     <div class="score-sub" id="accuracy">Эффективность: 0%</div>
                 </div>
 
-                <button onclick="exitQuiz()" class="btn btn-danger">
-                    Завершить викторину
-                </button>
-
-                <button onclick="showHint()" id="hint-button" class="btn btn-warning" style="display: none; margin-top: 6px;">
-                    Подсказка
-                </button>
+                <div class="btn-group-vertical">
+                    <button onclick="showHint()" id="hint-button" class="btn btn-warning btn-block" style="display: none;">
+                        💡 Подсказка
+                    </button>
+                    <button onclick="exitQuiz()" class="btn btn-danger btn-block">
+                        Завершить викторину
+                    </button>
+                </div>
             </div>
 
             <!-- ЭКРАН РЕЗУЛЬТАТОВ -->
@@ -1295,9 +1464,11 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
                 <h4 style="color: #10B981; margin: 0 0 10px 0; font-size: 15px;">Результаты теста</h4>
                 <div id="results-content">
                 </div>
-                <button onclick="closeResultsAndReturnToMenu()" class="btn btn-primary" style="margin-top: 12px;">
-                    В главное меню
-                </button>
+                <div class="btn-group-vertical" style="margin-top: 12px;">
+                    <button onclick="closeResultsAndReturnToMenu()" class="btn btn-primary btn-block">
+                        В главное меню
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1343,7 +1514,7 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
                         <input type="checkbox" id="dont-show-welcome">
                         <span>Больше не показывать при входе</span>
                     </label>
-                    <button onclick="closeWelcomeModal()" class="btn-start">Начать работу с картой</button>
+                    <button onclick="closeWelcomeModal()" class="btn btn-primary btn-start">Начать работу с картой</button>
                 </div>
             </div>
         </div>
@@ -1404,45 +1575,431 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
 
                 <div style="display: flex; gap: 10px; margin-top: 18px;">
                     <button onclick="closeExamModal()" class="btn btn-secondary" style="flex: 1; padding: 10px;">Отмена</button>
-                    <button onclick="startExamFromModal()" class="btn-start" style="flex: 2; background: linear-gradient(135deg, #7C3AED, #4F46E5); padding: 10px; font-size: 14px;">🚀 Начать экзамен</button>
+                    <button onclick="startExamFromModal()" class="btn btn-exam" style="flex: 2; padding: 10px; font-size: 14px;">🚀 Начать экзамен</button>
                 </div>
             </div>
         </div>
 
         <!-- МОДАЛЬНОЕ ОКНО ПРЕДУПРЕЖДЕНИЯ ANTI-CHEAT -->
         <div id="anticheat-modal" class="welcome-overlay" style="display: none; z-index: 11000;">
-            <div class="welcome-card" style="max-width: 440px; border-top: 5px solid #EF4444; animation: shakeAnim 0.3s ease;">
-                <div style="font-size: 38px; text-align: center; margin-bottom: 6px;">🚨</div>
-                <h3 id="anticheat-title" style="margin: 0 0 10px 0; color: #991B1B; text-align: center; font-size: 18px;">ВНИМАНИЕ: Нарушение дисциплины!</h3>
+            <div class="welcome-card" style="max-width: 440px; border-top: 4px solid #DC2626; animation: shakeAnim 0.3s ease;">
+                <div style="font-size: 34px; text-align: center; margin-bottom: 6px;">🚨</div>
+                <h3 id="anticheat-title" style="margin: 0 0 10px 0; color: #991B1B; text-align: center; font-size: 17px;">ВНИМАНИЕ: Нарушение дисциплины!</h3>
                 <div id="anticheat-body" style="font-size: 13px; color: #334155; line-height: 1.5; margin-bottom: 18px; text-align: center;">
                     Вы переключились на другую вкладку браузера во время контрольной работы!
                 </div>
-                <button id="anticheat-confirm-btn" class="btn btn-danger" style="width: 100%; padding: 10px; font-size: 13px; font-weight: 700;">
+                <button id="anticheat-confirm-btn" class="btn btn-danger btn-block" style="padding: 10px; font-size: 13px;">
                     Я понимаю, вернуться к экзамену
                 </button>
             </div>
         </div>
 
+        <!-- МОДАЛЬНОЕ ОКНО ПОБЕДЫ В ПАЗЛЕ -->
+        <div id="puzzle-victory-modal" class="welcome-overlay" style="display: none; z-index: 10500;">
+            <div class="welcome-card" style="max-width: 480px; text-align: center; border-top: 4px solid #10B981;">
+                <div style="font-size: 38px; margin-bottom: 6px;">🏆</div>
+                <div class="welcome-badge" style="background: linear-gradient(135deg, #10B981, #059669); color: white;">Регион успешно собран!</div>
+                <h2 id="puzzle-victory-title" class="welcome-title" style="margin: 8px 0 4px 0; font-size: 20px;">Поздравляем с победой!</h2>
+                <p id="puzzle-victory-sub" class="welcome-subtitle" style="margin-bottom: 14px;">Вы восстановили географическую целостность региона</p>
+                
+                <div id="puzzle-victory-stats" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px; margin-bottom: 14px; text-align: left;">
+                    <!-- Динамическая сводка: Время, Районы, Ошибки, Точность -->
+                </div>
+
+                <div class="exam-token-card" style="margin: 10px 0 14px 0;">
+                    <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Цифровой токен сдачи (ЮФУ)
+                    </div>
+                    <div class="exam-token-val" id="puzzle-token-display">PUZZLE-XXXX-XXXX</div>
+                    <div>
+                        <button onclick="copyPuzzleToken()" class="btn btn-secondary btn-sm token-copy-btn">📋 Скопировать код</button>
+                    </div>
+                    <div style="font-size: 11px; color: #94A3B8; margin-top: 6px;">
+                        Отправьте преподавателю для фиксации практической работы
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="restartPuzzleMode()" class="btn btn-secondary" style="flex: 1; padding: 9px;">🔄 Заново</button>
+                    <button onclick="closePuzzleVictoryModal()" class="btn btn-primary" style="flex: 1; padding: 9px;">🗺️ К карте</button>
+                    <button onclick="exitPuzzleMode()" class="btn btn-danger" style="flex: 1; padding: 9px;">В меню</button>
+                </div>
+            </div>
+        </div>
+
         <style>
+        /* ========================================================
+           ЕДИНАЯ СИСТЕМА КНОПОК И ЭЛЕМЕНТОВ УПРАВЛЕНИЯ (DESIGN SYSTEM)
+           ======================================================== */
+        .btn {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.4;
+            letter-spacing: -0.1px;
+            padding: 9px 16px;
+            border-radius: 10px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            text-decoration: none;
+            user-select: none;
+            box-sizing: border-box;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            white-space: nowrap;
+        }}
+
+        .btn:hover {{
+            transform: translateY(-1.5px);
+            filter: brightness(1.04);
+        }}
+
+        .btn:active {{
+            transform: translateY(0.5px) scale(0.985);
+        }}
+
+        .btn:focus-visible {{
+            outline: 2px solid #2563EB;
+            outline-offset: 2px;
+        }}
+
+        /* 1. Главные действия (Основной приоритет) */
+        .btn-primary {{
+            background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+            color: #FFFFFF !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28) !important;
+        }}
+        .btn-primary:hover {{
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.38) !important;
+        }}
+
+        /* 2. Конструктивные действия и фичи (Пазл, Сохранение, Успех) */
+        .btn-success, .btn-puzzle {{
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;
+            color: #FFFFFF !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.28) !important;
+        }}
+        .btn-success:hover, .btn-puzzle:hover {{
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.38) !important;
+        }}
+
+        /* 3. Экзаменационный режим */
         .btn-exam {{
             background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%) !important;
             color: #FFFFFF !important;
-            font-weight: 800 !important;
-            letter-spacing: 0.2px;
-            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.32) !important;
-            border: 1px solid rgba(255, 255, 255, 0.2) !important;
-            margin-bottom: 10px !important;
-            transition: all 0.2s ease !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28) !important;
         }}
         .btn-exam:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45) !important;
-            filter: brightness(1.08);
+            box-shadow: 0 6px 20px rgba(124, 58, 237, 0.38) !important;
+        }}
+
+        /* 4. Второстепенные действия (Вспомогательный приоритет) */
+        .btn-secondary {{
+            background: #FFFFFF !important;
+            color: #334155 !important;
+            border: 1px solid #CBD5E1 !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+        }}
+        .btn-secondary:hover {{
+            background: #F8FAFC !important;
+            color: #0F172A !important;
+            border-color: #94A3B8 !important;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08) !important;
+        }}
+
+        /* 5. Деструктивные / Завершающие действия */
+        .btn-danger {{
+            background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%) !important;
+            color: #FFFFFF !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.25) !important;
+        }}
+        .btn-danger:hover {{
+            box-shadow: 0 6px 18px rgba(239, 68, 68, 0.35) !important;
+        }}
+
+        /* 6. Подсказки и предупреждения */
+        .btn-warning {{
+            background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%) !important;
+            color: #FFFFFF !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25) !important;
+        }}
+        .btn-warning:hover {{
+            box-shadow: 0 6px 18px rgba(245, 158, 11, 0.35) !important;
+        }}
+
+        /* Предметные кнопки викторин */
+        .btn-study-action {{
+            background: linear-gradient(135deg, #6366F1, #4F46E5) !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 3px 10px rgba(99, 102, 241, 0.25) !important;
+            padding: 8px 6px !important;
+            font-size: 11.5px !important;
+            border-radius: 8px !important;
+        }}
+        .btn-study-action:hover {{
+            box-shadow: 0 5px 14px rgba(99, 102, 241, 0.35) !important;
+        }}
+
+        .btn-district {{
+            background: linear-gradient(135deg, #0D9488, #0F766E) !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 3px 10px rgba(13, 148, 136, 0.25) !important;
+            border-radius: 10px !important;
+        }}
+        .btn-district:hover {{
+            box-shadow: 0 5px 14px rgba(13, 148, 136, 0.35) !important;
+        }}
+
+        .btn-neighbor {{
+            background: linear-gradient(135deg, #2563EB, #1D4ED8) !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25) !important;
+            border-radius: 10px !important;
+        }}
+        .btn-neighbor:hover {{
+            box-shadow: 0 5px 14px rgba(37, 99, 235, 0.35) !important;
+        }}
+
+        .btn-river {{
+            background: linear-gradient(135deg, #0EA5E9, #0284C7) !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 3px 10px rgba(14, 165, 233, 0.25) !important;
+            border-radius: 10px !important;
+        }}
+        .btn-river:hover {{
+            box-shadow: 0 5px 14px rgba(14, 165, 233, 0.35) !important;
+        }}
+
+        .btn-center {{
+            background: linear-gradient(135deg, #475569, #334155) !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 3px 10px rgba(51, 65, 85, 0.25) !important;
+            border-radius: 10px !important;
+        }}
+        .btn-center:hover {{
+            box-shadow: 0 5px 14px rgba(51, 65, 85, 0.35) !important;
+        }}
+
+        .btn-confirm {{
+            background: linear-gradient(135deg, #2563EB, #1D4ED8) !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28) !important;
+            border-radius: 10px !important;
+        }}
+
+        /* Модификаторы размеров */
+        .btn-sm {{
+            padding: 6px 12px !important;
+            font-size: 11.5px !important;
+            border-radius: 8px !important;
+        }}
+
+        .btn-block {{
+            width: 100% !important;
+            display: flex !important;
+        }}
+
+        /* Вертикальные контейнеры кнопок (монолитный Flexbox-блок с gap) */
+        .btn-group-vertical {{
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 8px !important;
+            width: 100% !important;
+        }}
+
+        .btn-group-vertical > .btn,
+        .btn-group-vertical > button {{
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 9px 14px !important;
+            font-size: 13px !important;
+            border-radius: 10px !important;
+            box-sizing: border-box !important;
+        }}
+
+        /* Кнопка-иконка / закрытие */
+        .btn-icon, .close-card-btn {{
+            width: 32px !important;
+            height: 32px !important;
+            padding: 0 !important;
+            border-radius: 8px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-size: 16px !important;
+            background: #F1F5F9 !important;
+            border: 1px solid #E2E8F0 !important;
+            color: #64748B !important;
+            cursor: pointer !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            line-height: 1 !important;
+        }}
+        .btn-icon:hover, .close-card-btn:hover {{
+            background: #E2E8F0 !important;
+            color: #0F172A !important;
+            transform: translateY(-1.5px) !important;
+        }}
+        .btn-icon:active, .close-card-btn:active {{
+            transform: translateY(0.5px) !important;
+        }}
+
+        /* Кнопки верхней панели */
+        .top-nav-buttons {{
+            position: fixed;
+            top: 14px;
+            right: 330px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }}
+
+        .nav-top-btn {{
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(8px) !important;
+            border: 1px solid #CBD5E1 !important;
+            border-radius: 10px !important;
+            padding: 8px 14px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            color: #1E293B !important;
+            cursor: pointer !important;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }}
+        .nav-top-btn:hover {{
+            transform: translateY(-1.5px) !important;
+            background: #FFFFFF !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+        }}
+        .nav-top-btn:active {{
+            transform: translateY(0.5px) scale(0.985) !important;
+        }}
+
+        .reset-map-btn {{
+            color: #1D4ED8 !important;
+            border-color: #BFDBFE !important;
+            background: #EFF6FF !important;
+        }}
+        .admin-btn {{
+            background: #F0FDF4 !important;
+            border-color: #BBF7D0 !important;
+            color: #166534 !important;
+        }}
+        .leaderboard-top-btn {{
+            background: #FFFBEB !important;
+            border-color: #FDE68A !important;
+            color: #B45309 !important;
+        }}
+
+        .help-circle-btn {{
+            width: 36px !important;
+            height: 36px !important;
+            border-radius: 10px !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(8px) !important;
+            border: 1px solid #CBD5E1 !important;
+            color: #334155 !important;
+            font-size: 15px !important;
+            font-weight: 700 !important;
+            cursor: pointer !important;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-shrink: 0 !important;
+        }}
+        .help-circle-btn:hover {{
+            background: #FFFFFF !important;
+            border-color: #94A3B8 !important;
+            color: #0F172A !important;
+            transform: translateY(-1.5px) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+        }}
+        .help-circle-btn:active {{
+            transform: translateY(0.5px) !important;
+        }}
+
+        .student-badge {{
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            border: 1px solid #CBD5E1;
+            border-radius: 10px;
+            padding: 4px 10px 4px 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+        }}
+        .badge-avatar {{
+            width: 26px;
+            height: 26px;
+            background: #EFF6FF;
+            border: 1px solid #BFDBFE;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+        }}
+        .badge-info {{ display: flex; flex-direction: column; text-align: left; }}
+        .badge-name {{ font-size: 11.5px; font-weight: 700; color: #1E293B; line-height: 1.2; }}
+        .badge-group {{ font-size: 10px; color: #64748B; }}
+        .badge-logout {{
+            background: none;
+            border: none;
+            font-size: 16px;
+            color: #94A3B8;
+            cursor: pointer;
+            margin-left: 4px;
+            line-height: 1;
+            border-radius: 4px;
+            transition: all 0.15s ease;
+        }}
+        .badge-logout:hover {{ color: #DC2626; background: #FEE2E2; }}
+
+        .panel-header-bar {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            margin-bottom: 6px;
+        }}
+
+        .panel-institution-badge {{
+            font-size: 10px;
+            font-weight: 800;
+            color: #1E40AF;
+            background: #EFF6FF;
+            border: 1px solid #BFDBFE;
+            padding: 3px 8px;
+            border-radius: 6px;
+            display: inline-block;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: left;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }}
 
         .exam-select {{
             width: 100%;
-            padding: 9px 12px;
+            padding: 8px 12px;
             border-radius: 8px;
             border: 1px solid #CBD5E1;
             font-size: 13px;
@@ -1450,13 +2007,14 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             color: #1E293B;
             background: #FFFFFF;
             font-family: inherit;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
             outline: none;
             cursor: pointer;
+            transition: border-color 0.15s;
         }}
         .exam-select:focus {{
-            border-color: #7C3AED;
-            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+            border-color: #2563EB;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
         }}
 
         .exam-rules-box {{
@@ -1469,54 +2027,241 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
 
         .exam-token-card {{
             background: #F8FAFC;
-            border: 2px dashed #CBD5E1;
-            border-radius: 12px;
+            border: 1.5px dashed #CBD5E1;
+            border-radius: 10px;
             padding: 14px;
-            margin: 14px 0 10px 0;
+            margin: 12px 0 10px 0;
             text-align: center;
         }}
         .exam-token-val {{
-            font-family: 'JetBrains Mono', monospace, Consolas, Courier;
-            font-size: 20px;
-            font-weight: 800;
-            letter-spacing: 2px;
-            color: #4F46E5;
-            background: #EEF2FF;
-            padding: 8px 12px;
+            font-family: 'JetBrains Mono', Consolas, monospace;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            color: #1E1B4B;
+            background: #FFFFFF;
+            padding: 6px 14px;
             border-radius: 8px;
-            border: 1px solid #C7D2FE;
+            border: 1px solid #CBD5E1;
             display: inline-block;
             margin: 8px 0;
             user-select: all;
-        }}
-        .token-copy-btn {{
-            background: #FFFFFF;
-            border: 1px solid #CBD5E1;
-            border-radius: 6px;
-            padding: 5px 12px;
-            font-size: 11.5px;
-            font-weight: 700;
-            color: #334155;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }}
-        .token-copy-btn:hover {{
-            background: #F1F5F9;
-            color: #0F172A;
-            border-color: #94A3B8;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }}
 
         @keyframes shakeAnim {{
             0%, 100% {{ transform: translateX(0); }}
-            20%, 60% {{ transform: translateX(-6px); }}
-            40%, 80% {{ transform: translateX(6px); }}
+            20%, 60% {{ transform: translateX(-5px); }}
+            40%, 80% {{ transform: translateX(5px); }}
+        }}
+
+        .puzzle-header {{
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+        }}
+
+        .puzzle-progress-track {{
+            width: 100%;
+            height: 7px;
+            background: #E2E8F0;
+            border-radius: 4px;
+            overflow: hidden;
+        }}
+
+        #puzzle-progress-bar {{
+            height: 100%;
+            background: linear-gradient(90deg, #10B981, #059669);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }}
+
+        .puzzle-target-card {{
+            background: #FFFFFF;
+            border: 1.5px solid #2563EB;
+            border-radius: 12px;
+            padding: 10px 12px;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.1);
+            transition: all 0.2s ease;
+            cursor: grab;
+        }}
+
+        .puzzle-target-card:active, .puzzle-target-card.dragging {{
+            cursor: grabbing;
+            opacity: 0.6;
+            border-style: dashed;
+        }}
+
+        .puzzle-target-card.shake {{
+            animation: shakeAnim 0.35s ease;
+            border-color: #DC2626 !important;
+        }}
+
+        .puzzle-active-preview-wrap {{
+            width: 100%;
+            height: 90px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 6px;
+            background: #F8FAFC;
+            border: 1.5px dashed #CBD5E1;
+            border-radius: 8px;
+            padding: 4px;
+            box-sizing: border-box;
+        }}
+
+        .puzzle-type-badge {{
+            font-size: 9px;
+            font-weight: 700;
+            color: #1D4ED8;
+            background: #EFF6FF;
+            border: 1px solid #BFDBFE;
+            padding: 2px 7px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }}
+
+        .puzzle-tray-list {{
+            max-height: 290px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 8px;
+            padding: 8px;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+        }}
+
+        .puzzle-silhouette-card {{
+            background: #FFFFFF;
+            border: 1px solid #CBD5E1;
+            border-radius: 9px;
+            padding: 6px 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            cursor: grab;
+            user-select: none;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            position: relative;
+            height: 102px;
+            box-sizing: border-box;
+        }}
+
+        .puzzle-silhouette-card:hover {{
+            border-color: #2563EB;
+            background: #F8FAFC;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.16);
+        }}
+
+        .puzzle-silhouette-card.active {{
+            border-color: #1D4ED8;
+            background: #EFF6FF;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+            transform: translateY(-1px);
+        }}
+
+        .puzzle-silhouette-card.dragging {{
+            opacity: 0.35;
+            cursor: grabbing;
+            transform: scale(0.96);
+            border-style: dashed;
+        }}
+
+        .puzzle-card-badge {{
+            font-size: 8px;
+            font-weight: 700;
+            color: #64748B;
+            background: #F1F5F9;
+            padding: 1px 5px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            max-width: 90%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: center;
+        }}
+
+        .puzzle-card-badge.neighbor-ready {{
+            background: #DCFCE7 !important;
+            color: #166534 !important;
+            border: 1px solid #86EFAC;
+            font-weight: 800;
+        }}
+
+        .puzzle-silhouette-card.neighbor-connectable {{
+            border-color: #86EFAC;
+            background: #F0FDF4;
+        }}
+
+        .puzzle-silhouette-card.neighbor-connectable:hover {{
+            border-color: #059669;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2);
+        }}
+
+        .puzzle-silhouette-card.active .puzzle-card-badge {{
+            background: #DBEAFE;
+            color: #1E40AF;
+        }}
+
+        .puzzle-card-svg-wrap {{
+            width: 100%;
+            height: 54px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .puzzle-svg-shape {{
+            width: 100%;
+            height: 100%;
+            display: block;
+            filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.05));
+            transition: transform 0.15s ease;
+        }}
+
+        .puzzle-silhouette-card:hover .puzzle-svg-shape {{
+            transform: scale(1.05);
+        }}
+
+        .puzzle-card-caption {{
+            font-size: 9.5px;
+            font-weight: 700;
+            color: #334155;
+            text-align: center;
+            line-height: 1.15;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 96%;
+        }}
+
+        .puzzle-drop-active {{
+            box-shadow: inset 0 0 0 3px #10B981, 0 0 20px rgba(16, 185, 129, 0.35) !important;
+            transition: box-shadow 0.2s ease;
+        }}
+
+        .puzzle-placed-label {{
+            background: transparent;
+            border: none;
+            text-align: center;
         }}
         .leaflet-tooltip {{
-            background-color: #ffffff !important;
+            background-color: #FFFFFF !important;
             border: 1px solid #CBD5E1 !important;
-            border-radius: 6px !important;
-            padding: 4px 8px !important;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+            border-radius: 8px !important;
+            padding: 5px 10px !important;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1) !important;
             white-space: nowrap !important;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
             font-size: 12px !important;
@@ -1538,135 +2283,32 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             text-align: center !important;
         }}
 
-        .top-nav-buttons {{
-            position: fixed;
-            top: 14px;
-            right: 330px;
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: opacity 0.25s ease, transform 0.25s ease;
-        }}
-
-        .nav-top-btn {{
-            background: rgba(255, 255, 255, 0.96);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            border-radius: 20px;
-            padding: 8px 14px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 12px;
-            font-weight: 700;
-            color: #1E293B;
-            cursor: pointer;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-            transition: all 0.2s ease;
-        }}
-        .nav-top-btn:hover {{
-            transform: translateY(-1px);
-            background: #ffffff;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-        }}
-
-        .admin-btn {{
-            background: linear-gradient(135deg, #F0FDF4, #DCFCE7);
-            border-color: #86EFAC;
-            color: #166534;
-        }}
-
-        .leaderboard-top-btn {{
-            background: linear-gradient(135deg, #FFF7ED, #FFEDD5);
-            border-color: #FDBA74;
-            color: #C2410C;
-        }}
-
-        .student-badge {{
-            background: rgba(255, 255, 255, 0.96);
-            backdrop-filter: blur(8px);
-            border: 1px solid #BAE6FD;
-            border-radius: 20px;
-            padding: 4px 10px 4px 6px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-        }}
-        .badge-avatar {{
-            width: 26px;
-            height: 26px;
-            background: #E0F2FE;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-        }}
-        .badge-info {{ display: flex; flex-direction: column; text-align: left; }}
-        .badge-name {{ font-size: 11.5px; font-weight: 700; color: #0369A1; line-height: 1.2; }}
-        .badge-group {{ font-size: 10px; color: #64748B; }}
-        .badge-logout {{
-            background: none;
-            border: none;
-            font-size: 16px;
-            color: #94A3B8;
-            cursor: pointer;
-            margin-left: 4px;
-            line-height: 1;
-        }}
-        .badge-logout:hover {{ color: #EF4444; }}
-
-        .help-circle-btn {{
-            width: 38px;
-            height: 38px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(6px);
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            color: #334155;
-            font-size: 17px;
-            font-weight: 700;
-            cursor: pointer;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }}
-        .help-circle-btn:hover {{
-            transform: scale(1.05);
-            background: white;
-            color: #10B981;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
-        }}
-
         .lb-main-tabs {{
             display: flex;
             background: #F1F5F9;
-            padding: 4px;
-            border-radius: 12px;
-            margin-bottom: 14px;
+            padding: 3px;
+            border-radius: 8px;
+            margin-bottom: 12px;
             gap: 4px;
+            border: 1px solid #E2E8F0;
         }}
         .lb-tab-btn {{
             flex: 1;
             background: transparent;
             border: none;
-            padding: 8px 12px;
-            font-size: 12.5px;
+            padding: 7px 10px;
+            font-size: 12px;
             font-weight: 700;
             color: #64748B;
-            border-radius: 9px;
+            border-radius: 6px;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.15s ease;
         }}
         .lb-tab-btn.active {{
-            background: #ffffff;
+            background: #FFFFFF;
             color: #0F172A;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            border: 1px solid #CBD5E1;
         }}
 
         .lb-content-fade {{
@@ -1676,7 +2318,7 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
         }}
         .fade-anim {{
             opacity: 0;
-            transform: translateY(6px);
+            transform: translateY(4px);
         }}
 
         .lb-filters {{
@@ -1687,28 +2329,28 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             flex-wrap: wrap;
         }}
         .lb-filter-chip {{
-            background: #F8FAFC;
-            border: 1px solid #E2E8F0;
+            background: #FFFFFF;
+            border: 1px solid #CBD5E1;
             padding: 5px 12px;
-            border-radius: 16px;
+            border-radius: 8px;
             font-size: 11.5px;
             font-weight: 600;
             color: #475569;
             cursor: pointer;
             transition: all 0.15s ease;
         }}
-        .lb-filter-chip:hover {{ background: #F1F5F9; }}
+        .lb-filter-chip:hover {{ background: #F8FAFC; }}
         .lb-filter-chip.active {{
-            background: #10B981;
+            background: #2563EB;
             color: white;
-            border-color: #10B981;
+            border-color: #2563EB;
         }}
 
         .lb-table-wrap {{
             max-height: 300px;
             overflow-y: auto;
-            border-radius: 10px;
-            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            border: 1px solid #CBD5E1;
         }}
         .lb-styled-table {{
             width: 100%;
@@ -1733,12 +2375,13 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
         .lb-styled-table tr:hover {{ background: #F8FAFC; }}
 
         .auth-card {{
-            background: #ffffff;
-            border-radius: 18px;
+            background: #FFFFFF;
+            border-radius: 14px;
             max-width: 440px;
             width: 100%;
             padding: 24px 26px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+            border: 1px solid #CBD5E1;
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             box-sizing: border-box;
             animation: welcomeIn 0.25s ease-out;
@@ -1777,21 +2420,22 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
         }}
         .auth-input {{
             width: 100%;
-            padding: 9px 12px;
+            padding: 8px 12px;
             border-radius: 8px;
-            border: 1.5px solid #CBD5E1;
+            border: 1px solid #CBD5E1;
             font-size: 13px;
             box-sizing: border-box;
             outline: none;
-            transition: border-color 0.2s;
+            transition: border-color 0.15s;
         }}
-        .auth-input:focus {{ border-color: #0284C7; }}
+        .auth-input:focus {{ border-color: #2563EB; }}
         .code-input {{
             text-align: center;
-            letter-spacing: 6px;
-            font-size: 20px;
-            font-weight: 800;
-            color: #0284C7;
+            letter-spacing: 5px;
+            font-size: 19px;
+            font-weight: 700;
+            color: #1D4ED8;
+            font-family: 'JetBrains Mono', Consolas, monospace;
         }}
 
         .welcome-overlay {{
@@ -1804,7 +2448,7 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             align-items: center;
             justify-content: center;
             padding: 16px;
-            transition: opacity 0.25s ease;
+            transition: opacity 0.2s ease;
         }}
         .welcome-overlay.fade-out {{
             opacity: 0;
@@ -1812,32 +2456,34 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
         }}
 
         .welcome-card {{
-            background: #ffffff;
-            border-radius: 18px;
+            background: #FFFFFF;
+            border-radius: 16px;
             max-width: 640px;
             width: 100%;
-            padding: 28px 32px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+            padding: 26px 30px;
+            border: 1px solid #CBD5E1;
+            box-shadow: 0 16px 44px rgba(15, 23, 42, 0.18);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             position: relative;
-            animation: welcomeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: welcomeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             max-height: calc(100vh - 40px);
             overflow-y: auto;
             box-sizing: border-box;
         }}
 
         @keyframes welcomeIn {{
-            from {{ opacity: 0; transform: scale(0.96) translateY(10px); }}
+            from {{ opacity: 0; transform: scale(0.97) translateY(8px); }}
             to {{ opacity: 1; transform: scale(1) translateY(0); }}
         }}
 
         .welcome-badge {{
             display: inline-block;
-            background: #DCFCE7;
-            color: #15803D;
-            padding: 4px 10px;
+            background: #EFF6FF;
+            color: #1D4ED8;
+            border: 1px solid #BFDBFE;
+            padding: 3px 10px;
             border-radius: 20px;
-            font-size: 11.5px;
+            font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -1846,14 +2492,14 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
 
         .welcome-title {{
             margin: 0 0 6px 0;
-            font-size: 24px;
+            font-size: 23px;
             color: #0F172A;
             font-weight: 800;
-            letter-spacing: -0.4px;
+            letter-spacing: -0.3px;
         }}
 
         .welcome-subtitle {{
-            margin: 0 0 22px 0;
+            margin: 0 0 20px 0;
             font-size: 13.5px;
             color: #64748B;
             line-height: 1.45;
@@ -1862,14 +2508,14 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
         .welcome-grid {{
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 14px;
-            margin-bottom: 24px;
+            gap: 12px;
+            margin-bottom: 22px;
         }}
 
         .welcome-feature {{
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
-            border-radius: 12px;
+            border-radius: 10px;
             padding: 12px 14px;
             display: flex;
             gap: 12px;
@@ -1879,12 +2525,13 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
         .feature-icon {{
             width: 36px;
             height: 36px;
-            border-radius: 10px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 17px;
+            font-size: 16px;
             flex-shrink: 0;
+            border: 1px solid rgba(0, 0, 0, 0.06);
         }}
 
         .feature-content h4 {{
@@ -1925,99 +2572,52 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             cursor: pointer;
         }}
 
-        .btn-start {{
-            background: linear-gradient(135deg, #10B981, #059669);
-            color: white;
-            border: none;
-            padding: 10px 22px;
-            border-radius: 10px;
-            font-size: 13.5px;
-            font-weight: 700;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-            transition: all 0.2s ease;
-        }}
-        .btn-start:hover {{
-            transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
-        }}
-
         .app-card {{
             position: fixed;
             top: 14px;
             right: 14px;
             z-index: 1000;
-            background: rgba(255, 255, 255, 0.98);
-            backdrop-filter: blur(8px);
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(12px);
             padding: 16px;
             border-radius: 14px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.1), 0 4px 12px -2px rgba(15, 23, 42, 0.05);
             width: 300px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            border: 1px solid rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(226, 232, 240, 0.9);
             max-height: calc(100vh - 28px);
             overflow-y: auto;
             box-sizing: border-box;
             transition: max-height 0.25s cubic-bezier(0.16, 1, 0.3, 1), padding 0.25s ease;
         }}
 
-        .panel-header h3 {{
-            margin: 0 0 12px 0;
-            color: #1E293B;
+        .panel-header {{
             text-align: center;
+            margin-bottom: 12px;
+        }}
+        .panel-header h3 {{
+            margin: 0;
+            color: #0F172A;
             font-size: 15px;
             font-weight: 700;
             letter-spacing: -0.2px;
         }}
 
-        .btn {{
-            display: block;
-            width: 100%;
-            border: none;
-            padding: 9px 12px;
-            margin-bottom: 7px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
-            color: white;
-            box-sizing: border-box;
-        }}
-
-        .btn:hover {{
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.12);
-        }}
-
         .study-pick-grid {{
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            gap: 5px;
+            gap: 6px;
             margin-bottom: 8px;
-        }}
-
-        .btn-study-action {{
-            background: linear-gradient(135deg, #6366F1, #4F46E5);
-            font-weight: 700;
-            font-size: 11.5px;
-            padding: 9px 4px;
-            margin-bottom: 0;
-            box-shadow: 0 3px 8px rgba(99, 102, 241, 0.25);
-            text-align: center;
-        }}
-        .btn-study-action:hover {{
-            background: linear-gradient(135deg, #4F46E5, #4338CA);
         }}
 
         .study-category-bar {{
             display: flex;
             background: #F1F5F9;
             padding: 3px;
-            border-radius: 10px;
+            border-radius: 8px;
             margin-bottom: 10px;
             gap: 4px;
+            border: 1px solid #E2E8F0;
         }}
         .study-cat-tab {{
             flex: 1;
@@ -2026,75 +2626,46 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             font-size: 11px;
             font-weight: 700;
             padding: 6px 2px;
-            border-radius: 7px;
+            border-radius: 6px;
             color: #64748B;
             cursor: pointer;
             transition: all 0.15s;
         }}
         .study-cat-tab.active {{
-            background: white;
-            color: #4F46E5;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-        }}
-
-        .btn-district {{ background: linear-gradient(135deg, #10B981, #059669); }}
-        .btn-neighbor {{ background: linear-gradient(135deg, #0D9488, #0F766E); }}
-        .btn-river {{ background: linear-gradient(135deg, #0EA5E9, #0284C7); }}
-        .btn-center {{ background: linear-gradient(135deg, #3B82F6, #2563EB); }}
-        .btn-primary {{ background: #10B981; }}
-        .btn-secondary {{ background: #64748B; }}
-        .btn-warning {{ background: #F59E0B; }}
-        .btn-danger {{ background: #EF4444; }}
-
-        .btn-confirm {{
-            display: block;
-            width: 100%;
-            border: none;
-            padding: 10px 14px;
-            margin-top: 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #2563EB, #1D4ED8);
-            color: #ffffff;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-            transition: all 0.2s ease;
-            box-sizing: border-box;
-        }}
-        .btn-confirm:hover {{
-            transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
-            background: linear-gradient(135deg, #1D4ED8, #1E40AF);
+            background: #FFFFFF;
+            color: #2563EB;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            border: 1px solid #CBD5E1;
         }}
 
         .study-status-header {{
             background: linear-gradient(135deg, #6366F1, #4F46E5);
             color: white;
-            padding: 9px 12px;
+            padding: 8px 12px;
             border-radius: 8px;
             margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
         }}
-        .study-status-header h4 {{ margin: 0; font-size: 13px; font-weight: 700; }}
-        #study-counter-val {{ font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.25); padding: 2px 7px; border-radius: 6px; }}
+        .study-status-header h4 {{ margin: 0; font-size: 12.5px; font-weight: 700; }}
+        #study-counter-val {{ font-size: 11.5px; font-weight: 700; background: rgba(255,255,255,0.22); padding: 2px 7px; border-radius: 6px; }}
 
         .study-card-body {{
             background: #F8FAFC;
             border: 1px solid #E2E8F0;
             border-radius: 10px;
             padding: 12px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }}
         .study-title {{
-            margin: 0 0 10px 0;
-            font-size: 15px;
+            margin: 0 0 8px 0;
+            font-size: 14.5px;
             color: #1E293B;
             font-weight: 800;
             text-align: center;
-            border-bottom: 1.5px solid #CBD5E1;
+            border-bottom: 1px solid #CBD5E1;
             padding-bottom: 6px;
         }}
         .study-nav-grid {{
@@ -2149,9 +2720,9 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1.5px solid #86EFAC;
-            padding-bottom: 6px;
-            margin-bottom: 8px;
+            border-bottom: 1px solid #86EFAC;
+            padding-bottom: 5px;
+            margin-bottom: 7px;
         }}
 
         .info-card-header strong {{
@@ -2159,21 +2730,10 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             font-size: 13.5px;
         }}
 
-        .close-card-btn {{
-            background: none;
-            border: none;
-            font-size: 18px;
-            cursor: pointer;
-            color: #94A3B8;
-            line-height: 1;
-            padding: 0;
-        }}
-        .close-card-btn:hover {{ color: #334155; }}
-
         .info-row {{
             display: flex;
             justify-content: space-between;
-            font-size: 12px;
+            font-size: 11.5px;
             margin-bottom: 4px;
             color: #334155;
         }}
@@ -2183,25 +2743,30 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             display: inline-block;
             background: #DCFCE7;
             color: #15803D;
-            padding: 3px 7px;
-            border-radius: 5px;
+            padding: 3px 8px;
+            border-radius: 6px;
             font-size: 11px;
             margin: 2px;
             cursor: pointer;
-            transition: background 0.15s;
+            border: 1px solid #BBF7D0;
+            transition: all 0.15s ease;
         }}
-        .neighbor-tag:hover {{ background: #BBF7D0; }}
+        .neighbor-tag:hover {{
+            background: #BBF7D0;
+            transform: translateY(-1px);
+        }}
 
         .quiz-status-header {{
-            background: linear-gradient(135deg, #10B981, #059669);
+            background: linear-gradient(135deg, #2563EB, #1D4ED8);
             color: white;
             padding: 9px 12px;
             border-radius: 8px;
             margin-bottom: 10px;
             text-align: center;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
         }}
         .quiz-status-header h4 {{ margin: 0; font-size: 13px; font-weight: 700; }}
-        #quiz-progress {{ font-size: 11.5px; opacity: 0.9; margin-top: 2px; }}
+        #quiz-progress {{ font-size: 11px; opacity: 0.9; margin-top: 2px; }}
 
         .timer-flex {{
             display: flex;
@@ -2237,26 +2802,29 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             display: block;
             width: 100%;
             padding: 9px 12px;
-            margin: 5px 0;
+            margin: 6px 0;
             background: #F8FAFC;
-            border: 1.5px solid #E2E8F0;
-            border-radius: 8px;
+            border: 1px solid #CBD5E1;
+            border-radius: 10px;
             cursor: pointer;
             font-size: 12.5px;
             color: #334155;
             text-align: left;
-            transition: all 0.15s ease;
+            transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
             box-sizing: border-box;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
         }}
         .quiz-option:hover {{
             background: #F1F5F9;
-            border-color: #CBD5E1;
+            border-color: #94A3B8;
+            transform: translateY(-1px);
         }}
         .quiz-option.selected {{
-            border-color: #3B82F6 !important;
+            border-color: #2563EB !important;
             background: #EFF6FF !important;
             color: #1D4ED8 !important;
             font-weight: 600;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
         }}
         .quiz-option.correct {{
             background: #DCFCE7 !important;
@@ -2277,7 +2845,7 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             border-radius: 8px;
             color: #475569;
             text-align: center;
-            font-size: 12px;
+            font-size: 11.5px;
             line-height: 1.4;
         }}
         .center-quiz-instruction span {{
@@ -2289,7 +2857,7 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
 
         .feedback-box {{
             padding: 9px 12px;
-            border-radius: 7px;
+            border-radius: 8px;
             margin-top: 10px;
             text-align: center;
             font-weight: 700;
@@ -2301,7 +2869,7 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
         .hint-container {{
             background: #FEF3C7;
             border: 1px solid #FDE68A;
-            border-radius: 7px;
+            border-radius: 8px;
             padding: 8px 10px;
             margin-top: 8px;
             font-size: 11.5px;
@@ -2311,35 +2879,49 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
 
         .score-card {{
             background: #F8FAFC;
-            border: 1px solid #E2E8F0;
+            border: 1px solid #CBD5E1;
             padding: 8px 12px;
             border-radius: 8px;
             margin: 10px 0;
             text-align: center;
             font-weight: 700;
-            font-size: 13px;
+            font-size: 12.5px;
             color: #1E293B;
         }}
         .score-sub {{ font-size: 11px; color: #64748B; font-weight: 500; margin-top: 2px; }}
 
+        /* Кнопка сворачивания панели: по умолчанию (десктоп >= 1024px) полностью скрыта */
         .mobile-collapse-trigger {{
-            display: none;
-            width: 100%;
-            background: #F1F5F9;
-            border: 1px solid #CBD5E1;
-            padding: 7px 10px;
-            font-size: 12px;
-            font-weight: 700;
-            color: #334155;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-bottom: 8px;
-            text-align: center;
+            display: none !important;
         }}
 
-        @media (max-width: 768px) {{
+        /* АДАПТИВНОСТЬ: мобильные экраны и планшеты (< 1024px) */
+        @media (max-width: 1023.98px) {{
             .mobile-collapse-trigger {{
-                display: block;
+                display: inline-flex !important;
+                width: 28px !important;
+                height: 28px !important;
+                min-width: 28px !important;
+                border-radius: 8px !important;
+                background: #F1F5F9 !important;
+                border: 1px solid #CBD5E1 !important;
+                color: #475569 !important;
+                padding: 0 !important;
+                align-items: center !important;
+                justify-content: center !important;
+                cursor: pointer !important;
+                transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+                line-height: 1 !important;
+            }}
+            .mobile-collapse-trigger:hover {{
+                background: #E2E8F0 !important;
+                color: #0F172A !important;
+            }}
+            .mobile-collapse-trigger .collapse-icon {{
+                transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            }}
+            .app-card.collapsed .mobile-collapse-trigger .collapse-icon {{
+                transform: rotate(180deg);
             }}
 
             .top-nav-buttons {{
@@ -2350,13 +2932,13 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
                 gap: 5px;
             }}
             .nav-top-btn, .help-circle-btn {{
-                padding: 6px 9px;
-                font-size: 11px;
-                height: 32px;
+                padding: 6px 9px !important;
+                font-size: 11px !important;
+                height: 32px !important;
             }}
             .help-circle-btn {{
-                width: 32px;
-                font-size: 14px;
+                width: 32px !important;
+                font-size: 14px !important;
             }}
 
             .app-card {{
@@ -2366,21 +2948,27 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
                 right: 0;
                 left: 0;
                 width: 100%;
-                border-radius: 18px 18px 0 0;
-                max-height: 48vh;
+                border-radius: 16px 16px 0 0;
+                max-height: 52vh;
                 padding: 12px 14px;
                 z-index: 1001;
-                box-shadow: 0 -4px 22px rgba(0,0,0,0.18);
+                box-shadow: 0 -6px 24px rgba(0,0,0,0.14);
             }}
 
             .app-card.collapsed {{
-                max-height: 46px;
+                max-height: 52px;
                 overflow: hidden;
-                padding-top: 7px;
-                background: rgba(255, 255, 255, 0.95);
+                padding: 10px 14px;
+                background: rgba(255, 255, 255, 0.98);
             }}
-            .app-card.collapsed > *:not(.mobile-collapse-trigger) {{
+            .app-card.collapsed > *:not(.panel-header) {{
                 display: none !important;
+            }}
+            .app-card.collapsed .panel-header h3 {{
+                display: none;
+            }}
+            .app-card.collapsed .panel-header {{
+                margin-bottom: 0;
             }}
 
             body.ui-collapsed #top-nav-panel {{
@@ -2394,17 +2982,36 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             }}
 
             .leaflet-bottom.leaflet-left {{
-                bottom: 50vh !important;
+                bottom: 54vh !important;
                 margin-left: 6px !important;
             }}
             .leaflet-control-layers {{
                 border-radius: 8px !important;
-                background: rgba(255, 255, 255, 0.95) !important;
+                background: rgba(255, 255, 255, 0.98) !important;
+                border: 1px solid #CBD5E1 !important;
                 transition: opacity 0.25s ease;
             }}
 
             div[style*="top: 14px; left: 60px;"] {{
                 display: none !important;
+            }}
+        }}
+
+        /* ДЕСКТОП: >= 1024px — панель строго зафиксирована в развернутом виде, кнопка скрыта */
+        @media (min-width: 1024px) {{
+            .mobile-collapse-trigger {{
+                display: none !important;
+            }}
+            .app-card {{
+                position: fixed !important;
+                top: 14px !important;
+                right: 14px !important;
+                width: 300px !important;
+                max-height: calc(100vh - 28px) !important;
+                overflow-y: auto !important;
+            }}
+            .app-card.collapsed > * {{
+                display: block !important;
             }}
         }}
         </style>
@@ -2671,18 +3278,17 @@ const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
             position: fixed;
             top: 14px; left: 60px;
             width: 220px;
-            background: rgba(255, 255, 255, 0.98);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(0,0,0,0.08);
+            background: #FFFFFF;
+            border: 1px solid #CBD5E1;
             z-index: 9999;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             font-size: 13px;
-            padding: 14px;
-            border-radius: 12px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            padding: 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             color: #334155;
         ">
-            <h4 style="margin: 0 0 10px 0; color: #1E293B; font-size: 14px; font-weight: 700;">Легенда карты</h4>
+            <h4 style="margin: 0 0 10px 0; color: #1E293B; font-size: 13.5px; font-weight: 700;">Легенда карты</h4>
             <div style="display: flex; align-items: center; margin-bottom: 6px;">
                 <i class="fa fa-star" style="color: #FF9800; font-size: 12px; margin-right: 8px;"></i>
                 <span>Центры</span>

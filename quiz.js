@@ -36,6 +36,34 @@ let studyQueue = [];
 let studyIndex = 0;
 let studyCenterMarker = null;
 
+// ==================== РЕЖИМ ПАЗЛА (СОБЕРИ РЕГИОН) ====================
+let isPuzzleMode = false;
+let puzzleDistricts = [];
+let puzzleUnplacedQueue = [];
+let puzzleActivePiece = null;
+let puzzleAnchorDistrict = null;
+let puzzlePlacedDistricts = new Set();
+let puzzleSlotLayers = {};
+let puzzlePlacedMarkers = [];
+let puzzleOutlineLayer = null;
+let puzzleTimerInterval = null;
+let puzzleStartTime = 0;
+let puzzleMistakes = 0;
+let puzzleHintsUsed = 0;
+let puzzleToken = '';
+let puzzleSavedLayerStyles = [];
+
+const PUZZLE_PALETTE = [
+    '#38BDF8', '#34D399', '#F472B6', '#A78BFA',
+    '#FBBF24', '#60A5FA', '#4ADE80', '#FB7185',
+    '#818CF8', '#F59E0B', '#2DD4BF', '#C084FC',
+    '#E879F9', '#22C55E', '#38BDF8', '#FB923C'
+];
+
+function getPuzzlePieceColor(index) {
+    return PUZZLE_PALETTE[index % PUZZLE_PALETTE.length];
+}
+
 function getMapObject() {
     if (window._leaflet_map) return window._leaflet_map;
     for (let key in window) {
@@ -58,12 +86,11 @@ function togglePanelCollapse() {
     const panel = document.getElementById('quiz-controls');
     const btn = document.getElementById('panel-collapse-btn');
     if (panel) {
-        panel.classList.toggle('collapsed');
-        document.body.classList.toggle('ui-collapsed');
-        if (panel.classList.contains('collapsed')) {
-            if (btn) btn.innerHTML = '▲ Развернуть панель атласа';
-        } else {
-            if (btn) btn.innerHTML = '▼ Свернуть панель к карте';
+        const isCollapsed = panel.classList.toggle('collapsed');
+        document.body.classList.toggle('ui-collapsed', isCollapsed);
+        if (btn) {
+            btn.setAttribute('aria-expanded', (!isCollapsed).toString());
+            btn.title = isCollapsed ? 'Развернуть панель атласа' : 'Свернуть панель к карте';
         }
     }
 }
@@ -823,6 +850,1225 @@ function generateExamQuestions(category, count) {
 
     totalQuestions = quizData.length;
     showQuestion();
+}
+
+/* ==================== ИНТЕРАКТИВНЫЙ ПАЗЛ: СОБЕРИ РЕГИОН ==================== */
+function startPuzzleMode() {
+    if (typeof EMBEDDED_PUZZLE_DATA === 'undefined' || !EMBEDDED_PUZZLE_DATA || EMBEDDED_PUZZLE_DATA.length < 2) {
+        alert('Для запуска режима пазла требуются пространственные данные районов этого региона.');
+        return;
+    }
+
+    const map = getMapObject();
+    if (!map) {
+        alert('Карта еще не инициализирована. Подождите пару секунд.');
+        return;
+    }
+
+    currentQuiz = 'puzzle';
+    isPuzzleMode = true;
+
+    // Сброс прочих режимов и таймеров
+    stopTimer();
+    stopGlobalExamTimer();
+    disableAntiCheat();
+    closeInfoCard();
+    clearMarkers();
+    resetActiveHighlight(false);
+    disablePopups();
+
+    // Скрываем другие экраны интерфейса, показываем панель пазла
+    document.getElementById('normal-mode').style.display = 'none';
+    document.getElementById('study-mode').style.display = 'none';
+    document.getElementById('quiz-mode').style.display = 'none';
+    document.getElementById('results-mode').style.display = 'none';
+    const pm = document.getElementById('puzzle-mode');
+    if (pm) pm.style.display = 'block';
+
+    // Скрываем базовые тайлы карты, оставляем чистый контурный холст
+    setBasemapVisible(false);
+
+    // Скрываем все штатные слои карты, сохраняя их параметры
+    hideAllMapLayersForPuzzle();
+
+    // Инициализация структуры данных пазла
+    puzzleDistricts = JSON.parse(JSON.stringify(EMBEDDED_PUZZLE_DATA));
+    puzzlePlacedDistricts = new Set();
+    puzzleSlotLayers = {};
+    puzzlePlacedMarkers = [];
+    puzzleMistakes = 0;
+    puzzleHintsUsed = 0;
+    puzzleStartTime = Date.now();
+
+    // 1. Отрисовка чистого внешнего контура региона (БЕЗ внутренних сеток и пунктиров)
+    renderPuzzleRegionOutline();
+
+    // 2. Выбор случайного стартового опорного района
+    const randomIndex = Math.floor(Math.random() * puzzleDistricts.length);
+    puzzleAnchorDistrict = puzzleDistricts[randomIndex];
+
+    // 3. Фиксируем стартовый опорный район на карте с самого начала
+    placeDistrictOnMap(puzzleAnchorDistrict, true);
+
+    // 4. Все остальные районы отправляем в пул боковой панели
+    puzzleUnplacedQueue = puzzleDistricts.filter(d => d.id !== puzzleAnchorDistrict.id);
+    shuffleArray(puzzleUnplacedQueue);
+
+    // 5. Выбираем первую деталь (предпочтительно соседа опорного района)
+    const initialNeighbor = puzzleUnplacedQueue.find(d => isDistrictNeighborOfPlaced(d)) || puzzleUnplacedQueue[0];
+    if (initialNeighbor) {
+        setActivePuzzlePiece(initialNeighbor);
+    }
+
+    // 6. Отрисовка списка районов в трее (с реальными силуэтами и топологической индикацией)
+    renderPuzzleTray();
+
+    // 7. Обновление шкалы и счетчиков
+    updatePuzzleProgress();
+
+    // Центрирование карты по границам региона
+    resetMapView();
+
+    // Запуск таймера
+    startPuzzleTimer();
+
+    // Настройка зоны сброса Drag-and-Drop на контейнере карты
+    setupPuzzleDropZone();
+
+    showPuzzleFloatingMessage(`⭐ Опорный район: «${puzzleAnchorDistrict.name}» зафиксирован! Присоединяйте соседние районы к нему.`, '#0284C7');
+}
+
+function hideAllMapLayersForPuzzle() {
+    const map = getMapObject();
+    if (!map) return;
+    puzzleSavedLayerStyles = [];
+
+    map.eachLayer(function(layer) {
+        if (layer.options && layer.options.isPuzzleLayer) return;
+
+        if (layer.feature && layer.setStyle) {
+            puzzleSavedLayerStyles.push({
+                layer: layer,
+                opacity: layer.options.opacity !== undefined ? layer.options.opacity : 1,
+                fillOpacity: layer.options.fillOpacity !== undefined ? layer.options.fillOpacity : 0.6
+            });
+            try {
+                layer.setStyle({ opacity: 0, fillOpacity: 0 });
+            } catch(e) {}
+        } else if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
+            if (layer.setOpacity) {
+                puzzleSavedLayerStyles.push({
+                    layer: layer,
+                    isMarker: true,
+                    opacity: 1
+                });
+                try { layer.setOpacity(0); } catch(e) {}
+            }
+        }
+    });
+}
+
+function restoreMapLayersAfterPuzzle() {
+    puzzleSavedLayerStyles.forEach(item => {
+        try {
+            if (item.isMarker && item.layer.setOpacity) {
+                item.layer.setOpacity(item.opacity);
+            } else if (item.layer.setStyle) {
+                item.layer.setStyle({
+                    opacity: item.opacity,
+                    fillOpacity: item.fillOpacity
+                });
+            }
+        } catch(e) {}
+    });
+    puzzleSavedLayerStyles = [];
+}
+
+function renderPuzzleRegionOutline() {
+    const map = getMapObject();
+    if (!map) return;
+
+    if (puzzleOutlineLayer) {
+        try { map.removeLayer(puzzleOutlineLayer); } catch(e) {}
+        puzzleOutlineLayer = null;
+    }
+
+    if (typeof REGION_OUTLINE_GEOJSON !== 'undefined' && REGION_OUTLINE_GEOJSON) {
+        try {
+            puzzleOutlineLayer = L.geoJSON(REGION_OUTLINE_GEOJSON, {
+                style: {
+                    color: '#334155',
+                    weight: 3.0,
+                    opacity: 0.9,
+                    fillColor: '#F8FAFC',
+                    fillOpacity: 0.85,
+                    dashArray: null
+                },
+                interactive: false
+            });
+            puzzleOutlineLayer.options = puzzleOutlineLayer.options || {};
+            puzzleOutlineLayer.options.isPuzzleLayer = true;
+            puzzleOutlineLayer.addTo(map);
+        } catch(e) {
+            console.warn('Не удалось отобразить внешний контур региона:', e);
+        }
+    }
+}
+
+function renderPuzzleSlots() {
+    // Чистое поле: предварительные внутренние линии, сетки и пунктирные слоты полностью убраны!
+    const map = getMapObject();
+    if (!map) return;
+
+    for (let id in puzzleSlotLayers) {
+        try { map.removeLayer(puzzleSlotLayers[id]); } catch(e) {}
+    }
+    puzzleSlotLayers = {};
+}
+
+function placeDistrictOnMap(district, isAnchor = false) {
+    const map = getMapObject();
+    if (!map || !district || !district.geojson) return;
+
+    puzzlePlacedDistricts.add(district.id);
+    const placedCount = puzzlePlacedDistricts.size;
+    const pieceColor = isAnchor ? '#2563EB' : getPuzzlePieceColor(placedCount);
+
+    try {
+        const layer = L.geoJSON(district.geojson, {
+            style: {
+                color: isAnchor ? '#1E40AF' : '#0F766E',
+                weight: isAnchor ? 3.0 : 2.2,
+                opacity: 1,
+                fillColor: pieceColor,
+                fillOpacity: 0.88,
+                dashArray: null
+            },
+            interactive: false
+        });
+        layer.options = layer.options || {};
+        layer.options.isPuzzleLayer = true;
+        layer.options.districtId = district.id;
+        layer.addTo(map);
+        puzzleSlotLayers[district.id] = layer;
+
+        if (!isAnchor) {
+            // Зеленый импульс примагничивания
+            layer.setStyle({
+                color: '#10B981',
+                weight: 4,
+                fillColor: '#6EE7B7',
+                fillOpacity: 0.95
+            });
+            setTimeout(() => {
+                if (puzzleSlotLayers[district.id]) {
+                    puzzleSlotLayers[district.id].setStyle({
+                        color: '#0F766E',
+                        weight: 2.2,
+                        opacity: 1,
+                        fillColor: pieceColor,
+                        fillOpacity: 0.88
+                    });
+                }
+            }, 400);
+        }
+    } catch(err) {
+        console.warn('Ошибка фиксации района на карте:', err);
+    }
+
+    if (district.centroid && map) {
+        const badgeText = isAnchor ? `⭐ ${district.name} (Старт)` : district.name;
+        const labelMarker = L.marker([district.centroid[0], district.centroid[1]], {
+            icon: L.divIcon({
+                className: 'puzzle-placed-label',
+                html: `<div style="font-size: 10px; font-weight: 800; color: ${isAnchor ? '#1E3A8A' : '#0F172A'}; text-shadow: 0 1px 2px white, 0 0 4px white, 0 0 6px white; white-space: nowrap; pointer-events: none;">${badgeText}</div>`,
+                iconSize: [95, 20],
+                iconAnchor: [47, 10]
+            }),
+            interactive: false
+        });
+        labelMarker.options = labelMarker.options || {};
+        labelMarker.options.isPuzzleLayer = true;
+        labelMarker.addTo(map);
+        puzzlePlacedMarkers.push(labelMarker);
+    }
+}
+
+function isDistrictNeighborOfPlaced(district) {
+    if (!district) return false;
+    if (!puzzlePlacedDistricts || puzzlePlacedDistricts.size === 0) return true;
+
+    // 1. Проверка по IDs соседей
+    if (district.neighbor_ids && Array.isArray(district.neighbor_ids)) {
+        for (let nId of district.neighbor_ids) {
+            if (puzzlePlacedDistricts.has(nId)) return true;
+        }
+    }
+
+    // 2. Проверка по именам соседей
+    const placedNames = new Set();
+    for (let pId of puzzlePlacedDistricts) {
+        const p = puzzleDistricts.find(d => d.id === pId);
+        if (p && p.name) placedNames.add(p.name.trim().toLowerCase());
+    }
+
+    if (district.neighbors && Array.isArray(district.neighbors)) {
+        for (let nName of district.neighbors) {
+            if (nName && (placedNames.has(nName.trim().toLowerCase()) || puzzlePlacedDistricts.has(nName))) {
+                return true;
+            }
+        }
+    }
+
+    // 3. Пространственный fallback по пересечению bounding-box с допуском 0.015° (~1.5 км)
+    if (district.bounds) {
+        for (let pId of puzzlePlacedDistricts) {
+            const placedD = puzzleDistricts.find(d => d.id === pId);
+            if (placedD && placedD.bounds) {
+                const b1 = district.bounds;
+                const b2 = placedD.bounds;
+                const tol = 0.015;
+                const latOverlap = (b1[0][0] - tol <= b2[1][0]) && (b1[1][0] + tol >= b2[0][0]);
+                const lonOverlap = (b1[0][1] - tol <= b2[1][1]) && (b1[1][1] + tol >= b2[0][1]);
+                if (latOverlap && lonOverlap) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+/* ==================== ГЕО-ПРОВЕРКА И DRAG-AND-DROP ПАЗЛА ==================== */
+function isPointInGeoJsonPolygon(lat, lng, geojson) {
+    if (!geojson || !geojson.type || !geojson.coordinates) return false;
+
+    function pointInRing(pt, ring) {
+        let inside = false;
+        const x = pt[0], y = pt[1];
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const xi = ring[i][0], yi = ring[i][1];
+            const xj = ring[j][0], yj = ring[j][1];
+            const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    const pt = [lng, lat]; // В GeoJSON координаты [lon, lat]
+
+    if (geojson.type === 'Polygon') {
+        const rings = geojson.coordinates;
+        if (!rings || rings.length === 0) return false;
+        if (!pointInRing(pt, rings[0])) return false;
+        for (let h = 1; h < rings.length; h++) {
+            if (pointInRing(pt, rings[h])) return false;
+        }
+        return true;
+    } else if (geojson.type === 'MultiPolygon') {
+        const polys = geojson.coordinates;
+        for (let p = 0; p < polys.length; p++) {
+            const rings = polys[p];
+            if (rings && rings.length > 0) {
+                if (pointInRing(pt, rings[0])) {
+                    let inHole = false;
+                    for (let h = 1; h < rings.length; h++) {
+                        if (pointInRing(pt, rings[h])) {
+                            inHole = true;
+                            break;
+                        }
+                    }
+                    if (!inHole) return true;
+                }
+            }
+        }
+        return false;
+    }
+    return false;
+}
+
+function isPointNearDistrict(lat, lng, district, toleranceKm = 14) {
+    if (!district) return false;
+    if (district.centroid) {
+        const dLat = (lat - district.centroid[0]) * 111.0;
+        const dLng = (lng - district.centroid[1]) * 111.0 * Math.cos(district.centroid[0] * Math.PI / 180);
+        const distKm = Math.sqrt(dLat * dLat + dLng * dLng);
+        if (distKm <= toleranceKm) return true;
+    }
+    if (district.bounds) {
+        const b = district.bounds;
+        const latBuf = 0.04;
+        const lngBuf = 0.05;
+        if (lat >= b[0][0] - latBuf && lat <= b[1][0] + latBuf &&
+            lng >= b[0][1] - lngBuf && lng <= b[1][1] + lngBuf) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function setupPuzzleDropZone() {
+    const map = getMapObject();
+    if (!map) return;
+    const container = map.getContainer();
+    if (!container || container._puzzleDropBound) return;
+    container._puzzleDropBound = true;
+
+    container.addEventListener('dragenter', handleMapDragEnter);
+    container.addEventListener('dragover', handleMapDragOver);
+    container.addEventListener('dragleave', handleMapDragLeave);
+    container.addEventListener('drop', handleMapDrop);
+
+    try { map.on('click', handleMapPuzzleClick); } catch(e) {}
+}
+
+function removePuzzleDropZone() {
+    const map = getMapObject();
+    if (!map) return;
+    const container = map.getContainer();
+    if (container && container._puzzleDropBound) {
+        container._puzzleDropBound = false;
+        container.removeEventListener('dragenter', handleMapDragEnter);
+        container.removeEventListener('dragover', handleMapDragOver);
+        container.removeEventListener('dragleave', handleMapDragLeave);
+        container.removeEventListener('drop', handleMapDrop);
+        container.classList.remove('puzzle-drop-active');
+    }
+    try { map.off('click', handleMapPuzzleClick); } catch(e) {}
+}
+
+function handleMapPuzzleClick(e) {
+    if (!isPuzzleMode || !puzzleActivePiece || !e || !e.latlng) return;
+    processPuzzleDropPlacement(puzzleActivePiece, e.latlng);
+}
+
+function handleMapDragEnter(e) {
+    if (!isPuzzleMode) return;
+    e.preventDefault();
+    const map = getMapObject();
+    if (map) {
+        try { map.getContainer().classList.add('puzzle-drop-active'); } catch(err) {}
+    }
+}
+
+function handleMapDragOver(e) {
+    if (!isPuzzleMode) return;
+    e.preventDefault();
+    if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+    }
+}
+
+function handleMapDragLeave(e) {
+    if (!isPuzzleMode) return;
+    const map = getMapObject();
+    if (map) {
+        try {
+            const container = map.getContainer();
+            if (!container.contains(e.relatedTarget)) {
+                container.classList.remove('puzzle-drop-active');
+            }
+        } catch(err) {}
+    }
+}
+
+function handleMapDrop(e) {
+    if (!isPuzzleMode) return;
+    e.preventDefault();
+    const map = getMapObject();
+    if (!map) return;
+    try { map.getContainer().classList.remove('puzzle-drop-active'); } catch(err) {}
+
+    let districtId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : null;
+    if (!districtId && window._draggedPuzzleDistrictId) {
+        districtId = window._draggedPuzzleDistrictId;
+    }
+    window._draggedPuzzleDistrictId = null;
+
+    if (!districtId) return;
+
+    const targetDistrict = puzzleDistricts.find(p => p.id === districtId);
+    if (!targetDistrict) return;
+
+    const container = map.getContainer();
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const latlng = map.containerPointToLatLng(L.point(x, y));
+
+    processPuzzleDropPlacement(targetDistrict, latlng);
+}
+
+/* ==================== SVG СИЛУЭТЫ ДЕТАЛЕЙ ПАЗЛА ==================== */
+
+function getDistrictTypeHint(name) {
+    if (!name) return 'район';
+    const n = name.toLowerCase();
+    if (n.includes('город') || n.includes('г.о.') || n.startsWith('г.') || n.includes('округ')) {
+        return 'городской округ';
+    }
+    return 'район';
+}
+
+function getGeoJsonBounds(geojson) {
+    let minLon = Infinity, maxLon = -Infinity;
+    let minLat = Infinity, maxLat = -Infinity;
+
+    function processRing(ring) {
+        if (!ring || !ring.length) return;
+        for (let i = 0; i < ring.length; i++) {
+            const lon = ring[i][0];
+            const lat = ring[i][1];
+            if (lon < minLon) minLon = lon;
+            if (lon > maxLon) maxLon = lon;
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+        }
+    }
+
+    if (!geojson) return null;
+    let geom = geojson;
+    if (geom.type === 'Feature' && geom.geometry) {
+        geom = geom.geometry;
+    }
+
+    if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(processRing);
+    } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(poly => poly.forEach(processRing));
+    }
+
+    if (minLon === Infinity) return null;
+    return { minLon, maxLon, minLat, maxLat };
+}
+
+function geoJsonToSvgPath(geojson, width, height, padding = 6) {
+    const bounds = getGeoJsonBounds(geojson);
+    if (!bounds) return '';
+    const { minLon, maxLon, minLat, maxLat } = bounds;
+
+    const midLat = (minLat + maxLat) / 2;
+    const cosLat = Math.cos((midLat * Math.PI) / 180);
+    const spanLon = Math.max((maxLon - minLon) * cosLat, 0.0001);
+    const spanLat = Math.max(maxLat - minLat, 0.0001);
+
+    const wDraw = Math.max(width - 2 * padding, 10);
+    const hDraw = Math.max(height - 2 * padding, 10);
+    const scale = Math.min(wDraw / spanLon, hDraw / spanLat);
+
+    const contentW = spanLon * scale;
+    const contentH = spanLat * scale;
+    const offX = padding + (wDraw - contentW) / 2;
+    const offY = padding + (hDraw - contentH) / 2;
+
+    function ringToPath(ring) {
+        if (!ring || ring.length < 3) return '';
+        let d = '';
+        for (let i = 0; i < ring.length; i++) {
+            const lon = ring[i][0];
+            const lat = ring[i][1];
+            const x = (offX + (lon - minLon) * cosLat * scale).toFixed(1);
+            const y = (offY + (maxLat - lat) * scale).toFixed(1);
+            d += (i === 0 ? 'M' : 'L') + x + ' ' + y + ' ';
+        }
+        return d + 'Z ';
+    }
+
+    let geom = geojson;
+    if (geom.type === 'Feature' && geom.geometry) geom = geom.geometry;
+
+    let pathStr = '';
+    if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(ring => { pathStr += ringToPath(ring); });
+    } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(p => {
+            p.forEach(ring => { pathStr += ringToPath(ring); });
+        });
+    }
+    return pathStr.trim();
+}
+
+function generateDistrictSvg(piece, width = 86, height = 56, options = {}) {
+    if (!piece || !piece.geojson) {
+        return `<svg viewBox="0 0 ${width} ${height}" class="puzzle-svg-shape"><rect width="${width}" height="${height}" rx="6" fill="#F1F5F9"/></svg>`;
+    }
+    const padding = options.padding !== undefined ? options.padding : 5;
+    const pathD = geoJsonToSvgPath(piece.geojson, width, height, padding);
+    const strokeColor = options.strokeColor || '#334155';
+    const fillColor = options.fillColor || '#E2E8F0';
+    const strokeWidth = options.strokeWidth || 1.6;
+    const uniqueGradId = `pgrad-${piece.id}-${width}-${Math.floor(Math.random() * 100000)}`;
+
+    return `
+        <svg viewBox="0 0 ${width} ${height}" class="puzzle-svg-shape" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="${uniqueGradId}" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="${fillColor}" stop-opacity="0.95"/>
+                    <stop offset="100%" stop-color="${fillColor}" stop-opacity="0.80"/>
+                </linearGradient>
+            </defs>
+            <path d="${pathD}" 
+                  fill="url(#${uniqueGradId})" 
+                  stroke="${strokeColor}" 
+                  stroke-width="${strokeWidth}" 
+                  stroke-linejoin="round" 
+                  stroke-linecap="round" 
+                  fill-rule="evenodd" />
+        </svg>
+    `;
+}
+
+function generateTrueScaleDragSilhouette(piece, map) {
+    if (!piece || !piece.geojson || !map) return null;
+
+    try {
+        const zoom = map.getZoom();
+        let geom = piece.geojson;
+        if (geom.type === 'Feature' && geom.geometry) geom = geom.geometry;
+
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+        function projectRing(ring) {
+            if (!ring || !ring.length) return [];
+            return ring.map(([lon, lat]) => {
+                const pt = map.project(L.latLng(lat, lon), zoom);
+                if (pt.x < minX) minX = pt.x;
+                if (pt.x > maxX) maxX = pt.x;
+                if (pt.y < minY) minY = pt.y;
+                if (pt.y > maxY) maxY = pt.y;
+                return pt;
+            });
+        }
+
+        let projectedPolys = [];
+        if (geom.type === 'Polygon') {
+            projectedPolys.push(geom.coordinates.map(projectRing));
+        } else if (geom.type === 'MultiPolygon') {
+            projectedPolys = geom.coordinates.map(poly => poly.map(projectRing));
+        }
+
+        if (minX === Infinity || maxX <= minX || maxY <= minY) return null;
+
+        const pad = 4;
+        const width = Math.max(Math.round(maxX - minX), 14);
+        const height = Math.max(Math.round(maxY - minY), 14);
+        const totalW = width + pad * 2;
+        const totalH = height + pad * 2;
+
+        let pathD = '';
+        projectedPolys.forEach(poly => {
+            poly.forEach(ring => {
+                if (ring.length < 3) return;
+                for (let i = 0; i < ring.length; i++) {
+                    const x = (ring[i].x - minX + pad).toFixed(1);
+                    const y = (ring[i].y - minY + pad).toFixed(1);
+                    pathD += (i === 0 ? 'M' : 'L') + x + ' ' + y + ' ';
+                }
+                pathD += 'Z ';
+            });
+        });
+
+        let offsetX = Math.round(totalW / 2);
+        let offsetY = Math.round(totalH / 2);
+
+        if (piece.centroid) {
+            try {
+                const cPt = map.project(L.latLng(piece.centroid[0], piece.centroid[1]), zoom);
+                offsetX = Math.round(Math.max(0, Math.min(totalW, cPt.x - minX + pad)));
+                offsetY = Math.round(Math.max(0, Math.min(totalH, cPt.y - minY + pad)));
+            } catch(e) {}
+        }
+
+        const svgMarkup = `
+            <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg">
+                <path d="${pathD.trim()}" 
+                      fill="rgba(37, 99, 235, 0.45)" 
+                      stroke="#1D4ED8" 
+                      stroke-width="2" 
+                      stroke-linejoin="round" 
+                      stroke-linecap="round" 
+                      fill-rule="evenodd" />
+            </svg>
+        `;
+
+        return { svgMarkup, totalW, totalH, offsetX, offsetY };
+    } catch(err) {
+        console.warn('Error computing true-scale drag silhouette:', err);
+        return null;
+    }
+}
+
+function handlePuzzleDragStart(e, districtId) {
+    if (!isPuzzleMode) return;
+    window._draggedPuzzleDistrictId = districtId;
+
+    if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', districtId);
+        e.dataTransfer.effectAllowed = 'copyMove';
+
+        // Создаем парящий силуэт детали в РЕАЛЬНОМ масштабе карты Leaflet
+        try {
+            const piece = puzzleDistricts.find(p => p.id === districtId);
+            const map = getMapObject();
+            if (piece) {
+                let ghost = document.getElementById('puzzle-drag-ghost');
+                if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
+
+                ghost = document.createElement('div');
+                ghost.id = 'puzzle-drag-ghost';
+                ghost.style.position = 'fixed';
+                ghost.style.top = '-9999px';
+                ghost.style.left = '-9999px';
+                ghost.style.pointerEvents = 'none';
+                ghost.style.zIndex = '99999';
+
+                const trueScale = generateTrueScaleDragSilhouette(piece, map);
+
+                if (trueScale && e.dataTransfer && e.dataTransfer.setDragImage) {
+                    ghost.style.width = trueScale.totalW + 'px';
+                    ghost.style.height = trueScale.totalH + 'px';
+                    ghost.innerHTML = trueScale.svgMarkup;
+                    document.body.appendChild(ghost);
+                    e.dataTransfer.setDragImage(ghost, trueScale.offsetX, trueScale.offsetY);
+                } else {
+                    ghost.style.width = '100px';
+                    ghost.style.height = '75px';
+                    ghost.style.opacity = '0.85';
+                    ghost.innerHTML = generateDistrictSvg(piece, 100, 75, {
+                        fillColor: '#93C5FD',
+                        strokeColor: '#1D4ED8',
+                        strokeWidth: 2.0,
+                        padding: 4
+                    });
+                    document.body.appendChild(ghost);
+                    if (e.dataTransfer && e.dataTransfer.setDragImage) {
+                        e.dataTransfer.setDragImage(ghost, 50, 38);
+                    }
+                }
+
+                setTimeout(() => {
+                    if (ghost && ghost.parentNode) {
+                        ghost.parentNode.removeChild(ghost);
+                    }
+                }, 200);
+            }
+        } catch(dragErr) {
+            console.warn('Custom drag image error:', dragErr);
+        }
+    }
+
+    const targetEl = e.currentTarget || e.target;
+    if (targetEl && targetEl.classList) {
+        targetEl.classList.add('dragging');
+    }
+
+    const piece = puzzleDistricts.find(p => p.id === districtId);
+    if (piece) {
+        setActivePuzzlePiece(piece);
+    }
+}
+
+function handlePuzzleDragEnd(e) {
+    window._draggedPuzzleDistrictId = null;
+    document.querySelectorAll('.puzzle-silhouette-card.dragging, .puzzle-chip.dragging, .puzzle-target-card.dragging').forEach(el => {
+        el.classList.remove('dragging');
+    });
+
+    const map = getMapObject();
+    if (map) {
+        try {
+            map.getContainer().classList.remove('puzzle-drop-active');
+        } catch(err) {}
+    }
+}
+
+function processPuzzleDropPlacement(targetDistrict, latlng) {
+    if (!targetDistrict || !latlng) return;
+
+    if (puzzlePlacedDistricts.has(targetDistrict.id)) {
+        showPuzzleFloatingMessage(`ℹ️ Район «${targetDistrict.name}» уже установлен на карте!`, '#0284C7');
+        return;
+    }
+
+    // 1. Проверка геометрического совпадения с целевым районом (a)
+    const directHit = isPointInGeoJsonPolygon(latlng.lat, latlng.lng, targetDistrict.geojson);
+    const nearTarget = isPointNearDistrict(latlng.lat, latlng.lng, targetDistrict, 14);
+
+    let landedInsideOther = null;
+    for (let d of puzzleDistricts) {
+        if (d.id !== targetDistrict.id && isPointInGeoJsonPolygon(latlng.lat, latlng.lng, d.geojson)) {
+            landedInsideOther = d;
+            break;
+        }
+    }
+
+    if (!directHit && (!nearTarget || landedInsideOther)) {
+        if (landedInsideOther) {
+            triggerPuzzleMismatch(targetDistrict, `❌ Вы сбросили «${targetDistrict.name}» на место района «${landedInsideOther.name}». Найдите его собственное расположение!`);
+        } else {
+            triggerPuzzleMismatch(targetDistrict, `❌ Геометрический промах! Район «${targetDistrict.name}» находится в другом месте.`);
+        }
+        return;
+    }
+
+    // 2. Проверка топологического правила сборки («Конструктор по соседям») (б)
+    const isNeighbor = isDistrictNeighborOfPlaced(targetDistrict);
+    if (!isNeighbor) {
+        triggerPuzzleMismatch(targetDistrict, `⚠️ Топологический запрет! Район «${targetDistrict.name}» не граничит ни с одним из уже собранных районов ядра. Сначала присоедините его соседей!`);
+        return;
+    }
+
+    // Оба условия выполнены -> фиксация детали в растущее ядро региона
+    completePuzzleDistrictPlacement(targetDistrict);
+}
+
+function completePuzzleDistrictPlacement(district) {
+    // Впаиваем район на карту с заливкой
+    placeDistrictOnMap(district, false);
+
+    showPuzzleFloatingMessage(`🧲 Отлично! «${district.name}» пристыкован к ядру региона!`, '#10B981');
+
+    puzzleUnplacedQueue = puzzleUnplacedQueue.filter(p => p.id !== district.id);
+    updatePuzzleProgress();
+
+    if (puzzleUnplacedQueue.length === 0) {
+        setTimeout(finishPuzzleVictory, 600);
+        return;
+    }
+
+    // Выбираем следующий активный район — предпочтительно тот, который УЖЕ доступен для стыковки!
+    const nextAvailableNeighbor = puzzleUnplacedQueue.find(d => isDistrictNeighborOfPlaced(d)) || puzzleUnplacedQueue[0];
+    if (nextAvailableNeighbor) {
+        setActivePuzzlePiece(nextAvailableNeighbor);
+    }
+
+    renderPuzzleTray();
+}
+
+function triggerPuzzleMismatch(targetDistrict, message = null) {
+    puzzleMistakes++;
+
+    const card = document.getElementById('puzzle-active-piece-card');
+    if (card) {
+        card.classList.remove('shake');
+        void card.offsetWidth;
+        card.classList.add('shake');
+        setTimeout(() => card.classList.remove('shake'), 450);
+    }
+
+    const trayCard = document.querySelector(`.puzzle-silhouette-card[data-id="${targetDistrict.id}"], .puzzle-chip[data-id="${targetDistrict.id}"]`);
+    if (trayCard) {
+        trayCard.classList.remove('shake');
+        void trayCard.offsetWidth;
+        trayCard.classList.add('shake');
+        setTimeout(() => trayCard.classList.remove('shake'), 450);
+    }
+
+    const defaultMsg = `❌ Неверно! Район «${targetDistrict.name}» не пристыкован.`;
+    showPuzzleFloatingMessage(message || defaultMsg, '#DC2626');
+    updatePuzzleProgress();
+}
+
+function handlePuzzleSlotClick(clickedId, slotLayer) {
+    if (!isPuzzleMode || !puzzleActivePiece) return;
+    const target = puzzleDistricts.find(p => p.id === clickedId) || puzzleActivePiece;
+    if (target.centroid) {
+        processPuzzleDropPlacement(puzzleActivePiece, { lat: target.centroid[0], lng: target.centroid[1] });
+    }
+}
+
+function setActivePuzzlePiece(piece) {
+    puzzleActivePiece = piece;
+    if (!piece) return;
+
+    const nameEl = document.getElementById('puzzle-active-name');
+    const infoEl = document.getElementById('puzzle-active-info');
+    const card = document.getElementById('puzzle-active-piece-card');
+    const badgeEl = document.getElementById('puzzle-active-badge');
+    let previewEl = document.getElementById('puzzle-active-preview');
+
+    const isNeighbor = isDistrictNeighborOfPlaced(piece);
+
+    if (nameEl) nameEl.textContent = piece.name;
+    if (badgeEl) {
+        badgeEl.textContent = isNeighbor ? '🔗 Сосед ядра (доступен)' : getDistrictTypeHint(piece.name);
+        badgeEl.className = isNeighbor ? 'puzzle-type-badge neighbor-ready' : 'puzzle-type-badge';
+    }
+
+    if (infoEl) {
+        let centerStr = piece.center ? `Центр: ${piece.center}` : '';
+        let areaStr = piece.area ? `Площадь: ~${Number(piece.area).toLocaleString('ru-RU')} км²` : '';
+        let statusStr = isNeighbor ? '🟢 Граничит с ядром' : '🔒 Не примыкает к ядру';
+        let parts = [centerStr, areaStr, statusStr].filter(Boolean);
+        infoEl.textContent = parts.length > 0 ? parts.join(' | ') : 'Перетащите силуэт на карту';
+    }
+
+    if (!previewEl && card && nameEl) {
+        previewEl = document.createElement('div');
+        previewEl.id = 'puzzle-active-preview';
+        previewEl.className = 'puzzle-active-preview-wrap';
+        card.insertBefore(previewEl, nameEl);
+    }
+
+    if (previewEl) {
+        previewEl.innerHTML = generateDistrictSvg(piece, 140, 84, {
+            fillColor: isNeighbor ? '#DCFCE7' : '#FEF3C7',
+            strokeColor: isNeighbor ? '#16A34A' : '#D97706',
+            strokeWidth: 2.2,
+            padding: 6
+        });
+    }
+
+    if (card) {
+        card.setAttribute('draggable', 'true');
+        card.ondragstart = (e) => handlePuzzleDragStart(e, piece.id);
+        card.ondragend = (e) => handlePuzzleDragEnd(e);
+        card.title = `Перетащите силуэт «${piece.name}» на карту`;
+    }
+
+    document.querySelectorAll('.puzzle-silhouette-card, .puzzle-chip').forEach(chip => {
+        if (chip.getAttribute('data-id') === piece.id) {
+            chip.classList.add('active');
+            chip.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            chip.classList.remove('active');
+        }
+    });
+}
+
+function renderPuzzleTray() {
+    const tray = document.getElementById('puzzle-tray-container');
+    if (!tray) return;
+
+    if (!puzzleUnplacedQueue || puzzleUnplacedQueue.length === 0) {
+        tray.innerHTML = `
+            <div style="grid-column: 1 / -1; padding: 24px 12px; text-align: center; color: #166534; font-weight: 700; font-size: 13px;">
+                🎉 Все районы успешно присоединены к региону!
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    puzzleUnplacedQueue.forEach(p => {
+        const isActive = puzzleActivePiece && puzzleActivePiece.id === p.id;
+        const isNeighbor = isDistrictNeighborOfPlaced(p);
+        const typeHint = getDistrictTypeHint(p.name);
+        const badgeText = isNeighbor ? '🔗 Сосед ядра' : typeHint;
+        const badgeClass = isNeighbor ? 'puzzle-card-badge neighbor-ready' : 'puzzle-card-badge';
+        const cardConnectableClass = isNeighbor ? 'neighbor-connectable' : '';
+
+        const svgMarkup = generateDistrictSvg(p, 86, 54, {
+            fillColor: isActive ? '#DBEAFE' : (isNeighbor ? '#F0FDF4' : '#F8FAFC'),
+            strokeColor: isActive ? '#2563EB' : (isNeighbor ? '#16A34A' : '#64748B'),
+            strokeWidth: isActive ? 2.0 : 1.6,
+            padding: 5
+        });
+
+        html += `
+            <div class="puzzle-silhouette-card puzzle-chip ${cardConnectableClass} ${isActive ? 'active' : ''}" 
+                 data-id="${p.id}" 
+                 draggable="true" 
+                 ondragstart="handlePuzzleDragStart(event, '${p.id}')" 
+                 ondragend="handlePuzzleDragEnd(event)" 
+                 onclick="selectPuzzlePieceById('${p.id}')" 
+                 title="«${p.name}» ${isNeighbor ? '— граничит с ядром, готов к стыковке!' : '— ждет соседних районов'}">
+                <span class="${badgeClass}">${badgeText}</span>
+                <div class="puzzle-card-svg-wrap">
+                    ${svgMarkup}
+                </div>
+                <div class="puzzle-card-caption">${p.name}</div>
+            </div>
+        `;
+    });
+
+    tray.innerHTML = html;
+}
+
+function selectPuzzlePieceById(id) {
+    const piece = puzzleUnplacedQueue.find(p => p.id === id);
+    if (piece) {
+        setActivePuzzlePiece(piece);
+    }
+}
+
+function skipCurrentPuzzlePiece() {
+    if (!puzzleUnplacedQueue || puzzleUnplacedQueue.length <= 1) return;
+    const current = puzzleUnplacedQueue.shift();
+    puzzleUnplacedQueue.push(current);
+    setActivePuzzlePiece(puzzleUnplacedQueue[0]);
+    renderPuzzleTray();
+}
+
+function hintPuzzleSlot() {
+    if (!puzzleActivePiece || !puzzleActivePiece.geojson) return;
+    const map = getMapObject();
+    if (!map) return;
+
+    puzzleHintsUsed++;
+    puzzleMistakes++;
+
+    try {
+        const hintLayer = L.geoJSON(puzzleActivePiece.geojson, {
+            style: {
+                color: '#F59E0B',
+                weight: 3.5,
+                opacity: 0.95,
+                fillColor: '#FEF3C7',
+                fillOpacity: 0.65,
+                dashArray: '4, 4'
+            },
+            interactive: false
+        });
+        hintLayer.addTo(map);
+
+        if (puzzleActivePiece.centroid) {
+            map.panTo([puzzleActivePiece.centroid[0], puzzleActivePiece.centroid[1]], { animate: true, duration: 0.5 });
+        }
+
+        showPuzzleFloatingMessage(`💡 Район «${puzzleActivePiece.name}» временно подсвечен золотым контуром!`, '#D97706');
+
+        setTimeout(() => {
+            try { map.removeLayer(hintLayer); } catch(e) {}
+        }, 2200);
+    } catch(err) {
+        console.warn('Hint error:', err);
+    }
+
+    updatePuzzleProgress();
+}
+
+function updatePuzzleProgress() {
+    const total = puzzleDistricts.length;
+    const placed = puzzlePlacedDistricts.size;
+    const percent = total > 0 ? Math.round((placed / total) * 100) : 0;
+
+    const prgText = document.getElementById('puzzle-progress-text');
+    const prgPct = document.getElementById('puzzle-percent-text');
+    const prgBar = document.getElementById('puzzle-progress-bar');
+    const misText = document.getElementById('puzzle-mistakes-text');
+    const accText = document.getElementById('puzzle-accuracy-text');
+
+    if (prgText) prgText.textContent = `Собрано: ${placed} из ${total}`;
+    if (prgPct) prgPct.textContent = `${percent}%`;
+    if (prgBar) prgBar.style.width = `${percent}%`;
+    if (misText) misText.textContent = puzzleMistakes;
+
+    const attempts = placed + puzzleMistakes;
+    const accuracy = attempts > 0 ? Math.max(10, Math.round((placed / attempts) * 100)) : 100;
+    if (accText) {
+        accText.textContent = `${accuracy}%`;
+        accText.style.color = accuracy >= 75 ? '#10B981' : accuracy >= 50 ? '#F59E0B' : '#EF4444';
+    }
+}
+
+function startPuzzleTimer() {
+    stopPuzzleTimer();
+    const timerText = document.getElementById('puzzle-timer-text');
+    puzzleTimerInterval = setInterval(() => {
+        const sec = Math.floor((Date.now() - puzzleStartTime) / 1000);
+        const mins = Math.floor(sec / 60);
+        const remSec = sec % 60;
+        const str = `${String(mins).padStart(2, '0')}:${String(remSec).padStart(2, '0')}`;
+        if (timerText) timerText.textContent = `⏱ ${str}`;
+    }, 1000);
+}
+
+function stopPuzzleTimer() {
+    if (puzzleTimerInterval) {
+        clearInterval(puzzleTimerInterval);
+        puzzleTimerInterval = null;
+    }
+}
+
+function showPuzzleFloatingMessage(msg, color = '#10B981') {
+    let el = document.getElementById('puzzle-floating-notice');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'puzzle-floating-notice';
+        el.style.cssText = 'position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:10000; padding:8px 18px; border-radius:20px; font-size:13px; font-weight:700; color:white; box-shadow:0 6px 20px rgba(0,0,0,0.25); transition:opacity 0.3s ease, transform 0.3s ease; pointer-events:none;';
+        document.body.appendChild(el);
+    }
+    el.style.background = color;
+    el.innerHTML = msg;
+    el.style.opacity = '1';
+    el.style.transform = 'translateX(-50%) translateY(0)';
+
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateX(-50%) translateY(-10px)';
+    }, 2200);
+}
+
+function finishPuzzleVictory() {
+    stopPuzzleTimer();
+    const timeSec = Math.floor((Date.now() - puzzleStartTime) / 1000);
+    const mins = Math.floor(timeSec / 60);
+    const secs = timeSec % 60;
+    const timeStr = `${mins} мин. ${secs} сек.`;
+
+    const total = puzzleDistricts.length;
+    const attempts = total + puzzleMistakes;
+    const accuracy = attempts > 0 ? Math.max(10, Math.round((total / attempts) * 100)) : 100;
+    const studentInfo = getCurrentStudentInfo();
+
+    puzzleToken = generatePuzzleToken(studentInfo, total, puzzleMistakes, timeSec);
+
+    const statsContainer = document.getElementById('puzzle-victory-stats');
+    if (statsContainer) {
+        const studentLine = studentInfo 
+            ? `<div style="font-size: 12.5px; color: #1E293B; margin-bottom: 8px; border-bottom: 1px solid #E2E8F0; padding-bottom: 6px;">
+                 Студент: <b>${studentInfo.name}</b> (${studentInfo.group})
+               </div>`
+            : `<div style="font-size: 11.5px; color: #D97706; margin-bottom: 8px;">
+                 ⚠️ Авторизуйтесь через меню для привязки к ведомости ЮФУ
+               </div>`;
+
+        statsContainer.innerHTML = `
+            ${studentLine}
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12.5px;">
+                <div>🧩 Собрано районов: <b>${total} из ${total}</b> (100%)</div>
+                <div>⏱ Затрачено времени: <b>${timeStr}</b></div>
+                <div>❌ Допущено ошибок: <b style="color: ${puzzleMistakes === 0 ? '#10B981' : '#EF4444'}">${puzzleMistakes}</b></div>
+                <div>🎯 Итоговая точность: <b style="color: #10B981">${accuracy}%</b></div>
+            </div>
+        `;
+    }
+
+    const tokenEl = document.getElementById('puzzle-token-display');
+    if (tokenEl) tokenEl.textContent = puzzleToken;
+
+    const modal = document.getElementById('puzzle-victory-modal');
+    if (modal) modal.style.display = 'flex';
+
+    savePuzzleResult(total, accuracy, timeStr, puzzleToken, puzzleMistakes);
+}
+
+function generatePuzzleToken(student, total, mistakes, timeSec) {
+    const raw = `${student ? student.name : 'GUEST'}_${student ? student.group : 'SFEDU'}_${total}_${mistakes}_${timeSec}`;
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+        hash = ((hash << 5) - hash) + raw.charCodeAt(i);
+        hash |= 0;
+    }
+    const h1 = Math.abs(hash).toString(16).toUpperCase().padStart(4, '0').slice(-4);
+    const h2 = Math.abs((hash ^ 0x5A5A5A5A)).toString(16).toUpperCase().padStart(4, '0').slice(-4);
+    const h3 = Math.abs((hash * 31)).toString(16).toUpperCase().padStart(4, '0').slice(-4);
+    return `PUZZLE-${h1}-${h2}-${h3}`;
+}
+
+function copyPuzzleToken() {
+    if (!puzzleToken) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(puzzleToken).then(() => {
+            alert(`Токен сдачи скопирован в буфер обмена:\n${puzzleToken}`);
+        }).catch(() => {
+            prompt('Скопируйте ваш токен сдачи пазла:', puzzleToken);
+        });
+    } else {
+        prompt('Скопируйте ваш токен сдачи пазла:', puzzleToken);
+    }
+}
+
+function closePuzzleVictoryModal() {
+    const modal = document.getElementById('puzzle-victory-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function restartPuzzleMode() {
+    closePuzzleVictoryModal();
+    startPuzzleMode();
+}
+
+function savePuzzleResult(total, accuracy, timeStr, token, mistakes) {
+    const student = getCurrentStudentInfo();
+    const results = JSON.parse(localStorage.getItem('rostovQuizResults') || '[]');
+    results.push({
+        date: new Date().toLocaleString(),
+        student: student ? student.name : 'Анонимно',
+        group: student ? student.group : '-',
+        type: `Пазл: Собери регион (${total} районов)`,
+        score: total,
+        maxScore: total,
+        accuracy: accuracy,
+        time_spent: timeStr,
+        is_exam: false,
+        exam_token: token,
+        violations: mistakes,
+        exam_status: mistakes === 0 ? 'Идеально' : 'Собрано'
+    });
+    localStorage.setItem('rostovQuizResults', JSON.stringify(results));
+
+    if (student) {
+        fetch('/api/results/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: student.email,
+                name: student.name,
+                group: student.group,
+                quiz_type: `Пазл: Собери регион (${total})`,
+                score: total,
+                max_score: total,
+                accuracy: accuracy,
+                time_spent: timeStr,
+                is_exam: false,
+                exam_token: token,
+                violations: mistakes,
+                exam_status: mistakes === 0 ? 'Идеально' : 'Собрано'
+            })
+        }).catch(e => {});
+    }
+}
+
+function exitPuzzleMode() {
+    stopPuzzleTimer();
+    isPuzzleMode = false;
+    currentQuiz = null;
+
+    removePuzzleDropZone();
+    closePuzzleVictoryModal();
+
+    // Удаляем контуры и слоты пазла с карты
+    const map = getMapObject();
+    if (map) {
+        if (puzzleOutlineLayer) {
+            try { map.removeLayer(puzzleOutlineLayer); } catch(e) {}
+            puzzleOutlineLayer = null;
+        }
+        for (let id in puzzleSlotLayers) {
+            try { map.removeLayer(puzzleSlotLayers[id]); } catch(e) {}
+        }
+        puzzleSlotLayers = {};
+
+        puzzlePlacedMarkers.forEach(m => {
+            try { map.removeLayer(m); } catch(e) {}
+        });
+        puzzlePlacedMarkers = [];
+    }
+
+    // Восстанавливаем видимость базовой подложки и слоев
+    setBasemapVisible(true);
+    restoreMapLayersAfterPuzzle();
+    enablePopups();
+    resetActiveHighlight(false);
+    restoreAllLayers();
+    resetMapView();
+
+    // Возвращаем главное меню
+    const pm = document.getElementById('puzzle-mode');
+    if (pm) pm.style.display = 'none';
+    const nm = document.getElementById('normal-mode');
+    if (nm) nm.style.display = 'block';
+
+    setTimeout(setupDistrictClickListeners, 350);
+}
+
+function getDistrictNameById(id) {
+    const d = puzzleDistricts.find(p => p.id === id);
+    return d ? d.name : 'Район';
 }
 
 /* ==================== ВИКТОРИНЫ ==================== */
@@ -1854,6 +3100,12 @@ function copyExamToken(token) {
 }
 
 function exitQuiz() {
+    if (isPuzzleMode) {
+        if (confirm('Выйти из режима сборки пазла? Прогресс текущей сессии будет сброшен.')) {
+            exitPuzzleMode();
+        }
+        return;
+    }
     if (isExamMode) {
         if (confirm('Внимание! Вы находитесь в режиме контрольной работы. При выходе попытка завершится досрочно, а набранные баллы будут зафиксированы. Завершить?')) {
             finishExamEarly(false);
@@ -1866,6 +3118,10 @@ function exitQuiz() {
 }
 
 function exitQuizDirectly() {
+    if (isPuzzleMode) {
+        exitPuzzleMode();
+        return;
+    }
     stopTimer();
     stopGlobalExamTimer();
     disableAntiCheat();
