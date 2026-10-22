@@ -869,6 +869,7 @@ function startPuzzleMode() {
     isPuzzleMode = true;
 
     // Сброс прочих режимов и таймеров
+    removePuzzleGhost();
     stopTimer();
     stopGlobalExamTimer();
     disableAntiCheat();
@@ -1276,6 +1277,9 @@ function handleMapDragLeave(e) {
 function handleMapDrop(e) {
     if (!isPuzzleMode) return;
     e.preventDefault();
+    window._isHtml5Dragging = false;
+    removePuzzleGhost();
+
     const map = getMapObject();
     if (!map) return;
     try { map.getContainer().classList.remove('puzzle-drop-active'); } catch(err) {}
@@ -1481,11 +1485,11 @@ function generateTrueScaleDragSilhouette(piece, map) {
         }
 
         const svgMarkup = `
-            <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg">
+            <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="display: block; overflow: visible;">
                 <path d="${pathD.trim()}" 
-                      fill="rgba(37, 99, 235, 0.45)" 
+                      fill="rgba(37, 99, 235, 0.52)" 
                       stroke="#1D4ED8" 
-                      stroke-width="2" 
+                      stroke-width="2.5" 
                       stroke-linejoin="round" 
                       stroke-linecap="round" 
                       fill-rule="evenodd" />
@@ -1499,78 +1503,150 @@ function generateTrueScaleDragSilhouette(piece, map) {
     }
 }
 
+/* ==================== ПЛАВАЮЩИЙ SVG-ПРИЗРАК ДЕТАЛИ (DRAG GHOST) ==================== */
+
+function createPuzzleGhost(piece, clientX, clientY) {
+    if (!piece) return;
+
+    // Сначала удаляем предыдущий временный элемент, если он существует
+    removePuzzleGhost();
+
+    const map = getMapObject();
+    const trueScale = generateTrueScaleDragSilhouette(piece, map);
+
+    let totalW, totalH, offsetX, offsetY, svgMarkup;
+    if (trueScale) {
+        totalW = trueScale.totalW;
+        totalH = trueScale.totalH;
+        offsetX = trueScale.offsetX;
+        offsetY = trueScale.offsetY;
+        svgMarkup = trueScale.svgMarkup;
+    } else {
+        totalW = 120;
+        totalH = 80;
+        offsetX = 60;
+        offsetY = 40;
+        svgMarkup = generateDistrictSvg(piece, totalW, totalH, {
+            fillColor: 'rgba(37, 99, 235, 0.52)',
+            strokeColor: '#1D4ED8',
+            strokeWidth: 2.5,
+            padding: 6
+        });
+    }
+
+    window._puzzleGhostOffsetX = offsetX;
+    window._puzzleGhostOffsetY = offsetY;
+
+    const ghost = document.createElement('div');
+    ghost.id = 'puzzle-drag-ghost';
+    ghost.className = 'puzzle-drag-ghost-active';
+    ghost.style.position = 'fixed';
+    ghost.style.left = '0px';
+    ghost.style.top = '0px';
+    ghost.style.width = totalW + 'px';
+    ghost.style.height = totalH + 'px';
+    ghost.style.pointerEvents = 'none';
+    ghost.style.zIndex = '999999';
+    ghost.style.willChange = 'transform';
+    ghost.style.opacity = '0.92';
+    ghost.style.filter = 'drop-shadow(0 8px 24px rgba(37, 99, 235, 0.45))';
+    ghost.style.userSelect = 'none';
+    ghost.style.cursor = 'grabbing';
+    ghost.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0)`;
+    ghost.innerHTML = svgMarkup;
+
+    document.body.appendChild(ghost);
+}
+
+function updatePuzzleGhostPosition(clientX, clientY) {
+    const ghost = document.getElementById('puzzle-drag-ghost');
+    if (!ghost) return;
+    const offsetX = window._puzzleGhostOffsetX || 0;
+    const offsetY = window._puzzleGhostOffsetY || 0;
+    ghost.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0)`;
+}
+
+function removePuzzleGhost() {
+    const ghost = document.getElementById('puzzle-drag-ghost');
+    if (ghost && ghost.parentNode) {
+        ghost.parentNode.removeChild(ghost);
+    }
+    window.removeEventListener('dragover', handleGlobalDragOver);
+    window.removeEventListener('dragend', handlePuzzleDragEnd);
+}
+
+/* ==================== ОБРАБОТЧИКИ ПЕРЕТАСКИВАНИЯ (HTML5 + POINTER) ==================== */
+
+let isPointerDragging = false;
+let pointerDragPiece = null;
+let pointerDragStartPt = null;
+
 function handlePuzzleDragStart(e, districtId) {
     if (!isPuzzleMode) return;
+    window._isHtml5Dragging = true;
     window._draggedPuzzleDistrictId = districtId;
 
-    if (e.dataTransfer) {
-        e.dataTransfer.setData('text/plain', districtId);
-        e.dataTransfer.effectAllowed = 'copyMove';
+    const piece = puzzleDistricts.find(p => p.id === districtId);
+    if (!piece) return;
 
-        // Создаем парящий силуэт детали в РЕАЛЬНОМ масштабе карты Leaflet
-        try {
-            const piece = puzzleDistricts.find(p => p.id === districtId);
-            const map = getMapObject();
-            if (piece) {
-                let ghost = document.getElementById('puzzle-drag-ghost');
-                if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
-
-                ghost = document.createElement('div');
-                ghost.id = 'puzzle-drag-ghost';
-                ghost.style.position = 'fixed';
-                ghost.style.top = '-9999px';
-                ghost.style.left = '-9999px';
-                ghost.style.pointerEvents = 'none';
-                ghost.style.zIndex = '99999';
-
-                const trueScale = generateTrueScaleDragSilhouette(piece, map);
-
-                if (trueScale && e.dataTransfer && e.dataTransfer.setDragImage) {
-                    ghost.style.width = trueScale.totalW + 'px';
-                    ghost.style.height = trueScale.totalH + 'px';
-                    ghost.innerHTML = trueScale.svgMarkup;
-                    document.body.appendChild(ghost);
-                    e.dataTransfer.setDragImage(ghost, trueScale.offsetX, trueScale.offsetY);
-                } else {
-                    ghost.style.width = '100px';
-                    ghost.style.height = '75px';
-                    ghost.style.opacity = '0.85';
-                    ghost.innerHTML = generateDistrictSvg(piece, 100, 75, {
-                        fillColor: '#93C5FD',
-                        strokeColor: '#1D4ED8',
-                        strokeWidth: 2.0,
-                        padding: 4
-                    });
-                    document.body.appendChild(ghost);
-                    if (e.dataTransfer && e.dataTransfer.setDragImage) {
-                        e.dataTransfer.setDragImage(ghost, 50, 38);
-                    }
-                }
-
-                setTimeout(() => {
-                    if (ghost && ghost.parentNode) {
-                        ghost.parentNode.removeChild(ghost);
-                    }
-                }, 200);
-            }
-        } catch(dragErr) {
-            console.warn('Custom drag image error:', dragErr);
-        }
-    }
+    setActivePuzzlePiece(piece);
 
     const targetEl = e.currentTarget || e.target;
     if (targetEl && targetEl.classList) {
         targetEl.classList.add('dragging');
     }
 
-    const piece = puzzleDistricts.find(p => p.id === districtId);
-    if (piece) {
-        setActivePuzzlePiece(piece);
+    if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', districtId);
+        e.dataTransfer.effectAllowed = 'copyMove';
+
+        // Прозрачный 1x1 пиксель скрывает браузерный серый прямоугольник по умолчанию
+        const emptyImg = new Image();
+        emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        try {
+            e.dataTransfer.setDragImage(emptyImg, 0, 0);
+        } catch(err) {}
+    }
+
+    const startX = (e.clientX && e.clientX > 0) ? e.clientX : (window.innerWidth / 2);
+    const startY = (e.clientY && e.clientY > 0) ? e.clientY : (window.innerHeight / 2);
+    createPuzzleGhost(piece, startX, startY);
+
+    window.addEventListener('dragover', handleGlobalDragOver, { passive: false });
+    window.addEventListener('dragend', handlePuzzleDragEnd);
+}
+
+function handleGlobalDragOver(e) {
+    if (!isPuzzleMode) return;
+    e.preventDefault();
+    if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+    }
+
+    if (e.clientX || e.clientY) {
+        updatePuzzleGhostPosition(e.clientX, e.clientY);
+    }
+
+    const map = getMapObject();
+    if (map) {
+        try {
+            const container = map.getContainer();
+            const rect = container.getBoundingClientRect();
+            if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                container.classList.add('puzzle-drop-active');
+            } else {
+                container.classList.remove('puzzle-drop-active');
+            }
+        } catch(err) {}
     }
 }
 
 function handlePuzzleDragEnd(e) {
+    window._isHtml5Dragging = false;
     window._draggedPuzzleDistrictId = null;
+    removePuzzleGhost();
+
     document.querySelectorAll('.puzzle-silhouette-card.dragging, .puzzle-chip.dragging, .puzzle-target-card.dragging').forEach(el => {
         el.classList.remove('dragging');
     });
@@ -1581,6 +1657,98 @@ function handlePuzzleDragEnd(e) {
             map.getContainer().classList.remove('puzzle-drop-active');
         } catch(err) {}
     }
+}
+
+function handlePuzzlePointerDown(e, districtId) {
+    if (!isPuzzleMode) return;
+    if (e.button !== undefined && e.button !== 0) return; // Только основная кнопка мыши или палец
+
+    const piece = puzzleDistricts.find(p => p.id === districtId);
+    if (!piece) return;
+
+    pointerDragPiece = piece;
+    pointerDragStartPt = { x: e.clientX, y: e.clientY };
+    isPointerDragging = false;
+
+    window.addEventListener('pointermove', onWindowPointerMove, { passive: false });
+    window.addEventListener('pointerup', onWindowPointerUp);
+    window.addEventListener('pointercancel', onWindowPointerUp);
+}
+
+function onWindowPointerMove(e) {
+    if (!pointerDragPiece || !pointerDragStartPt) return;
+
+    // Если нативный HTML5 drag уже запустился, не дублируем
+    if (window._isHtml5Dragging) return;
+
+    const dx = e.clientX - pointerDragStartPt.x;
+    const dy = e.clientY - pointerDragStartPt.y;
+
+    if (!isPointerDragging) {
+        if (Math.hypot(dx, dy) > 5) {
+            isPointerDragging = true;
+            window._draggedPuzzleDistrictId = pointerDragPiece.id;
+            setActivePuzzlePiece(pointerDragPiece);
+            createPuzzleGhost(pointerDragPiece, e.clientX, e.clientY);
+        }
+    }
+
+    if (isPointerDragging) {
+        if (e.cancelable) e.preventDefault();
+        updatePuzzleGhostPosition(e.clientX, e.clientY);
+
+        const map = getMapObject();
+        if (map) {
+            try {
+                const container = map.getContainer();
+                const rect = container.getBoundingClientRect();
+                if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                    e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                    container.classList.add('puzzle-drop-active');
+                } else {
+                    container.classList.remove('puzzle-drop-active');
+                }
+            } catch(err) {}
+        }
+    }
+}
+
+function onWindowPointerUp(e) {
+    window.removeEventListener('pointermove', onWindowPointerMove);
+    window.removeEventListener('pointerup', onWindowPointerUp);
+    window.removeEventListener('pointercancel', onWindowPointerUp);
+
+    if (window._isHtml5Dragging) {
+        pointerDragPiece = null;
+        pointerDragStartPt = null;
+        isPointerDragging = false;
+        return;
+    }
+
+    if (isPointerDragging && pointerDragPiece) {
+        const piece = pointerDragPiece;
+        removePuzzleGhost();
+
+        const map = getMapObject();
+        if (map) {
+            try {
+                const container = map.getContainer();
+                container.classList.remove('puzzle-drop-active');
+                const rect = container.getBoundingClientRect();
+                if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                    e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const latlng = map.containerPointToLatLng(L.point(x, y));
+                    processPuzzleDropPlacement(piece, latlng);
+                }
+            } catch(err) {}
+        }
+    }
+
+    pointerDragPiece = null;
+    pointerDragStartPt = null;
+    isPointerDragging = false;
 }
 
 function processPuzzleDropPlacement(targetDistrict, latlng) {
@@ -1724,6 +1892,7 @@ function setActivePuzzlePiece(piece) {
         card.setAttribute('draggable', 'true');
         card.ondragstart = (e) => handlePuzzleDragStart(e, piece.id);
         card.ondragend = (e) => handlePuzzleDragEnd(e);
+        card.onpointerdown = (e) => handlePuzzlePointerDown(e, piece.id);
         card.title = `Перетащите силуэт «${piece.name}» на карту`;
     }
 
@@ -1772,6 +1941,7 @@ function renderPuzzleTray() {
                  draggable="true" 
                  ondragstart="handlePuzzleDragStart(event, '${p.id}')" 
                  ondragend="handlePuzzleDragEnd(event)" 
+                 onpointerdown="handlePuzzlePointerDown(event, '${p.id}')" 
                  onclick="selectPuzzlePieceById('${p.id}')" 
                  title="«${p.name}» ${isNeighbor ? '— граничит с ядром, готов к стыковке!' : '— ждет соседних районов'}">
                 <span class="${badgeClass}">${badgeText}</span>
@@ -2028,6 +2198,7 @@ function exitPuzzleMode() {
     isPuzzleMode = false;
     currentQuiz = null;
 
+    removePuzzleGhost();
     removePuzzleDropZone();
     closePuzzleVictoryModal();
 

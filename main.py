@@ -2251,6 +2251,19 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
             transition: box-shadow 0.2s ease;
         }}
 
+        #puzzle-drag-ghost, .puzzle-drag-ghost-active {{
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            pointer-events: none !important;
+            z-index: 999999 !important;
+            will-change: transform !important;
+            opacity: 0.92 !important;
+            filter: drop-shadow(0 8px 24px rgba(37, 99, 235, 0.45)) !important;
+            user-select: none !important;
+            transform-origin: 0 0 !important;
+        }}
+
         .puzzle-placed-label {{
             background: transparent;
             border: none;
