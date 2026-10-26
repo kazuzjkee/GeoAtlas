@@ -31,6 +31,12 @@ let examToken = '';
 let antiCheatActive = false;
 let blurCooldown = false;
 
+// ==================== СИНХРОННЫЙ ЭКЗАМЕНАЦИОННЫЙ ДИСПЕТЧЕР (LMS) ====================
+let currentSyncSessionId = null;
+let currentSyncGroupName = null;
+let syncExamRemainingSec = null;
+let syncSessionHeartbeatTimer = null;
+
 let studyCategory = 'districts';
 let studyQueue = [];
 let studyIndex = 0;
@@ -278,7 +284,8 @@ function updateGlobalExamTimerDisplay() {
     const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
     if (timerText) {
-        timerText.textContent = `⏳ Экзамен: ${timeStr}`;
+        const syncLabel = currentSyncGroupName ? ` [${currentSyncGroupName}]` : '';
+        timerText.textContent = `⏳ Экзамен${syncLabel}: ${timeStr}`;
         timerText.style.fontWeight = '800';
         timerText.style.color = examTimeRemaining < 120 ? '#EF4444' : '#1E293B';
     }
@@ -604,7 +611,12 @@ function startExamQuiz(category = 'mixed', count = 15, timeLimitMinutes = 10) {
     examCategory = category;
     examQuestionCount = count || 15;
     examTimeLimitMinutes = timeLimitMinutes || 10;
-    examTimeRemaining = examTimeLimitMinutes * 60;
+    // Строгий расчет: если экзамен синхронный, используется остаток абсолютного серверного времени
+    if (currentSyncSessionId && typeof syncExamRemainingSec === 'number' && syncExamRemainingSec > 0) {
+        examTimeRemaining = syncExamRemainingSec;
+    } else {
+        examTimeRemaining = examTimeLimitMinutes * 60;
+    }
     examCheatingViolations = 0;
     examStatus = 'passed';
     examToken = '';
@@ -3484,9 +3496,16 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         is_exam: wasExam,
         exam_token: token,
         violations: violations,
-        exam_status: displayStatus
+        exam_status: displayStatus,
+        session_id: currentSyncSessionId || ''
     });
     localStorage.setItem('rostovQuizResults', JSON.stringify(results));
+
+    if (currentSyncSessionId) {
+        try {
+            localStorage.setItem('sfedu_exam_submitted_' + currentSyncSessionId, 'true');
+        } catch(e) {}
+    }
 
     if (student) {
         fetch('/api/results/save', {
@@ -3504,7 +3523,8 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
                 is_exam: wasExam,
                 exam_token: token,
                 violations: violations,
-                exam_status: displayStatus
+                exam_status: displayStatus,
+                session_id: currentSyncSessionId || ''
             })
         }).catch(e => {});
     }
@@ -3756,4 +3776,218 @@ window.addEventListener('load', function() {
     if (!localStorage.getItem('rostovMapHideWelcome')) {
         setTimeout(openWelcomeModal, 400);
     }
+
+    // Проверка и подключение к синхронной экзаменационной сессии
+    setTimeout(checkAndApplySyncExamSession, 600);
 });
+
+// ==================== СИНХРОННЫЙ ЭКЗАМЕНАЦИОННЫЙ ДИСПЕТЧЕР ЮФУ (LMS) ====================
+
+function renderSyncExamBanner(session, remainingSeconds) {
+    let existing = document.getElementById('sync-exam-top-banner');
+    if (existing) existing.remove();
+
+    const mins = Math.floor(remainingSeconds / 60);
+    const secs = remainingSeconds % 60;
+    const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    const bannerHtml = `
+    <div id="sync-exam-top-banner" style="position: fixed; top: 0; left: 0; right: 0; z-index: 99999; background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%); color: #FFFFFF; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 20px rgba(0,0,0,0.35); border-bottom: 2px solid #8B5CF6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #EF4444; box-shadow: 0 0 10px #EF4444; animation: syncPulse 1.5s infinite;"></span>
+            <div>
+                <strong style="font-size: 13.5px; letter-spacing: 0.02em;">🔴 СИНХРОННЫЙ ЭКЗАМЕН ЮФУ • ГРУППА: ${session.group_name || 'ВКР'}</strong>
+                <div style="font-size: 11.5px; color: #CBD5E1;">Абсолютное серверное время • Режим контроля Anti-Cheat</div>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="background: rgba(15, 23, 42, 0.7); padding: 5px 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); font-family: monospace; font-size: 15px; font-weight: 800; color: #FBBF24;">
+                ⏳ ${timeStr}
+            </div>
+            <button onclick="startSynchronousExamFromBanner()" style="background: linear-gradient(135deg, #7C3AED, #4F46E5); color: #FFF; border: none; font-size: 12.5px; font-weight: 700; padding: 7px 18px; border-radius: 6px; cursor: pointer; box-shadow: 0 2px 10px rgba(124,58,237,0.45); transition: opacity 0.2s;">
+                🚀 Приступить к тестированию
+            </button>
+        </div>
+    </div>
+    <style>
+        @keyframes syncPulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+    </style>
+    `;
+
+    document.body.insertAdjacentHTML('afterbegin', bannerHtml);
+}
+
+function startSynchronousExamFromBanner() {
+    const banner = document.getElementById('sync-exam-top-banner');
+    if (banner) banner.style.opacity = '0.75';
+
+    if (window.currentSyncSessionMode === 'puzzle' && typeof startPuzzleGame === 'function') {
+        startPuzzleGame();
+    } else {
+        startExamQuiz('mixed', window.currentSyncQuestionCount || 15, window.currentSyncTimeLimit || 10);
+    }
+}
+
+function renderExamExpiredModal(session) {
+    const modalHtml = `
+    <div style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(8px); z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="background: #FFFFFF; border-radius: 16px; max-width: 480px; width: 100%; padding: 32px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+            <div style="font-size: 48px; margin-bottom: 12px;">⏰</div>
+            <h3 style="font-size: 20px; color: #1E293B; margin-bottom: 8px; font-weight: 800;">Экзаменационная сессия завершена</h3>
+            <p style="font-size: 14px; color: #64748B; line-height: 1.5; margin-bottom: 22px;">
+                Время тестирования для учебной группы <b>«${session.group_name || 'ЮФУ'}»</b> полностью истекло в соответствии с сервером аттестации. Доступ к контрольной закрыт.
+            </p>
+            <button onclick="window.location.href='index.html'" style="background: #4F46E5; color: #FFF; border: none; font-size: 14px; font-weight: 700; padding: 10px 24px; border-radius: 8px; cursor: pointer;">
+                Вернуться на главную GeoAtlas
+            </button>
+        </div>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function renderExamAlreadySubmittedBanner(session) {
+    const bannerHtml = `
+    <div style="position: fixed; top: 0; left: 0; right: 0; z-index: 99999; background: #064E3B; color: #FFFFFF; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #10B981; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 20px;">✅</span>
+            <span style="font-size: 13.5px; font-weight: 600;">
+                Вы уже успешно сдали синхронный экзамен для группы «${session.group_name || 'ЮФУ'}»! Результат зафиксирован в ведомости преподавателя.
+            </span>
+        </div>
+        <button onclick="window.location.href='index.html'" style="background: rgba(255,255,255,0.2); color: #FFF; border: 1px solid rgba(255,255,255,0.4); font-size: 12px; font-weight: 600; padding: 5px 14px; border-radius: 6px; cursor: pointer;">
+            На главную
+        </button>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('afterbegin', bannerHtml);
+}
+
+function startSyncHeartbeat(sessionId) {
+    if (syncSessionHeartbeatTimer) clearInterval(syncSessionHeartbeatTimer);
+    syncSessionHeartbeatTimer = setInterval(async () => {
+        try {
+            const res = await fetch('/api/exam/active-session');
+            if (res.ok) {
+                const data = await res.json();
+                if (!data || !data.session || data.session.status !== 'active' || data.session.session_id !== sessionId) {
+                    clearInterval(syncSessionHeartbeatTimer);
+                    if (isExamMode) {
+                        alert('⏹️ Преподаватель завершил экзаменационную сессию. Ваши результаты зафиксированы.');
+                        finishExamEarly(true);
+                    }
+                }
+            }
+        } catch (e) {
+            try {
+                const raw = localStorage.getItem('activeExamSession');
+                const s = raw ? JSON.parse(raw) : null;
+                if (!s || s.status !== 'active' || s.session_id !== sessionId) {
+                    clearInterval(syncSessionHeartbeatTimer);
+                    if (isExamMode) {
+                        alert('⏹️ Экзаменационная сессия была завершена преподавателем.');
+                        finishExamEarly(true);
+                    }
+                }
+            } catch (err) {}
+        }
+    }, 4000);
+}
+
+async function checkAndApplySyncExamSession() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const qSessionId = urlParams.get('session_id');
+    const qGroup = urlParams.get('group');
+    const qLimit = parseInt(urlParams.get('limit') || '0', 10);
+    const qTime = parseInt(urlParams.get('time') || '0', 10);
+    const qStart = parseInt(urlParams.get('start') || '0', 10);
+    const qMode = urlParams.get('mode') || 'quiz';
+
+    let session = null;
+    let serverNow = Date.now();
+
+    try {
+        const res = await fetch('/api/exam/active-session');
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.session && data.session.status === 'active') {
+                session = data.session;
+                serverNow = data.current_server_time || Date.now();
+            }
+        }
+    } catch (e) {
+        try {
+            const raw = localStorage.getItem('activeExamSession');
+            if (raw) {
+                const s = JSON.parse(raw);
+                if (s && s.status === 'active') {
+                    session = s;
+                }
+            }
+        } catch (err) {}
+    }
+
+    if (qSessionId && qStart && qTime) {
+        session = {
+            session_id: qSessionId,
+            group_name: qGroup ? decodeURIComponent(qGroup) : '',
+            time_limit_minutes: qTime,
+            questions_count: qLimit || 15,
+            started_at: qStart,
+            mode: qMode,
+            status: 'active'
+        };
+    }
+
+    if (!session || session.status !== 'active') return;
+
+    const student = getCurrentStudentInfo();
+    const isUrlDriven = !!qSessionId;
+    const isStudentGroupMatched = student && (
+        student.group === session.group_name ||
+        student.group === session.group_id ||
+        (session.group_name && student.group && session.group_name.toLowerCase().includes(student.group.toLowerCase()))
+    );
+
+    if (!isUrlDriven && !isStudentGroupMatched) return;
+
+    // Проверяем, сдавал ли студент уже этот экзамен
+    const alreadySubmittedLocal = localStorage.getItem('sfedu_exam_submitted_' + session.session_id);
+    const results = JSON.parse(localStorage.getItem('rostovQuizResults') || '[]');
+    const alreadyInResults = results.some(r => r.session_id === session.session_id);
+    if (alreadySubmittedLocal || alreadyInResults) {
+        renderExamAlreadySubmittedBanner(session);
+        return;
+    }
+
+    // Абсолютный расчет времени:
+    // Оставшееся_время = (sessionStartedAt + timeLimitMinutes * 60 * 1000) - currentServerTime
+    const sessionEndTime = session.started_at + (session.time_limit_minutes * 60 * 1000);
+    const remainingSeconds = Math.max(0, Math.floor((sessionEndTime - serverNow) / 1000));
+
+    if (remainingSeconds <= 0) {
+        renderExamExpiredModal(session);
+        return;
+    }
+
+    currentSyncSessionId = session.session_id;
+    currentSyncGroupName = session.group_name;
+    syncExamRemainingSec = remainingSeconds;
+    window.currentSyncQuestionCount = session.questions_count || 15;
+    window.currentSyncTimeLimit = session.time_limit_minutes || 10;
+    window.currentSyncSessionMode = session.mode || 'quiz';
+
+    renderSyncExamBanner(session, remainingSeconds);
+    startSyncHeartbeat(session.session_id);
+
+    // Если студент перешел по прямой ссылке на экзамен, сразу активируем контрольную
+    if (isUrlDriven) {
+        setTimeout(() => {
+            startSynchronousExamFromBanner();
+        }, 1200);
+    }
+}

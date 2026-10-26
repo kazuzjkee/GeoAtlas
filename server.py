@@ -24,6 +24,41 @@ app.add_middleware(
 
 verification_storage = {}
 RESULTS_FILE = "quiz_results.json"
+GROUPS_FILE = "groups.json"
+ACTIVE_SESSION_FILE = "active_session.json"
+
+DEFAULT_GROUPS = [
+    {
+        "id": "grp-geofak-51",
+        "name": "Геофак-51 (ВКР)",
+        "description": "5 курс, профиль: География и Экономика (ВКР)",
+        "students": [
+            {"name": "Литвинов Е. К.", "email": "elitvinov@sfedu.ru"},
+            {"name": "Иванов И. И.", "email": "ivanov@sfedu.ru"},
+            {"name": "Сидорова М. В.", "email": "sidorova@sfedu.ru"}
+        ],
+        "created_at": "26.10.2026 10:00"
+    },
+    {
+        "id": "grp-econom-31",
+        "name": "Эконом-31 (ЮФО)",
+        "description": "3 курс, экономический анализ и ВРП",
+        "students": [
+            {"name": "Петров А. С.", "email": "petrov@sfedu.ru"}
+        ],
+        "created_at": "26.10.2026 10:00"
+    },
+    {
+        "id": "grp-geofak-41",
+        "name": "Геофак-41 (Бакалавриат)",
+        "description": "4 курс, картография и ГИС",
+        "students": [
+            {"name": "Ковалев Д. В.", "email": "kovalev@sfedu.ru"},
+            {"name": "Смирнова А. А.", "email": "smirnova@sfedu.ru"}
+        ],
+        "created_at": "26.10.2026 10:00"
+    }
+]
 
 class AuthRequest(BaseModel):
     email: str
@@ -47,6 +82,28 @@ class ResultSubmit(BaseModel):
     exam_token: str = ""
     violations: int = 0
     exam_status: str = "Сдано"
+    session_id: str = ""
+
+class StudentItem(BaseModel):
+    name: str
+    email: str
+
+class GroupModel(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    students: list[StudentItem] = []
+    created_at: str = ""
+
+class LaunchSessionRequest(BaseModel):
+    groupId: str
+    groupName: str
+    mapUrl: str
+    regionName: str
+    quizType: str
+    quizTypeName: str
+    questionCount: int = 15
+    timeLimitMinutes: int = 10
 
 def load_results():
     if os.path.exists(RESULTS_FILE):
@@ -62,6 +119,36 @@ def save_result_to_file(result_data):
     results.append(result_data)
     with open(RESULTS_FILE, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
+
+def load_groups():
+    if os.path.exists(GROUPS_FILE):
+        try:
+            with open(GROUPS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) > 0:
+                    return data
+        except Exception:
+            pass
+    # Если файл не существует, инициализируем дефолтными группами
+    save_groups_to_file(DEFAULT_GROUPS)
+    return DEFAULT_GROUPS
+
+def save_groups_to_file(groups_data):
+    with open(GROUPS_FILE, "w", encoding="utf-8") as f:
+        json.dump(groups_data, f, ensure_ascii=False, indent=2)
+
+def load_active_session():
+    if os.path.exists(ACTIVE_SESSION_FILE):
+        try:
+            with open(ACTIVE_SESSION_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
+    return None
+
+def save_active_session(session_data):
+    with open(ACTIVE_SESSION_FILE, "w", encoding="utf-8") as f:
+        json.dump(session_data, f, ensure_ascii=False, indent=2)
 
 def check_admin(credentials: HTTPBasicCredentials = Depends(security)):
     correct_user = secrets.compare_digest(credentials.username, "sfedu_admin")
@@ -116,7 +203,8 @@ def save_quiz_result(res: ResultSubmit):
         "is_exam": res.is_exam,
         "exam_token": res.exam_token,
         "violations": res.violations,
-        "exam_status": res.exam_status
+        "exam_status": res.exam_status,
+        "session_id": res.session_id
     }
     save_result_to_file(data)
     return {"status": "ok"}
@@ -127,16 +215,137 @@ def get_leaderboard():
     sorted_res = sorted(results, key=lambda x: (x.get("accuracy", 0), x.get("score", 0)), reverse=True)
     return sorted_res[:25]
 
+# ==========================================
+# LMS УПРАВЛЕНИЕ ГРУППАМИ И СИНХРОННЫМИ СЕССИЯМИ
+# ==========================================
+@app.get("/api/admin/groups")
+def get_admin_groups():
+    return load_groups()
+
+@app.post("/api/admin/groups")
+def save_or_update_group(group: GroupModel):
+    groups = load_groups()
+    group_dict = group.model_dump()
+    if not group_dict.get("created_at"):
+        group_dict["created_at"] = time.strftime("%d.%m.%Y %H:%M")
+    idx = next((i for i, g in enumerate(groups) if g.get("id") == group.id), -1)
+    if idx >= 0:
+        groups[idx] = group_dict
+    else:
+        groups.append(group_dict)
+    save_groups_to_file(groups)
+    return {"status": "ok", "groups": groups}
+
+@app.delete("/api/admin/groups/{group_id}")
+def delete_group(group_id: str):
+    groups = load_groups()
+    groups = [g for g in groups if g.get("id") != group_id]
+    save_groups_to_file(groups)
+    return {"status": "ok", "groups": groups}
+
+@app.get("/api/admin/students")
+def get_all_students():
+    groups = load_groups()
+    results = load_results()
+    students_map = {}
+    for g in groups:
+        for s in g.get("students", []):
+            key = (s.get("email") or s.get("name") or "").strip().lower()
+            if key and key not in students_map:
+                students_map[key] = {"name": s.get("name"), "email": s.get("email", ""), "group": g.get("name")}
+    for r in results:
+        email = (r.get("email") or "").strip().lower()
+        name = r.get("name")
+        if email and email != "-" and email not in students_map:
+            students_map[email] = {"name": name, "email": email, "group": r.get("group", "")}
+    return list(students_map.values())
+
+@app.get("/api/server-time")
+def get_server_time():
+    return {"server_time": int(time.time() * 1000)}
+
+@app.post("/api/exam/launch")
+def launch_exam_session(req: LaunchSessionRequest):
+    now_ms = int(time.time() * 1000)
+    duration_ms = req.timeLimitMinutes * 60 * 1000
+    sess_id = f"SES-SFEDU-{int(time.time())}"
+    session_data = {
+        "sessionId": sess_id,
+        "session_id": sess_id,
+        "groupId": req.groupId,
+        "group_id": req.groupId,
+        "groupName": req.groupName,
+        "group_name": req.groupName,
+        "mapUrl": req.mapUrl,
+        "map_url": req.mapUrl,
+        "regionName": req.regionName,
+        "region_name": req.regionName,
+        "quizType": req.quizType,
+        "quiz_type": req.quizType,
+        "mode": req.quizType,
+        "quizTypeName": req.quizTypeName,
+        "quiz_type_name": req.quizTypeName,
+        "questionCount": req.questionCount,
+        "questions_count": req.questionCount,
+        "timeLimitMinutes": req.timeLimitMinutes,
+        "time_limit_minutes": req.timeLimitMinutes,
+        "sessionStartedAt": now_ms,
+        "started_at": now_ms,
+        "durationMs": duration_ms,
+        "duration_ms": duration_ms,
+        "endTime": now_ms + duration_ms,
+        "end_time": now_ms + duration_ms,
+        "status": "active",
+        "created_date": time.strftime("%d.%m.%Y %H:%M:%S")
+    }
+    save_active_session(session_data)
+    return {"status": "ok", "session": session_data, "server_time": now_ms}
+
+@app.get("/api/exam/active-session")
+def get_active_exam_session():
+    session = load_active_session()
+    now_ms = int(time.time() * 1000)
+    if not session or session.get("status") in ["stopped", "completed"]:
+        return {"session": None, "current_server_time": now_ms, "remaining_seconds": 0}
+    
+    started = session.get("sessionStartedAt", 0) or session.get("started_at", 0)
+    duration = session.get("durationMs", 0) or session.get("duration_ms", 0)
+    remaining_sec = max(0, int((started + duration - now_ms) / 1000))
+
+    if remaining_sec <= 0 and session.get("status") == "active":
+        session["status"] = "completed"
+        save_active_session(session)
+        return {"session": None, "current_server_time": now_ms, "remaining_seconds": 0}
+
+    session_copy = dict(session)
+    session_copy["server_time"] = now_ms
+    session_copy["remaining_seconds"] = remaining_sec
+    return {"session": session_copy, "current_server_time": now_ms, "remaining_seconds": remaining_sec}
+
+@app.post("/api/exam/stop")
+def stop_exam_session():
+    session = load_active_session()
+    if session:
+        session["status"] = "stopped"
+        save_active_session(session)
+    return {"status": "ok"}
+
 @app.get("/admin", response_class=HTMLResponse)
 @app.get("/admin.html", response_class=HTMLResponse)
 def admin_panel(username: str = Depends(check_admin)):
     results = load_results()
+    groups = load_groups()
+    active_session = load_active_session()
     admin_path = os.path.join(os.path.dirname(__file__), "admin.html")
     if os.path.exists(admin_path):
         with open(admin_path, "r", encoding="utf-8") as f:
             template = f.read()
         results_json = json.dumps(results, ensure_ascii=False)
+        groups_json = json.dumps(groups, ensure_ascii=False)
+        session_json = json.dumps(active_session, ensure_ascii=False)
         rendered = template.replace("__SERVER_RESULTS_JSON__", results_json)
+        rendered = rendered.replace("__SERVER_GROUPS_JSON__", groups_json)
+        rendered = rendered.replace("__SERVER_SESSION_JSON__", session_json)
         return HTMLResponse(content=rendered)
 
     total_tests = len(results)

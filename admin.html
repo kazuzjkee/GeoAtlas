@@ -655,6 +655,358 @@
             border: 1px solid #334155;
         }
 
+        /* ========================================================
+           LMS GROUP MANAGEMENT & TEST DISPATCHER STYLES
+           ======================================================== */
+        .lms-groups-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+            padding: 18px 20px;
+        }
+
+        .lms-group-card {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .lms-group-card:hover {
+            border-color: #93C5FD;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .lms-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .lms-group-name {
+            font-size: 15px;
+            font-weight: 800;
+            color: #0F172A;
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .lms-group-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .lms-roster-wrap {
+            background: #F8FAFC;
+            border: 1px solid #F1F5F9;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .lms-roster-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748B;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .student-pills-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 110px;
+            overflow-y: auto;
+        }
+
+        .student-pill {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #334155;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .student-pill .pill-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #10B981;
+        }
+
+        .lms-card-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: auto;
+            padding-top: 8px;
+            border-top: 1px solid #F1F5F9;
+        }
+
+        /* Dispatcher Form */
+        .dispatcher-form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 16px;
+            padding: 18px 20px;
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-label {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .form-select, .form-input {
+            width: 100%;
+            padding: 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: inherit;
+            color: var(--text-main);
+            background: #FFFFFF;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        .form-select:focus, .form-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+
+        .dispatcher-bottom-bar {
+            padding: 14px 20px;
+            background: #F8FAFC;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .dispatcher-info-note {
+            font-size: 12px;
+            color: #475569;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Active Session Monitor */
+        .active-session-banner {
+            background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 100%);
+            border: 1px solid #334155;
+            color: white;
+            border-radius: 14px;
+            padding: 18px 22px;
+            margin-bottom: 22px;
+            box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12);
+        }
+
+        .session-banner-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .session-live-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 800;
+            background: rgba(16, 185, 129, 0.18);
+            border: 1px solid #10B981;
+            color: #34D399;
+            padding: 4px 10px;
+            border-radius: 6px;
+            letter-spacing: 0.3px;
+        }
+
+        .pulse-beacon {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10B981;
+            animation: beaconPulse 1.8s infinite ease-in-out;
+        }
+        @keyframes beaconPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.6); opacity: 0.5; }
+        }
+
+        .session-timer-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 18px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(0, 0, 0, 0.35);
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #F8FAFC;
+        }
+
+        .session-details-strip {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-size: 12.5px;
+            color: #CBD5E1;
+            margin-bottom: 14px;
+        }
+        .session-detail-item strong {
+            color: #FFFFFF;
+        }
+
+        .live-student-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            background: rgba(15, 23, 42, 0.4);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .live-student-table th {
+            background: rgba(255, 255, 255, 0.06);
+            color: #94A3B8;
+            text-align: left;
+            padding: 8px 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .live-student-table td {
+            padding: 8px 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            color: #E2E8F0;
+        }
+
+        /* Modal dialog for LMS Groups */
+        .lms-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .lms-modal-window {
+            background: #FFFFFF;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 580px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border);
+        }
+
+        .lms-modal-header {
+            padding: 16px 20px;
+            background: #0F172A;
+            color: #FFFFFF;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .lms-modal-header h3 {
+            font-size: 16px;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .lms-modal-body {
+            padding: 18px 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .student-checklist {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            max-height: 220px;
+            overflow-y: auto;
+            background: #F8FAFC;
+        }
+
+        .student-check-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #F1F5F9;
+            font-size: 12.5px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .student-check-item:hover {
+            background: #EFF6FF;
+        }
+        .student-check-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: var(--primary);
+        }
+
+        .lms-modal-footer {
+            padding: 14px 20px;
+            background: #F8FAFC;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
         @media (max-width: 768px) {
             body { padding: 12px; }
             .portal-header { padding: 14px; }
@@ -722,16 +1074,159 @@
         </div>
     </section>
 
-    <!-- Academic Groups Card -->
-    <section class="section-card">
+    <!-- 1. АКТИВНАЯ СИНХРОННАЯ СЕССИЯ (LIVE SESSION MONITOR) -->
+    <div id="active-session-card" class="active-session-banner" style="display: none;">
+        <div class="session-banner-top">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div class="session-live-badge">
+                    <span class="pulse-beacon"></span>
+                    <span>СИНХРОННЫЙ ЭКЗАМЕН АКТИВЕН</span>
+                </div>
+                <div style="font-size: 15px; font-weight: 800; color: #FFFFFF; font-family: 'JetBrains Mono', monospace;" id="active-group-name">
+                    Группа: —
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="session-timer-box" title="Синхронизировано по серверному времени ЮФУ">
+                    <span style="font-size: 14px; opacity: 0.8;">⏳ До завершения:</span>
+                    <span id="active-session-timer" style="color: #38BDF8;">10:00</span>
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" onclick="stopCurrentSession()" title="Принудительно остановить экзамен для всех студентов группы">
+                    <span>⏹️</span> <span>Завершить тест</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="session-details-strip">
+            <div class="session-detail-item">🗺️ Регион: <strong id="active-region-name">—</strong></div>
+            <div class="session-detail-item">📝 Формат: <strong id="active-test-type">—</strong></div>
+            <div class="session-detail-item">🎯 Вопросов: <strong id="active-count">—</strong></div>
+            <div class="session-detail-item">🔑 Сессия: <strong id="active-session-id" style="font-family: 'JetBrains Mono'; color: #A78BFA;">—</strong></div>
+            <div class="session-detail-item">🔗 Ссылка для входа: <button class="btn btn-glass btn-sm" onclick="copySessionStudentLink()" title="Скопировать ссылку для отправки в чат группы">📋 Скопировать</button></div>
+        </div>
+
+        <!-- Таблица студентов группы в реальном времени -->
+        <div style="margin-top: 10px;">
+            <div style="font-size: 11px; font-weight: 700; color: #94A3B8; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.4px;">
+                Монитор сдачи студентами группы в реальном времени:
+            </div>
+            <table class="live-student-table">
+                <thead>
+                    <tr>
+                        <th>№</th>
+                        <th>ФИО Студента</th>
+                        <th>Корпоративный Email</th>
+                        <th>Статус сдачи</th>
+                        <th>Баллы / Результат</th>
+                        <th>Anti-Cheat</th>
+                        <th>Токен сдачи</th>
+                    </tr>
+                </thead>
+                <tbody id="active-session-students-tbody">
+                    <!-- Заполняется динамически -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 2. УПРАВЛЕНИЕ УЧЕБНЫМИ ГРУППАМИ (LMS GROUPS MANAGER) -->
+    <section class="section-card" id="groups-manager-section">
         <div class="section-header">
             <div class="section-title">
-                <span>👥</span> <span>Сводка по учебным группам ЮФУ</span>
+                <span>👥</span> <span>Управление учебными группами ЮФУ (LMS Roster)</span>
             </div>
-            <span style="font-size: 12px; color: var(--text-muted);" id="groups-count-label">0 групп</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 12px; color: var(--text-muted);" id="groups-count-label">3 группы</span>
+                <button type="button" class="btn btn-primary btn-sm" onclick="openCreateGroupModal()" title="Создать новую учебную группу студентов">
+                    <span>➕</span> <span>Создать группу</span>
+                </button>
+            </div>
         </div>
-        <div class="group-chips" id="group-chips-container">
-            <div style="color: var(--text-muted); font-size: 13px;">Данные по группам загружаются...</div>
+
+        <div class="lms-groups-grid" id="lms-groups-container">
+            <!-- Карточки групп генерируются динамически -->
+        </div>
+    </section>
+
+    <!-- 3. КОНФИГУРАТОР СИНХРОННОЙ СЕССИИ (TEST DISPATCHER) -->
+    <section class="section-card" id="test-dispatcher-section">
+        <div class="section-header">
+            <div class="section-title">
+                <span>🚀</span> <span>Конфигуратор синхронной экзаменационной сессии (Test Dispatcher)</span>
+            </div>
+            <span style="font-size: 11.5px; color: #2563EB; font-weight: 700; background: #EFF6FF; border: 1px solid #BFDBFE; padding: 2px 8px; border-radius: 6px;">
+                ⚡ Серверная синхронизация времени
+            </span>
+        </div>
+
+        <div class="dispatcher-form-grid">
+            <div class="form-field">
+                <label class="form-label" for="dispatch-group-select">1. Целевая учебная группа</label>
+                <select id="dispatch-group-select" class="form-select" onchange="handleDispatcherGroupChange()">
+                    <!-- Опции групп подставляются динамически -->
+                </select>
+            </div>
+
+            <div class="form-field">
+                <label class="form-label" for="dispatch-region-select">2. Картографический регион</label>
+                <select id="dispatch-region-select" class="form-select">
+                    <option value="rostov_quiz_map.html" selected>🗺️ Ростовская область (Пилотный полигон ЮФО)</option>
+                    <option value="russia_quiz_map.html">🇷🇺 Российская Федерация (Общероссийский)</option>
+                    <option value="krasnodar_quiz_map.html">🍇 Краснодарский край (Кубань и Черноморье)</option>
+                    <option value="adygey_quiz_map.html">🌊 Республика Адыгея</option>
+                    <option value="volgograd_quiz_map.html">🏛️ Волгоградская область</option>
+                    <option value="astrakhan_quiz_map.html">🐟 Астраханская область</option>
+                </select>
+            </div>
+
+            <div class="form-field">
+                <label class="form-label" for="dispatch-type-select">3. Формат тестирования / срез</label>
+                <select id="dispatch-type-select" class="form-select">
+                    <option value="exam_mixed" selected>🛡️ Комплексный экзаменационный срез (Районы + Реки + Экономика)</option>
+                    <option value="puzzle">🧩 Топологический пазл (Сборка контура региона)</option>
+                    <option value="center">📍 Районы и муниципальные образования</option>
+                    <option value="neighbor">🔗 Смежность и соседские связи</option>
+                    <option value="river">🌊 Гидрографическая сеть и водные артерии</option>
+                </select>
+            </div>
+
+            <div class="form-field">
+                <label class="form-label" for="dispatch-count-select">4. Число вопросов / объектов</label>
+                <select id="dispatch-count-select" class="form-select">
+                    <option value="10">10 вопросов (Экспресс-контроль)</option>
+                    <option value="15" selected>15 вопросов (Стандарт ГЭК ЮФУ)</option>
+                    <option value="20">20 вопросов (Расширенный срез)</option>
+                    <option value="25">25 вопросов (Полный аттестационный модуль)</option>
+                    <option value="30">30 вопросов (Максимальный охват)</option>
+                </select>
+            </div>
+
+            <div class="form-field">
+                <label class="form-label" for="dispatch-time-select">5. Лимит времени на тест</label>
+                <select id="dispatch-time-select" class="form-select">
+                    <option value="5">5 минут (Блиц-тест)</option>
+                    <option value="7">7 минут</option>
+                    <option value="10" selected>10 минут (Рекомендовано для 15 в.)</option>
+                    <option value="15">15 минут</option>
+                    <option value="20">20 минут</option>
+                    <option value="30">30 минут (Академический зачет)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="dispatcher-bottom-bar">
+            <div class="dispatcher-info-note">
+                <span>⏱️</span>
+                <span>
+                    <strong>Абсолютное серверное время:</strong> При старте фиксируется точный timestamp старта. Студенты, опоздавшие на 2–3 минуты, увидят остаток времени до единого финиша группы.
+                </span>
+            </div>
+
+            <button type="button" class="btn btn-primary" onclick="launchGroupTest()" id="btn-launch-dispatch">
+                <span class="btn-sparkle">🚀</span>
+                <span>Запустить тест для группы</span>
+            </button>
         </div>
     </section>
 
@@ -796,34 +1291,127 @@
     </section>
 </div>
 
+<!-- МОДАЛЬНОЕ ОКНО СОЗДАНИЯ / РЕДАКТИРОВАНИЯ УЧЕБНОЙ ГРУППЫ -->
+<div id="lms-group-modal" class="lms-modal-overlay">
+    <div class="lms-modal-window">
+        <div class="lms-modal-header">
+            <h3 id="lms-modal-title">Создание учебной группы</h3>
+            <button type="button" class="btn btn-glass btn-sm" onclick="closeGroupModal()" style="color:#FFF;">&times;</button>
+        </div>
+
+        <div class="lms-modal-body">
+            <input type="hidden" id="edit-group-id" value="">
+
+            <div class="form-field">
+                <label class="form-label" for="modal-group-name">Название академической группы *</label>
+                <input type="text" id="modal-group-name" class="form-input" placeholder="Например: Геофак-51 (ВКР)">
+            </div>
+
+            <div class="form-field">
+                <label class="form-label" for="modal-group-desc">Профиль / Описание группы</label>
+                <input type="text" id="modal-group-desc" class="form-input" placeholder="Например: 5 курс, Педагогическое образование (География и Экономика)">
+            </div>
+
+            <div class="form-field">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label">Состав студентов (выберите галочками)</label>
+                    <span style="font-size: 11px; color: var(--primary); font-weight: 700;" id="checked-students-count">Выбрано: 0</span>
+                </div>
+
+                <div class="student-checklist" id="modal-students-checklist">
+                    <!-- Заполняется чекбоксами студентов -->
+                </div>
+            </div>
+
+            <!-- Быстрое добавление нового студента в систему -->
+            <div style="background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;">➕ Быстро добавить студента в список:</span>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <input type="text" id="quick-new-name" class="form-input" placeholder="ФИО (например: Морозов К. И.)" style="flex: 1; min-width: 160px;">
+                    <input type="email" id="quick-new-email" class="form-input" placeholder="email@sfedu.ru" style="flex: 1; min-width: 140px;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="addQuickStudentToList()">Добавить</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="lms-modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeGroupModal()">Отмена</button>
+            <button type="button" class="btn btn-primary" onclick="saveGroupFromModal()" id="btn-save-group">
+                <span>💾</span> <span>Обновить группу</span>
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Floating Toast Notification -->
 <div id="toast">
     <span>📋</span> <span id="toast-text">Код скопирован</span>
 </div>
 
-<!-- Injected Server Results -->
+<!-- Injected Server Data -->
 <script id="server-results-data" type="application/json">
 __SERVER_RESULTS_JSON__
+</script>
+<script id="server-groups-data" type="application/json">
+__SERVER_GROUPS_JSON__
+</script>
+<script id="server-session-data" type="application/json">
+__SERVER_SESSION_JSON__
 </script>
 
 <script>
     let allResults = [];
+    let allGroups = [];
+    let activeSession = null;
+    let sessionCountdownTimer = null;
+    let allKnownStudents = [];
     let activeFilter = 'all';
     let searchQuery = '';
 
+    const DEFAULT_PRESET_GROUPS = [
+        {
+            id: "grp-geofak-51",
+            name: "Геофак-51 (ВКР)",
+            description: "5 курс, профиль: География и Экономика (ВКР)",
+            students: [
+                { name: "Литвинов Е. К.", email: "elitvinov@sfedu.ru" },
+                { name: "Иванов И. И.", email: "ivanov@sfedu.ru" },
+                { name: "Сидорова М. В.", email: "sidorova@sfedu.ru" }
+            ],
+            created_at: "26.10.2026 10:00"
+        },
+        {
+            id: "grp-econom-31",
+            name: "Эконом-31 (ЮФО)",
+            description: "3 курс, экономический анализ и ВРП",
+            students: [
+                { name: "Петров А. С.", email: "petrov@sfedu.ru" }
+            ],
+            created_at: "26.10.2026 10:00"
+        },
+        {
+            id: "grp-geofak-41",
+            name: "Геофак-41 (Бакалавриат)",
+            description: "4 курс, картография и ГИС",
+            students: [
+                { name: "Ковалев Д. В.", email: "kovalev@sfedu.ru" },
+                { name: "Смирнова А. А.", email: "smirnova@sfedu.ru" }
+            ],
+            created_at: "26.10.2026 10:00"
+        }
+    ];
+
     function initData() {
+        // 1. Загрузка результатов
         try {
             const raw = document.getElementById('server-results-data').textContent.trim();
             if (raw && raw !== '__SERVER_RESULTS_JSON__') {
                 allResults = JSON.parse(raw);
             }
         } catch (e) {
-            console.error('Ошибка парсинга данных сервера:', e);
             allResults = [];
         }
 
-        // Sort descending by date (most recent first)
-        // If results is empty, try to check localStorage
         if (allResults.length === 0) {
             try {
                 const local = localStorage.getItem('rostovQuizResults');
@@ -832,36 +1420,100 @@ __SERVER_RESULTS_JSON__
                     if (Array.isArray(parsed) && parsed.length > 0) {
                         allResults = parsed.map(r => ({
                             date: r.date,
-                            name: r.student || 'Анонимно',
-                            email: '-',
+                            name: r.student || r.name || 'Анонимно',
+                            email: r.email || '-',
                             group: r.group || 'Не указана',
-                            quiz_type: r.type,
+                            quiz_type: r.type || r.quiz_type || 'Общий',
                             score: r.score,
-                            max_score: r.maxScore,
+                            max_score: r.maxScore || r.max_score,
                             accuracy: r.accuracy,
                             time_spent: r.time_spent,
                             is_exam: !!r.is_exam,
                             exam_token: r.exam_token || '',
                             violations: r.violations || 0,
-                            exam_status: r.exam_status || 'Сдано'
+                            exam_status: r.exam_status || 'Сдано',
+                            session_id: r.session_id || ''
                         }));
                     }
                 }
             } catch (e) {}
         }
 
+        // 2. Загрузка групп (сервер + localStorage + дефолты)
+        try {
+            const grpRaw = document.getElementById('server-groups-data')?.textContent.trim();
+            if (grpRaw && grpRaw !== '__SERVER_GROUPS_JSON__') {
+                allGroups = JSON.parse(grpRaw);
+            }
+        } catch (e) {}
+
+        if (!allGroups || allGroups.length === 0) {
+            try {
+                const localGrp = localStorage.getItem('sfeduGroups');
+                if (localGrp) allGroups = JSON.parse(localGrp);
+            } catch(e) {}
+        }
+        if (!allGroups || allGroups.length === 0) {
+            allGroups = DEFAULT_PRESET_GROUPS.slice();
+            localStorage.setItem('sfeduGroups', JSON.stringify(allGroups));
+        }
+
+        // 3. Формирование каталога всех известных студентов
+        buildKnownStudentsRoster();
+
+        // 4. Загрузка активной сессии
+        try {
+            const sessRaw = document.getElementById('server-session-data')?.textContent.trim();
+            if (sessRaw && sessRaw !== '__SERVER_SESSION_JSON__') {
+                activeSession = JSON.parse(sessRaw);
+            }
+        } catch (e) {}
+
+        if (!activeSession) {
+            try {
+                const localSess = localStorage.getItem('activeExamSession');
+                if (localSess) activeSession = JSON.parse(localSess);
+            } catch(e) {}
+        }
+
         updateKPIs();
-        renderGroups();
+        renderGroupsManager();
+        renderDispatcherGroups();
         renderTable();
+
+        if (activeSession) {
+            checkActiveSessionState();
+        }
+
+        // Периодическая проверка активной сессии и обновление монитора
+        setInterval(checkActiveSessionLoop, 2500);
+    }
+
+    function buildKnownStudentsRoster() {
+        const map = {};
+        allGroups.forEach(g => {
+            (g.students || []).forEach(s => {
+                const key = (s.email || s.name || '').trim().toLowerCase();
+                if (key && !map[key]) {
+                    map[key] = { name: s.name, email: s.email || '' };
+                }
+            });
+        });
+        allResults.forEach(r => {
+            const email = (r.email || '').trim().toLowerCase();
+            const name = r.name;
+            if (email && email !== '-' && !map[email]) {
+                map[email] = { name: name, email: email };
+            }
+        });
+        allKnownStudents = Object.values(map);
     }
 
     function updateKPIs() {
         const total = allResults.length;
         const exams = allResults.filter(r => r.is_exam).length;
-        const quizzes = total - exams;
         const totalViolations = allResults.reduce((sum, r) => sum + (parseInt(r.violations) || 0), 0);
         const avgAcc = total > 0 ? Math.round(allResults.reduce((sum, r) => sum + (parseInt(r.accuracy) || 0), 0) / total) : 0;
-
         const violatingTests = allResults.filter(r => (parseInt(r.violations) || 0) > 0 || (r.exam_status && r.exam_status.includes('Подозрение'))).length;
 
         document.getElementById('kpi-total-tests').textContent = total;
@@ -881,53 +1533,495 @@ __SERVER_RESULTS_JSON__
 
         document.getElementById('cnt-all').textContent = total;
         document.getElementById('cnt-exams').textContent = exams;
-        document.getElementById('cnt-quizzes').textContent = quizzes;
+        document.getElementById('cnt-quizzes').textContent = total - exams;
         document.getElementById('cnt-violations').textContent = violatingTests;
     }
 
-    function renderGroups() {
-        const container = document.getElementById('group-chips-container');
+    // ==========================================
+    // УПРАВЛЕНИЕ УЧЕБНЫМИ ГРУППАМИ (LMS GROUPS)
+    // ==========================================
+    function renderGroupsManager() {
+        const container = document.getElementById('lms-groups-container');
+        const countLabel = document.getElementById('groups-count-label');
+        if (countLabel) countLabel.textContent = `${allGroups.length} групп`;
         if (!container) return;
 
-        const groups = {};
-        allResults.forEach(r => {
-            const grp = r.group && r.group.trim() !== '-' ? r.group.trim() : 'Не указана';
-            if (!groups[grp]) {
-                groups[grp] = { count: 0, exams: 0, accuracies: [] };
-            }
-            groups[grp].count++;
-            if (r.is_exam) groups[grp].exams++;
-            groups[grp].accuracies.push(parseInt(r.accuracy) || 0);
-        });
-
-        const groupKeys = Object.keys(groups);
-        document.getElementById('groups-count-label').textContent = `${groupKeys.length} групп`;
-
-        if (groupKeys.length === 0) {
-            container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">Пока нет сданных работ по группам.</div>';
+        if (allGroups.length === 0) {
+            container.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 24px; color: var(--text-muted);">
+                    <div style="font-size: 28px; margin-bottom: 6px;">👥</div>
+                    <strong>Нет созданных учебных групп</strong>
+                    <div style="font-size: 12px; margin-top: 4px;">Нажмите кнопку «➕ Создать группу», чтобы добавить первый поток студентов.</div>
+                </div>
+            `;
             return;
         }
 
         let html = '';
-        groupKeys.forEach(grp => {
-            const data = groups[grp];
-            const avg = Math.round(data.accuracies.reduce((a, b) => a + b, 0) / data.accuracies.length);
+        allGroups.forEach(grp => {
+            const students = grp.students || [];
+            const pillsHtml = students.length > 0 
+                ? students.map(s => `<span class="student-pill"><span class="pill-dot"></span>${escapeHtml(s.name)}</span>`).join('')
+                : '<span style="font-size: 11px; color: var(--text-muted);">Состав группы пуст</span>';
+
             html += `
-                <div class="group-chip">
-                    <div class="group-chip-name">${escapeHtml(grp)}</div>
-                    <div class="group-chip-stat">
-                        <span>Попыток: <b>${data.count}</b> (Экз: ${data.exams})</span>
-                        <span style="font-weight: 700; color: ${avg >= 65 ? '#10B981' : avg >= 40 ? '#D97706' : '#DC2626'}">${avg}%</span>
+                <div class="lms-group-card" id="card-${grp.id}">
+                    <div class="lms-card-header">
+                        <div class="lms-group-name">
+                            <span>🎓</span>
+                            <span>${escapeHtml(grp.name)}</span>
+                        </div>
+                        <div style="display: flex; gap: 4px;">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="openEditGroupModal('${grp.id}')" title="Редактировать состав группы">
+                                ✏️
+                            </button>
+                            <button type="button" class="btn btn-danger btn-sm" onclick="deleteGroup('${grp.id}')" title="Удалить группу">
+                                🗑️
+                            </button>
+                        </div>
                     </div>
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill" style="width: ${avg}%;"></div>
+
+                    <div class="lms-group-desc">${escapeHtml(grp.description || 'Учебная академическая группа')}</div>
+
+                    <div class="lms-roster-wrap">
+                        <div class="lms-roster-header">
+                            <span>Состав группы:</span>
+                            <span>${students.length} студ.</span>
+                        </div>
+                        <div class="student-pills-list">
+                            ${pillsHtml}
+                        </div>
+                    </div>
+
+                    <div class="lms-card-actions">
+                        <button type="button" class="btn btn-primary btn-sm btn-block" onclick="prepareTestForGroup('${grp.id}')">
+                            <span>🚀</span> <span>Настроить тест для группы</span>
+                        </button>
                     </div>
                 </div>
             `;
         });
+
         container.innerHTML = html;
     }
 
+    function openCreateGroupModal() {
+        document.getElementById('edit-group-id').value = '';
+        document.getElementById('modal-group-name').value = '';
+        document.getElementById('modal-group-desc').value = '';
+        document.getElementById('lms-modal-title').textContent = 'Создание новой учебной группы';
+        document.getElementById('btn-save-group').innerHTML = '<span>💾</span> <span>Сохранить группу</span>';
+
+        renderModalStudentsChecklist([]);
+        const modal = document.getElementById('lms-group-modal');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function openEditGroupModal(groupId) {
+        const grp = allGroups.find(g => g.id === groupId);
+        if (!grp) return;
+
+        document.getElementById('edit-group-id').value = grp.id;
+        document.getElementById('modal-group-name').value = grp.name;
+        document.getElementById('modal-group-desc').value = grp.description || '';
+        document.getElementById('lms-modal-title').textContent = `Редактирование группы: ${grp.name}`;
+        document.getElementById('btn-save-group').innerHTML = '<span>💾</span> <span>Обновить группу</span>';
+
+        const selectedEmails = (grp.students || []).map(s => (s.email || s.name || '').trim().toLowerCase());
+        renderModalStudentsChecklist(selectedEmails);
+
+        const modal = document.getElementById('lms-group-modal');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function closeGroupModal() {
+        const modal = document.getElementById('lms-group-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function renderModalStudentsChecklist(selectedEmails) {
+        const container = document.getElementById('modal-students-checklist');
+        if (!container) return;
+
+        let html = '';
+        allKnownStudents.forEach((st, idx) => {
+            const key = (st.email || st.name || '').trim().toLowerCase();
+            const isChecked = selectedEmails.includes(key);
+
+            html += `
+                <label class="student-check-item">
+                    <input type="checkbox" class="student-checkbox" value="${escapeHtml(st.email)}" data-name="${escapeHtml(st.name)}" ${isChecked ? 'checked' : ''} onchange="updateCheckedStudentsCount()">
+                    <div style="flex: 1;">
+                        <strong style="color: #0F172A;">${escapeHtml(st.name)}</strong>
+                        <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(st.email || '—')}</div>
+                    </div>
+                </label>
+            `;
+        });
+
+        container.innerHTML = html;
+        updateCheckedStudentsCount();
+    }
+
+    function updateCheckedStudentsCount() {
+        const count = document.querySelectorAll('.student-checkbox:checked').length;
+        const el = document.getElementById('checked-students-count');
+        if (el) el.textContent = `Выбрано: ${count}`;
+    }
+
+    function addQuickStudentToList() {
+        const nameInput = document.getElementById('quick-new-name');
+        const emailInput = document.getElementById('quick-new-email');
+        const name = (nameInput?.value || '').trim();
+        const email = (emailInput?.value || '').trim().toLowerCase();
+
+        if (!name) {
+            alert('Пожалуйста, введите ФИО студента');
+            return;
+        }
+
+        const newSt = { name: name, email: email || `${Date.now()}@sfedu.ru` };
+        allKnownStudents.push(newSt);
+
+        // Получаем текущие выбранные чекбоксы
+        const currentChecked = Array.from(document.querySelectorAll('.student-checkbox:checked')).map(cb => (cb.value || cb.dataset.name).trim().toLowerCase());
+        currentChecked.push((newSt.email || newSt.name).trim().toLowerCase());
+
+        renderModalStudentsChecklist(currentChecked);
+
+        if (nameInput) nameInput.value = '';
+        if (emailInput) emailInput.value = '';
+        showToast(`Студент ${name} добавлен в каталог`);
+    }
+
+    function saveGroupFromModal() {
+        const idInput = document.getElementById('edit-group-id').value;
+        const nameInput = document.getElementById('modal-group-name').value.trim();
+        const descInput = document.getElementById('modal-group-desc').value.trim();
+
+        if (!nameInput) {
+            alert('Пожалуйста, укажите название учебной группы');
+            return;
+        }
+
+        // Собираем отмеченных студентов
+        const checkedBoxes = document.querySelectorAll('.student-checkbox:checked');
+        const students = Array.from(checkedBoxes).map(cb => ({
+            name: cb.dataset.name,
+            email: cb.value
+        }));
+
+        let groupId = idInput;
+        if (!groupId) {
+            groupId = 'grp-' + Date.now();
+        }
+
+        const groupObj = {
+            id: groupId,
+            name: nameInput,
+            description: descInput,
+            students: students,
+            created_at: new Date().toLocaleDateString('ru-RU') + ' ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+        };
+
+        const existingIdx = allGroups.findIndex(g => g.id === groupId);
+        if (existingIdx >= 0) {
+            allGroups[existingIdx] = groupObj;
+        } else {
+            allGroups.push(groupObj);
+        }
+
+        // Сохраняем локально и отправляем на бэкенд
+        localStorage.setItem('sfeduGroups', JSON.stringify(allGroups));
+
+        fetch('/api/admin/groups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(groupObj)
+        }).catch(() => {});
+
+        closeGroupModal();
+        renderGroupsManager();
+        renderDispatcherGroups();
+        showToast(`Группа «${nameInput}» успешно сохранена!`);
+    }
+
+    function deleteGroup(groupId) {
+        const grp = allGroups.find(g => g.id === groupId);
+        if (!grp) return;
+
+        if (confirm(`Вы действительно хотите удалить группу «${grp.name}»?`)) {
+            allGroups = allGroups.filter(g => g.id !== groupId);
+            localStorage.setItem('sfeduGroups', JSON.stringify(allGroups));
+
+            fetch(`/api/admin/groups/${groupId}`, { method: 'DELETE' }).catch(() => {});
+
+            renderGroupsManager();
+            renderDispatcherGroups();
+            showToast(`Группа «${grp.name}» удалена`);
+        }
+    }
+
+    // ==========================================
+    // КОНФИГУРАТОР СЕССИИ (TEST DISPATCHER)
+    // ==========================================
+    function renderDispatcherGroups() {
+        const select = document.getElementById('dispatch-group-select');
+        if (!select) return;
+
+        let html = '';
+        allGroups.forEach(grp => {
+            const count = (grp.students || []).length;
+            html += `<option value="${grp.id}">${escapeHtml(grp.name)} (${count} студ.)</option>`;
+        });
+
+        select.innerHTML = html;
+    }
+
+    function prepareTestForGroup(groupId) {
+        const select = document.getElementById('dispatch-group-select');
+        if (select) select.value = groupId;
+
+        const sec = document.getElementById('test-dispatcher-section');
+        if (sec) {
+            sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            sec.style.outline = '3px solid #3B82F6';
+            setTimeout(() => { sec.style.outline = 'none'; }, 1500);
+        }
+    }
+
+    function handleDispatcherGroupChange() {}
+
+    function launchGroupTest() {
+        const groupId = document.getElementById('dispatch-group-select').value;
+        const group = allGroups.find(g => g.id === groupId);
+
+        if (!group) {
+            alert('Пожалуйста, выберите учебную группу для запуска теста');
+            return;
+        }
+
+        const mapUrl = document.getElementById('dispatch-region-select').value;
+        const regionSelect = document.getElementById('dispatch-region-select');
+        const regionName = regionSelect.options[regionSelect.selectedIndex].text;
+
+        const quizType = document.getElementById('dispatch-type-select').value;
+        const quizTypeSelect = document.getElementById('dispatch-type-select');
+        const quizTypeName = quizTypeSelect.options[quizTypeSelect.selectedIndex].text;
+
+        const questionCount = parseInt(document.getElementById('dispatch-count-select').value, 10);
+        const timeLimitMinutes = parseInt(document.getElementById('dispatch-time-select').value, 10);
+
+        const now = Date.now();
+        const durationMs = timeLimitMinutes * 60 * 1000;
+
+        activeSession = {
+            sessionId: `SES-SFEDU-${Math.floor(Date.now() / 1000)}`,
+            groupId: group.id,
+            groupName: group.name,
+            mapUrl: mapUrl,
+            regionName: regionName,
+            quizType: quizType,
+            quizTypeName: quizTypeName,
+            questionCount: questionCount,
+            timeLimitMinutes: timeLimitMinutes,
+            sessionStartedAt: now,
+            durationMs: durationMs,
+            endTime: now + durationMs,
+            status: "active",
+            students: group.students || []
+        };
+
+        // Сохранение в localStorage для мгновенного прототипа
+        localStorage.setItem('activeExamSession', JSON.stringify(activeSession));
+
+        // Отправка на бэкенд
+        fetch('/api/exam/launch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                groupId: group.id,
+                groupName: group.name,
+                mapUrl: mapUrl,
+                regionName: regionName,
+                quizType: quizType,
+                quizTypeName: quizTypeName,
+                questionCount: questionCount,
+                timeLimitMinutes: timeLimitMinutes
+            })
+        }).catch(() => {});
+
+        checkActiveSessionState();
+        showToast(`🚀 Синхронный тест запущен для группы «${group.name}»!`);
+
+        const banner = document.getElementById('active-session-card');
+        if (banner) banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ==========================================
+    // МОНИТОРИНГ АКТИВНОЙ СЕССИИ (LIVE MONITOR)
+    // ==========================================
+    function checkActiveSessionLoop() {
+        if (!activeSession) {
+            // Проверяем, не появилась ли активная сессия на сервере
+            fetch('/api/exam/active-session')
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.session && data.session.status === 'active') {
+                        activeSession = data.session;
+                        checkActiveSessionState();
+                    }
+                }).catch(() => {});
+            return;
+        }
+
+        checkActiveSessionState();
+    }
+
+    function checkActiveSessionState() {
+        const card = document.getElementById('active-session-card');
+        if (!activeSession || activeSession.status !== 'active') {
+            if (card) card.style.display = 'none';
+            if (sessionCountdownTimer) clearInterval(sessionCountdownTimer);
+            return;
+        }
+
+        if (card) card.style.display = 'block';
+
+        const grpNameEl = document.getElementById('active-group-name');
+        const regEl = document.getElementById('active-region-name');
+        const testTypeEl = document.getElementById('active-test-type');
+        const countEl = document.getElementById('active-count');
+        const sessIdEl = document.getElementById('active-session-id');
+
+        if (grpNameEl) grpNameEl.textContent = `Группа: ${activeSession.groupName}`;
+        if (regEl) regEl.textContent = activeSession.regionName;
+        if (testTypeEl) testTypeEl.textContent = activeSession.quizTypeName;
+        if (countEl) countEl.textContent = `${activeSession.questionCount} вопросов`;
+        if (sessIdEl) sessIdEl.textContent = activeSession.sessionId;
+
+        updateSessionCountdown();
+        if (!sessionCountdownTimer) {
+            sessionCountdownTimer = setInterval(updateSessionCountdown, 1000);
+        }
+
+        updateActiveSessionStudentsRoster();
+    }
+
+    function updateSessionCountdown() {
+        if (!activeSession) return;
+        const now = Date.now();
+        const endTime = activeSession.sessionStartedAt + activeSession.durationMs;
+        const remainingSec = Math.max(0, Math.floor((endTime - now) / 1000));
+
+        const mins = Math.floor(remainingSec / 60);
+        const secs = remainingSec % 60;
+        const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+        const timerEl = document.getElementById('active-session-timer');
+        if (timerEl) {
+            timerEl.textContent = timeStr;
+            timerEl.style.color = remainingSec < 120 ? '#EF4444' : '#38BDF8';
+        }
+
+        if (remainingSec <= 0) {
+            activeSession.status = 'completed';
+            localStorage.setItem('activeExamSession', JSON.stringify(activeSession));
+            if (sessionCountdownTimer) {
+                clearInterval(sessionCountdownTimer);
+                sessionCountdownTimer = null;
+            }
+            showToast('⏰ Время синхронного тестирования истекло!');
+            updateActiveSessionStudentsRoster();
+        }
+    }
+
+    function updateActiveSessionStudentsRoster() {
+        const tbody = document.getElementById('active-session-students-tbody');
+        if (!tbody || !activeSession) return;
+
+        const group = allGroups.find(g => g.id === activeSession.groupId) || { students: activeSession.students || [] };
+        const students = group.students || [];
+
+        let html = '';
+        students.forEach((st, idx) => {
+            // Ищем результаты студента по сессии или по ФИО в интервале сессии
+            const submission = allResults.find(r => 
+                (r.session_id === activeSession.sessionId || (r.name && r.name.toLowerCase() === st.name.toLowerCase())) &&
+                (r.is_exam || r.group === activeSession.groupName)
+            );
+
+            let statusBadge = '';
+            let scoreStr = '—';
+            let violationsStr = '—';
+            let tokenStr = '—';
+
+            if (submission) {
+                statusBadge = `<span class="status-badge status-green">✓ Сдано (${submission.accuracy}%)</span>`;
+                scoreStr = `<b>${submission.score}</b> / ${submission.max_score}`;
+                violationsStr = (submission.violations > 0)
+                    ? `<span style="color:#EF4444; font-weight:700;">⚠️ ${submission.violations} уход(а)</span>`
+                    : `<span style="color:#10B981; font-weight:700;">0 нарушений</span>`;
+                tokenStr = submission.exam_token ? `<span class="token-badge">${submission.exam_token}</span>` : '—';
+            } else if (activeSession.status === 'active') {
+                statusBadge = `<span class="status-badge status-yellow">⏳ В процессе выполнения</span>`;
+            } else {
+                statusBadge = `<span class="status-badge status-red">❌ Не сдал (Время вышло)</span>`;
+            }
+
+            html += `
+                <tr>
+                    <td style="color:#94A3B8;">${idx + 1}</td>
+                    <td><strong style="color:#FFFFFF;">${escapeHtml(st.name)}</strong></td>
+                    <td style="color:#94A3B8;">${escapeHtml(st.email || '—')}</td>
+                    <td>${statusBadge}</td>
+                    <td>${scoreStr}</td>
+                    <td>${violationsStr}</td>
+                    <td>${tokenStr}</td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function stopCurrentSession() {
+        if (!activeSession) return;
+        if (confirm(`Принудительно остановить экзаменационную сессию для группы «${activeSession.groupName}»?`)) {
+            activeSession.status = 'stopped';
+            localStorage.setItem('activeExamSession', JSON.stringify(activeSession));
+
+            fetch('/api/exam/stop', { method: 'POST' }).catch(() => {});
+
+            if (sessionCountdownTimer) {
+                clearInterval(sessionCountdownTimer);
+                sessionCountdownTimer = null;
+            }
+
+            const card = document.getElementById('active-session-card');
+            if (card) card.style.display = 'none';
+
+            showToast('Сессия остановлена преподавателем');
+        }
+    }
+
+    function copySessionStudentLink() {
+        if (!activeSession) return;
+        const link = `${window.location.origin}/${activeSession.mapUrl}?session_id=${activeSession.sessionId}&group=${encodeURIComponent(activeSession.groupName)}&start=${activeSession.sessionStartedAt}&limit=${activeSession.timeLimitMinutes}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(link).then(() => {
+                showToast('Ссылка на тест скопирована в буфер!');
+            }).catch(() => {
+                prompt('Скопируйте ссылку для студентов:', link);
+            });
+        } else {
+            prompt('Скопируйте ссылку для студентов:', link);
+        }
+    }
+
+    // ==========================================
+    // ФИЛЬТРАЦИЯ И ЖУРНАЛ РЕЗУЛЬТАТОВ
+    // ==========================================
     function setFilter(filterType) {
         activeFilter = filterType;
         ['all', 'exams', 'quizzes', 'violations'].forEach(f => {
@@ -949,7 +2043,6 @@ __SERVER_RESULTS_JSON__
         const empty = document.getElementById('emptyPlaceholder');
         if (!tbody) return;
 
-        // Apply filters
         let filtered = allResults.slice().reverse(); // recent first
 
         if (activeFilter === 'exams') {
@@ -962,7 +2055,7 @@ __SERVER_RESULTS_JSON__
 
         if (searchQuery) {
             filtered = filtered.filter(r => {
-                const searchStr = `${r.name || ''} ${r.group || ''} ${r.email || ''} ${r.quiz_type || ''} ${r.exam_token || ''} ${r.exam_status || ''}`.toLowerCase();
+                const searchStr = `${r.name || ''} ${r.group || ''} ${r.email || ''} ${r.quiz_type || ''} ${r.exam_token || ''} ${r.exam_status || ''} ${r.session_id || ''}`.toLowerCase();
                 return searchStr.includes(searchQuery);
             });
         }
@@ -981,21 +2074,19 @@ __SERVER_RESULTS_JSON__
             const violations = parseInt(r.violations) || 0;
             const statusRaw = r.exam_status || (isExam ? 'Сдано' : 'Пройдено');
 
-            // Determine status badge style
             let statusBadge = '';
             if (statusRaw.includes('Подозрение') || statusRaw.includes('Аннулировано') || violations >= 2) {
-                statusBadge = `<span class="status-badge status-red" title="Зафиксировано ${violations} ухода со вкладки">🚨 Подозрение на списывание (${violations})</span>`;
+                statusBadge = `<span class="status-badge status-red" title="Зафиксировано ${violations} ухода со вкладки">🚨 Подозрение (${violations})</span>`;
             } else if (statusRaw.includes('Время истекло')) {
                 statusBadge = `<span class="status-badge status-yellow">⏳ Время истекло</span>`;
             } else if (statusRaw.includes('Завершено досрочно')) {
                 statusBadge = `<span class="status-badge status-yellow">⚠️ Завершено досрочно</span>`;
             } else if (statusRaw.includes('замечанием') || violations === 1) {
-                statusBadge = `<span class="status-badge status-yellow" title="1 уход с вкладки">⚠️ С замечанием (1)</span>`;
+                statusBadge = `<span class="status-badge status-yellow" title="1 уход с вкладки">⚠️ Замечание (1)</span>`;
             } else {
                 statusBadge = `<span class="status-badge status-green">✓ ${escapeHtml(statusRaw)}</span>`;
             }
 
-            // Mode badge
             let modeBadge = `<span class="mode-badge mode-quiz">🎓 Викторина</span>`;
             if (isExam) {
                 modeBadge = `<span class="mode-badge mode-exam">📝 Экзамен</span>`;
@@ -1003,7 +2094,6 @@ __SERVER_RESULTS_JSON__
                 modeBadge = `<span class="mode-badge" style="background:#ECFDF5; color:#059669; border:1px solid #A7F3D0;">🧩 Пазл</span>`;
             }
 
-            // Token
             let tokenHtml = '<span style="color: #94A3B8;">—</span>';
             if (r.exam_token && r.exam_token !== '-') {
                 tokenHtml = `
@@ -1014,7 +2104,6 @@ __SERVER_RESULTS_JSON__
                 `;
             }
 
-            // Accuracy styling
             const acc = parseInt(r.accuracy) || 0;
             const accClass = acc >= 65 ? 'acc-high' : acc >= 40 ? 'acc-mid' : 'acc-low';
 
@@ -1039,6 +2128,43 @@ __SERVER_RESULTS_JSON__
 
         tbody.innerHTML = html;
     }
+
+    function copyToken(token) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(token).then(() => {
+                showToast(`Токен ${token} скопирован!`);
+            }).catch(() => {
+                prompt('Скопируйте токен:', token);
+            });
+        } else {
+            prompt('Скопируйте токен:', token);
+        }
+    }
+
+    function showToast(text) {
+        const toast = document.getElementById('toast');
+        const toastText = document.getElementById('toast-text');
+        if (toast && toastText) {
+            toastText.textContent = text;
+            toast.style.display = 'flex';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 2500);
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    window.addEventListener('DOMContentLoaded', initData);
+</script>
 
     function copyToken(token) {
         if (navigator.clipboard && navigator.clipboard.writeText) {

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "grp-geofak-51",
+    "name": "Геофак-51 (ВКР)",
+    "description": "5 курс, профиль: География и Экономика (ВКР)",
+    "students": [
+      {
+        "name": "Литвинов Е. К.",
+        "email": "elitvinov@sfedu.ru"
+      },
+      {
+        "name": "Иванов И. И.",
+        "email": "ivanov@sfedu.ru"
+      },
+      {
+        "name": "Сидорова М. В.",
+        "email": "sidorova@sfedu.ru"
+      }
+    ],
+    "created_at": "26.10.2026 10:00"
+  },
+  {
+    "id": "grp-econom-31",
+    "name": "Эконом-31 (ЮФО)",
+    "description": "3 курс, экономический анализ и ВРП",
+    "students": [
+      {
+        "name": "Петров А. С.",
+        "email": "petrov@sfedu.ru"
+      }
+    ],
+    "created_at": "26.10.2026 10:00"
+  },
+  {
+    "id": "grp-geofak-41",
+    "name": "Геофак-41 (Бакалавриат)",
+    "description": "4 курс, картография и ГИС",
+    "students": [
+      {
+        "name": "Ковалев Д. В.",
+        "email": "kovalev@sfedu.ru"
+      },
+      {
+        "name": "Смирнова А. А.",
+        "email": "smirnova@sfedu.ru"
+      }
+    ],
+    "created_at": "26.10.2026 10:00"
+  }
+]
