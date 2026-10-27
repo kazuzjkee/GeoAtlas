@@ -1795,11 +1795,36 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
             box-shadow: 0 5px 14px rgba(51, 65, 85, 0.35) !important;
         }}
 
-        .btn-confirm {{
-            background: linear-gradient(135deg, #2563EB, #1D4ED8) !important;
+        .btn-confirm, #confirm-button {{
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+            padding: 12px 16px !important;
+            border-radius: 8px !important;
+            font-size: 13.5px !important;
+            font-weight: 700 !important;
+            line-height: 1.4 !important;
+            letter-spacing: -0.1px !important;
+            background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
             color: #FFFFFF !important;
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28) !important;
-            border-radius: 10px !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3) !important;
+            box-sizing: border-box !important;
+            margin-top: 10px !important;
+            cursor: pointer !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            text-align: center !important;
+            white-space: normal !important;
+            min-height: 44px !important;
+        }}
+        .btn-confirm:hover, #confirm-button:hover {{
+            transform: translateY(-1.5px) !important;
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.42) !important;
+            filter: brightness(1.05) !important;
+        }}
+        .btn-confirm:active, #confirm-button:active {{
+            transform: translateY(0.5px) scale(0.985) !important;
         }}
 
         /* Модификаторы размеров */
@@ -1826,10 +1851,108 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
         .btn-group-vertical > button {{
             width: 100% !important;
             margin: 0 !important;
-            padding: 9px 14px !important;
+            padding: 12px 16px !important;
+            border-radius: 8px !important;
             font-size: 13px !important;
-            border-radius: 10px !important;
+            font-weight: 600 !important;
+            justify-content: center !important;
+            text-align: center !important;
+            min-height: 44px !important;
             box-sizing: border-box !important;
+        }}
+
+        /* Скрытие стандартной навигации в режиме экзамена (Kiosk Mode) */
+        body.exam-mode #top-nav-panel,
+        body.exam-mode .top-nav-buttons,
+        body.exam-mode #auth-top-btn,
+        body.exam-mode #student-profile-badge,
+        body.exam-mode .leaderboard-top-btn,
+        body.exam-mode .help-circle-btn,
+        body.exam-mode .admin-btn,
+        body.exam-mode .reset-map-btn {{
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }}
+
+        body.exam-mode #quiz-controls,
+        body.exam-mode .app-card {{
+            top: 66px !important;
+            max-height: calc(100vh - 80px) !important;
+        }}
+
+        body.exam-mode .leaflet-top {{
+            top: 62px !important;
+        }}
+
+        /* Фиолетовая статус-панель экзамена (Kiosk Bar) */
+        .exam-kiosk-bar {{
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            height: 52px !important;
+            z-index: 99999 !important;
+            background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%) !important;
+            color: #FFFFFF !important;
+            border-bottom: 2px solid #8B5CF6 !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            padding: 0 20px !important;
+            box-sizing: border-box !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        }}
+
+        .exam-kiosk-bar .kiosk-left {{
+            display: flex !important;
+            align-items: center !important;
+            gap: 12px !important;
+        }}
+
+        .exam-kiosk-bar .kiosk-dot {{
+            width: 10px !important;
+            height: 10px !important;
+            border-radius: 50% !important;
+            background: #EF4444 !important;
+            box-shadow: 0 0 10px #EF4444 !important;
+            animation: syncPulse 1.5s infinite !important;
+        }}
+
+        .exam-kiosk-bar .kiosk-title {{
+            font-size: 13.5px !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.02em !important;
+        }}
+
+        .exam-kiosk-bar .kiosk-meta {{
+            font-size: 11.5px !important;
+            color: #CBD5E1 !important;
+        }}
+
+        .exam-kiosk-bar .kiosk-right {{
+            display: flex !important;
+            align-items: center !important;
+            gap: 12px !important;
+        }}
+
+        .exam-kiosk-bar .kiosk-timer-box {{
+            background: rgba(15, 23, 42, 0.75) !important;
+            padding: 6px 14px !important;
+            border-radius: 8px !important;
+            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+        }}
+
+        .exam-kiosk-bar .kiosk-timer-text {{
+            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace !important;
+            font-size: 16px !important;
+            font-weight: 800 !important;
+            color: #FBBF24 !important;
+            letter-spacing: 0.5px !important;
         }}
 
         /* Кнопка-иконка / закрытие */

@@ -3296,18 +3296,18 @@
                 <span class="banner-pulse-dot"></span>
                 <span class="banner-tag">СИНХРОННЫЙ ЭКЗАМЕН ЮФУ</span>
                 <div class="banner-details">
-                    <strong id="bannerGroupTitle">Группа: Геофак-51 (ВКР)</strong>
-                    <span id="bannerDetailsText">Карта: Ростовская область • 15 вопросов</span>
+                    <strong id="bannerGroupTitle">Экзаменационная сессия</strong>
+                    <span id="bannerDetailsText">Ожидание параметров тестирования...</span>
                 </div>
             </div>
             <div class="banner-center">
                 <div class="banner-timer-box">
                     <span class="banner-timer-label">Осталось:</span>
-                    <span class="banner-countdown" id="bannerCountdown">09:59</span>
+                    <span class="banner-countdown" id="bannerCountdown">00:00</span>
                 </div>
             </div>
             <div class="banner-actions">
-                <a href="rostov_quiz_map.html" id="bannerExamLink" class="btn-banner-action">
+                <a href="javascript:void(0)" id="bannerExamLink" class="btn-banner-action">
                     <span>Войти в экзаменационную сессию</span>
                     <span class="banner-arrow">→</span>
                 </a>
@@ -5556,7 +5556,9 @@
             }
 
             if (examLinkEl) {
-                const targetUrl = `${session.map_url}?session_id=${session.session_id}&group=${encodeURIComponent(session.group_name)}&limit=${session.questions_count}&time=${session.time_limit_minutes}&start=${session.started_at}&mode=${session.mode}`;
+                const targetMap = session.map_url || 'rostov_quiz_map.html';
+                const regionParam = session.region_name || session.regionName || '';
+                const targetUrl = `${targetMap}?session_id=${session.session_id}&group=${encodeURIComponent(session.group_name)}&limit=${session.questions_count}&time=${session.time_limit_minutes}&start=${session.started_at}&mode=${session.mode}&region=${encodeURIComponent(regionParam)}`;
                 examLinkEl.href = targetUrl;
             }
 

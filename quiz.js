@@ -70,6 +70,219 @@ function getPuzzlePieceColor(index) {
     return PUZZLE_PALETTE[index % PUZZLE_PALETTE.length];
 }
 
+// ==================== ДИНАМИЧЕСКИЙ ДОСТУП К ДАННЫМ РЕГИОНА ====================
+function getDistrictsData() {
+    return window._dynamicDistricts || (typeof EMBEDDED_DISTRICTS !== 'undefined' ? EMBEDDED_DISTRICTS : []);
+}
+function getRiversData() {
+    return window._dynamicRivers || (typeof EMBEDDED_RIVERS !== 'undefined' ? EMBEDDED_RIVERS : []);
+}
+function getCentersData() {
+    return window._dynamicCenters || (typeof EMBEDDED_CENTERS !== 'undefined' ? EMBEDDED_CENTERS : []);
+}
+function getNeighborsData() {
+    return window._dynamicNeighbors || (typeof EMBEDDED_NEIGHBORS !== 'undefined' ? EMBEDDED_NEIGHBORS : []);
+}
+function getPuzzleData() {
+    return window._dynamicPuzzleData || (typeof EMBEDDED_PUZZLE_DATA !== 'undefined' ? EMBEDDED_PUZZLE_DATA : []);
+}
+function getRegionOutlineData() {
+    return window._dynamicOutline || (typeof REGION_OUTLINE_GEOJSON !== 'undefined' ? REGION_OUTLINE_GEOJSON : null);
+}
+function getRegionBoundsData() {
+    return window._dynamicBounds || (typeof REGION_BOUNDS !== 'undefined' ? REGION_BOUNDS : null);
+}
+
+function resolveRegionKey(raw) {
+    if (!raw) return 'rostov';
+    const s = String(raw).toLowerCase().trim()
+        .replace(/_quiz_map\.html$/, '')
+        .replace(/\.html$/, '');
+    if (s.includes('krasnodar') || s.includes('краснодар')) return 'krasnodar';
+    if (s.includes('adygey') || s.includes('адыге')) return 'adygey';
+    if (s.includes('volgograd') || s.includes('волгоград')) return 'volgograd';
+    if (s.includes('astrakhan') || s.includes('астрахан')) return 'astrakhan';
+    if (s.includes('stavropol') || s.includes('ставропол')) return 'stavropol';
+    if (s.includes('russia') || s.includes('росси')) return 'russia';
+    if (s.includes('dagestan') || s.includes('дагестан')) return 'dagestan';
+    if (s.includes('chechnya') || s.includes('чеч')) return 'chechnya';
+    if (s.includes('crimea') || s.includes('крым')) return 'crimea';
+    if (s.includes('rostov') || s.includes('ростов')) return 'rostov';
+    return s;
+}
+
+function getRegionName(key) {
+    const k = resolveRegionKey(key);
+    const names = {
+        'rostov': 'Ростовская область',
+        'krasnodar': 'Краснодарский край',
+        'adygey': 'Республика Адыгея',
+        'volgograd': 'Волгоградская область',
+        'astrakhan': 'Астраханская область',
+        'stavropol': 'Ставропольский край',
+        'russia': 'Российская Федерация',
+        'dagestan': 'Республика Дагестан',
+        'chechnya': 'Чеченская Республика',
+        'crimea': 'Республика Крым'
+    };
+    return names[k] || (k.charAt(0).toUpperCase() + k.slice(1));
+}
+
+function getResultsStorageKey() {
+    const reg = window.currentRegionKey || resolveRegionKey(window.location.pathname) || 'rostov';
+    return `${reg}_quiz_results`;
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+async function loadRegionData(regionKey) {
+    if (!regionKey) return false;
+    const resolved = resolveRegionKey(regionKey);
+    window.currentRegionKey = resolved;
+
+    const currentFile = (window.location.pathname || '').split('/').pop() || '';
+    const targetMapFile = `${resolved}_quiz_map.html`;
+
+    // Если мы уже на целевой карте этого региона, данные уже встроены
+    if (currentFile === targetMapFile && typeof EMBEDDED_DISTRICTS !== 'undefined') {
+        return true;
+    }
+
+    try {
+        const res = await fetch(`/api/region/${resolved}/data`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.status === 'ok') {
+                applyRegionDataset(data);
+                return true;
+            }
+        }
+    } catch (e) {
+        console.warn('API /api/region/ data недоступен, выполняем локальный fallback', e);
+    }
+
+    // Если мы на другой странице и API недоступен, перенаправляем на файл региона
+    if (currentFile && currentFile !== targetMapFile && !currentFile.includes(resolved)) {
+        const search = window.location.search;
+        window.location.href = `${targetMapFile}${search}`;
+        return true;
+    }
+    return false;
+}
+
+function applyRegionDataset(data) {
+    if (!data) return;
+    if (data.bounds) window._dynamicBounds = data.bounds;
+    if (data.districts) window._dynamicDistricts = data.districts;
+    if (data.centers) window._dynamicCenters = data.centers;
+    if (data.neighbors) window._dynamicNeighbors = data.neighbors;
+    if (data.rivers) window._dynamicRivers = data.rivers;
+    if (data.puzzle_data) window._dynamicPuzzleData = data.puzzle_data;
+    if (data.outline_geojson) window._dynamicOutline = data.outline_geojson;
+
+    const map = getMapObject();
+    if (map && window._dynamicBounds) {
+        try {
+            map.fitBounds(window._dynamicBounds, { padding: [20, 20] });
+        } catch (e) {}
+    }
+}
+
+// ==================== СТАТУС-ПАНЕЛЬ ЭКЗАМЕНА И KIOSK MODE ====================
+function ensureExamKioskTopBar(opts = {}) {
+    let bar = document.getElementById('exam-kiosk-top-bar');
+    const student = getCurrentStudentInfo();
+    const groupName = opts.groupName || currentSyncGroupName || (student ? student.group : '') || 'ВКР ЮФУ';
+    const studentName = (student && student.name) ? student.name : 'Студент';
+    const regionName = getRegionName(window.currentRegionKey || opts.region || '');
+
+    // Скрываем старый баннер ожидания сессии если есть
+    const oldBanner = document.getElementById('sync-exam-top-banner');
+    if (oldBanner) oldBanner.style.display = 'none';
+
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'exam-kiosk-top-bar';
+        bar.className = 'exam-kiosk-bar';
+        document.body.prepend(bar);
+    }
+
+    const safeSec = Math.max(0, examTimeRemaining);
+    const mins = Math.floor(safeSec / 60);
+    const secs = safeSec % 60;
+    const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    bar.innerHTML = `
+        <div class="kiosk-left">
+            <span class="kiosk-dot"></span>
+            <div>
+                <div class="kiosk-title">🛡️ ЭКЗАМЕНАЦИОННЫЙ РЕЖИМ (KIOSK) • ${escapeHtml(regionName)} • ГРУППА: <span id="kiosk-group-badge">${escapeHtml(groupName)}</span></div>
+                <div class="kiosk-meta">Студент: <b style="color:#FFF;">${escapeHtml(studentName)}</b> • Режим контроля Anti-Cheat ЮФУ</div>
+            </div>
+        </div>
+        <div class="kiosk-right">
+            <div class="kiosk-timer-box">
+                <span style="font-size: 14px;">⏳</span>
+                <span id="kiosk-timer-display" class="kiosk-timer-text">${timeStr}</span>
+            </div>
+        </div>
+    `;
+    bar.style.display = 'flex';
+}
+
+function removeExamKioskTopBar() {
+    const bar = document.getElementById('exam-kiosk-top-bar');
+    if (bar) bar.remove();
+    const oldBanner = document.getElementById('sync-exam-top-banner');
+    if (oldBanner) oldBanner.style.display = 'none';
+}
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ЭКЗАМЕНА (БЕЗ ХАРДКОДА РЕГИОНА) ====================
+async function initExamMode(options = {}) {
+    const urlParams = new URLSearchParams(window.location.search);
+
+    const regionParam = options.region || options.regionKey || options.regionName || options.region_name || 
+                        urlParams.get('region') || urlParams.get('map') || 
+                        (options.session && (options.session.regionName || options.session.region_name || options.session.mapUrl || options.session.map_url)) ||
+                        '';
+
+    const targetRegion = resolveRegionKey(regionParam);
+    const mode = options.mode || options.category || urlParams.get('mode') || 'mixed';
+    const count = options.count || parseInt(urlParams.get('limit') || '15', 10);
+    const timeLimit = options.timeLimit || parseInt(urlParams.get('time') || '10', 10);
+    const sessionId = options.sessionId || urlParams.get('session_id') || '';
+    const groupName = options.groupName || (options.session && (options.session.group_name || options.session.groupName)) || urlParams.get('group') || '';
+
+    if (targetRegion) {
+        await loadRegionData(targetRegion);
+    }
+
+    document.body.classList.add('exam-mode');
+    ensureExamKioskTopBar({
+        region: targetRegion,
+        groupName: groupName,
+        timeLimit: timeLimit,
+        category: mode
+    });
+
+    startSelectedTestMode(mode, {
+        isExam: true,
+        count: count,
+        timeLimit: timeLimit,
+        sessionId: sessionId,
+        groupName: groupName
+    });
+}
+window.initExamMode = initExamMode;
+
 function getMapObject() {
     if (window._leaflet_map) return window._leaflet_map;
     for (let key in window) {
@@ -152,7 +365,7 @@ function restoreAllRiverStyles() {
 function resetMapView() {
     const map = getMapObject();
     if (map) {
-        try { map.fitBounds(REGION_BOUNDS, {padding: [15, 15]}); } catch(e) {}
+        try { map.fitBounds(getRegionBoundsData() || (typeof REGION_BOUNDS !== 'undefined' ? REGION_BOUNDS : null), {padding: [15, 15]}); } catch(e) {}
     }
 }
 
@@ -343,6 +556,18 @@ function updateGlobalExamTimerDisplay() {
         }
     }
 
+    const kioskTimer = document.getElementById('kiosk-timer-display');
+    if (kioskTimer) {
+        kioskTimer.textContent = timeStr;
+        if (safeSec < 60) {
+            kioskTimer.style.color = '#EF4444';
+        } else if (safeSec < 180) {
+            kioskTimer.style.color = '#F59E0B';
+        } else {
+            kioskTimer.style.color = '#FBBF24';
+        }
+    }
+
     if (statusText) {
         if (safeSec <= 0) {
             statusText.textContent = 'Время истекло';
@@ -480,6 +705,8 @@ function finishExamEarly(isTimeout = false) {
     }
     stopGlobalExamTimer();
     disableAntiCheat();
+    document.body.classList.remove('exam-mode');
+    removeExamKioskTopBar();
     showResults();
 }
 
@@ -556,14 +783,14 @@ function startStudyMode(category = 'districts') {
 
     if (category === 'districts') {
         setQuizLayers('study_districts');
-        studyQueue = [...EMBEDDED_NEIGHBORS];
+        studyQueue = [...getNeighborsData()];
     } else if (category === 'rivers') {
         setQuizLayers('study_rivers');
         restoreAllRiverStyles();
-        studyQueue = [...EMBEDDED_RIVERS];
+        studyQueue = [...getRiversData()];
     } else if (category === 'centers') {
         setQuizLayers('study_centers');
-        studyQueue = [...EMBEDDED_CENTERS];
+        studyQueue = [...getCentersData()];
     }
 
     shuffleArray(studyQueue);
@@ -748,6 +975,16 @@ function startSelectedTestMode(mode = 'mixed', options = {}) {
     const normalized = String(mode).toLowerCase().trim();
 
     if (normalized === 'puzzle' || normalized.includes('пазл')) {
+        if (isExam) {
+            isExamMode = true;
+            document.body.classList.add('exam-mode');
+            ensureExamKioskTopBar({
+                region: window.currentRegionKey || '',
+                groupName: options.groupName || currentSyncGroupName,
+                timeLimit: timeLimit,
+                category: 'puzzle'
+            });
+        }
         startPuzzleMode();
     } else if (normalized === 'rivers' || normalized === 'river' || normalized.includes('гидрограф') || normalized.includes('рек')) {
         if (isExam) {
@@ -782,6 +1019,14 @@ function startSelectedTestMode(mode = 'mixed', options = {}) {
 
 function startExamQuiz(category = 'mixed', count = 15, timeLimitMinutes = 10) {
     isExamMode = true;
+    document.body.classList.add('exam-mode');
+    ensureExamKioskTopBar({
+        region: window.currentRegionKey || '',
+        groupName: currentSyncGroupName,
+        timeLimit: timeLimitMinutes,
+        category: category
+    });
+
     examCategory = category;
     examQuestionCount = count || 15;
     examTimeLimitMinutes = timeLimitMinutes || 10;
@@ -810,14 +1055,15 @@ function startExamQuiz(category = 'mixed', count = 15, timeLimitMinutes = 10) {
     document.getElementById('results-mode').style.display = 'none';
     document.getElementById('quiz-mode').style.display = 'block';
 
+    const regName = getRegionName(window.currentRegionKey || '');
     const titles = {
-        'mixed': '📝 Комплексный экзамен',
-        'districts': '📝 Контрольная: Территории',
-        'rivers': '📝 Контрольная: Гидрография',
-        'centers': '📝 Контрольная: Центры',
-        'neighbors': '📝 Контрольная: Топология'
+        'mixed': `📝 Комплексный экзамен (${regName})`,
+        'districts': `📝 Контрольная: Номенклатура (${regName})`,
+        'rivers': `📝 Контрольная: Гидрография (${regName})`,
+        'centers': `📝 Контрольная: Центры (${regName})`,
+        'neighbors': `📝 Контрольная: Топология (${regName})`
     };
-    document.getElementById('quiz-title').textContent = titles[category] || '📝 Контрольная работа';
+    document.getElementById('quiz-title').textContent = titles[category] || `📝 Контрольная работа (${regName})`;
 
     const hintBtn = document.getElementById('hint-button');
     if (hintBtn) hintBtn.style.display = 'none';
@@ -849,7 +1095,7 @@ function generateExamQuestions(category, count) {
     maxPossibleScore = 0;
 
     if (category === 'districts') {
-        const valid = (EMBEDDED_DISTRICTS || []).filter(d => d.name && d.name.trim() !== '');
+        const valid = (getDistrictsData() || []).filter(d => d.name && d.name.trim() !== '');
         if (valid.length < 2) {
             alert('Недостаточно данных для вопросов по территориям.');
             exitQuizDirectly();
@@ -872,7 +1118,7 @@ function generateExamQuestions(category, count) {
             maxPossibleScore += 1;
         }
     } else if (category === 'rivers') {
-        const valid = (EMBEDDED_RIVERS || []).filter(r => r.name && r.name.trim() !== '');
+        const valid = (getRiversData() || []).filter(r => r.name && r.name.trim() !== '');
         if (valid.length < 1) {
             alert('В данном регионе нет рек в базе данных.');
             exitQuizDirectly();
@@ -896,7 +1142,7 @@ function generateExamQuestions(category, count) {
         }
         shuffleArray(quizData);
     } else if (category === 'centers') {
-        const valid = (EMBEDDED_CENTERS || []).filter(c => c.name && c.name.trim() !== '');
+        const valid = (getCentersData() || []).filter(c => c.name && c.name.trim() !== '');
         if (valid.length < 1) {
             alert('Недостаточно данных об административных центрах.');
             exitQuizDirectly();
@@ -914,7 +1160,7 @@ function generateExamQuestions(category, count) {
             maxPossibleScore += 3;
         }
     } else if (category === 'neighbors') {
-        const validPool = (EMBEDDED_NEIGHBORS || []).filter(d => d.name && d.name.trim() !== '' && d.neighbors && d.neighbors.length >= 1);
+        const validPool = (getNeighborsData() || []).filter(d => d.name && d.name.trim() !== '' && d.neighbors && d.neighbors.length >= 1);
         const allNames = validPool.map(d => d.name);
         if (validPool.length === 0) {
             alert('Недостаточно данных о топологии.');
@@ -944,10 +1190,10 @@ function generateExamQuestions(category, count) {
         }
     } else {
         // 'mixed' - сбалансированная комбинация всех доступных типов
-        const hasDistricts = EMBEDDED_DISTRICTS && EMBEDDED_DISTRICTS.length >= 2;
-        const hasRivers = EMBEDDED_RIVERS && EMBEDDED_RIVERS.length >= 1;
-        const hasCenters = EMBEDDED_CENTERS && EMBEDDED_CENTERS.length >= 1;
-        const hasNeighbors = EMBEDDED_NEIGHBORS && EMBEDDED_NEIGHBORS.some(d => d.neighbors && d.neighbors.length >= 1);
+        const hasDistricts = getDistrictsData() && getDistrictsData().length >= 2;
+        const hasRivers = getRiversData() && getRiversData().length >= 1;
+        const hasCenters = getCentersData() && getCentersData().length >= 1;
+        const hasNeighbors = getNeighborsData() && getNeighborsData().some(d => d.neighbors && d.neighbors.length >= 1);
 
         const availableTypes = [];
         if (hasDistricts) availableTypes.push('districts');
@@ -961,10 +1207,10 @@ function generateExamQuestions(category, count) {
             return;
         }
 
-        const validDistricts = (EMBEDDED_DISTRICTS || []).filter(d => d.name && d.name.trim() !== '');
-        const validRivers = (EMBEDDED_RIVERS || []).filter(r => r.name && r.name.trim() !== '');
-        const validCenters = (EMBEDDED_CENTERS || []).filter(c => c.name && c.name.trim() !== '');
-        const validNeighborsPool = (EMBEDDED_NEIGHBORS || []).filter(d => d.name && d.name.trim() !== '' && d.neighbors && d.neighbors.length >= 1);
+        const validDistricts = (getDistrictsData() || []).filter(d => d.name && d.name.trim() !== '');
+        const validRivers = (getRiversData() || []).filter(r => r.name && r.name.trim() !== '');
+        const validCenters = (getCentersData() || []).filter(c => c.name && c.name.trim() !== '');
+        const validNeighborsPool = (getNeighborsData() || []).filter(d => d.name && d.name.trim() !== '' && d.neighbors && d.neighbors.length >= 1);
         const allNeighborNames = validNeighborsPool.map(d => d.name);
 
         for (let i = 0; i < count; i++) {
@@ -2355,6 +2601,7 @@ function savePuzzleResult(total, accuracy, timeStr, token, mistakes) {
         violations: mistakes,
         exam_status: mistakes === 0 ? 'Идеально' : 'Собрано'
     });
+    localStorage.setItem(storageKey, JSON.stringify(results));
     localStorage.setItem('rostovQuizResults', JSON.stringify(results));
 
     if (student) {
@@ -2430,7 +2677,8 @@ function getDistrictNameById(id) {
 
 /* ==================== ВИКТОРИНЫ ==================== */
 function startDistrictQuiz() {
-    if (!EMBEDDED_DISTRICTS || EMBEDDED_DISTRICTS.length < 2) {
+    const districts = getDistrictsData();
+    if (!districts || districts.length < 2) {
         alert('Для запуска викторины по силуэтам требуется как минимум 2 территории в атласе.');
         return;
     }
@@ -2454,7 +2702,8 @@ function startDistrictQuiz() {
 }
 
 function startNeighborQuiz() {
-    if (!EMBEDDED_NEIGHBORS || EMBEDDED_NEIGHBORS.filter(d => d.neighbors && d.neighbors.length >= 1).length === 0) {
+    const neighbors = getNeighborsData();
+    if (!neighbors || neighbors.filter(d => d.neighbors && d.neighbors.length >= 1).length === 0) {
         alert('Недостаточно данных о смежности территорий (соседях) для запуска викторины.');
         return;
     }
@@ -2478,7 +2727,8 @@ function startNeighborQuiz() {
 }
 
 function startCenterQuiz() {
-    if (!EMBEDDED_CENTERS || EMBEDDED_CENTERS.length === 0) {
+    const centers = getCentersData();
+    if (!centers || centers.length === 0) {
         alert('Недостаточно данных об административных центрах для запуска викторины.');
         return;
     }
@@ -2502,7 +2752,8 @@ function startCenterQuiz() {
 }
 
 function startRiverQuiz() {
-    if (!EMBEDDED_RIVERS || EMBEDDED_RIVERS.length < 1) {
+    const rivers = getRiversData();
+    if (!rivers || rivers.length < 1) {
         alert('В данном регионе нет рек в базе данных гидрографии');
         return;
     }
@@ -2528,7 +2779,7 @@ function startRiverQuiz() {
 
 function loadDistrictQuiz() {
     maxPossibleScore = totalQuestions;
-    generateDistrictQuestions(EMBEDDED_DISTRICTS);
+    generateDistrictQuestions(getDistrictsData());
 }
 
 function generateDistrictQuestions(data) {
@@ -2558,7 +2809,7 @@ function generateDistrictQuestions(data) {
 
 function loadCenterQuiz() {
     maxPossibleScore = totalQuestions * 3;
-    generateCenterQuestions(EMBEDDED_CENTERS);
+    generateCenterQuestions(getCentersData());
 }
 
 function generateCenterQuestions(data) {
@@ -2581,7 +2832,7 @@ function generateCenterQuestions(data) {
 
 function loadNeighborQuiz() {
     maxPossibleScore = totalQuestions;
-    generateNeighborQuestions(EMBEDDED_NEIGHBORS);
+    generateNeighborQuestions(getNeighborsData());
 }
 
 function generateNeighborQuestions(data) {
@@ -2633,7 +2884,7 @@ function generateNeighborQuestions(data) {
 
 function loadRiverQuiz() {
     maxPossibleScore = totalQuestions;
-    generateRiverQuestions(EMBEDDED_RIVERS);
+    generateRiverQuestions(getRiversData());
 }
 
 function generateRiverQuestions(data) {
@@ -2771,7 +3022,7 @@ function showConfirmButton() {
 
     const confirmButton = document.createElement('button');
     confirmButton.textContent = '✓ Подтвердить ответ';
-    confirmButton.className = 'btn-confirm';
+    confirmButton.className = 'btn btn-primary btn-block btn-confirm';
     confirmButton.onclick = checkAnswer;
     confirmButton.id = 'confirm-button';
     optionsContainer.appendChild(confirmButton);
@@ -3521,6 +3772,8 @@ function showResults() {
     stopTimer();
     stopGlobalExamTimer();
     disableAntiCheat();
+    document.body.classList.remove('exam-mode');
+    removeExamKioskTopBar();
 
     const wasExam = isExamMode;
     const finalExamViolations = examCheatingViolations;
@@ -3632,6 +3885,8 @@ function showResults() {
 }
 
 function closeResultsAndReturnToMenu() {
+    document.body.classList.remove('exam-mode');
+    removeExamKioskTopBar();
     document.getElementById('results-mode').style.display = 'none';
     document.getElementById('normal-mode').style.display = 'block';
     resetQuiz();
@@ -3657,7 +3912,8 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         }
     }
 
-    const results = JSON.parse(localStorage.getItem('rostovQuizResults') || '[]');
+    const storageKey = getResultsStorageKey();
+    const results = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('rostovQuizResults') || '[]');
     results.push({
         date: new Date().toLocaleString(),
         student: student ? student.name : 'Анонимно',
@@ -3673,6 +3929,7 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         exam_status: displayStatus,
         session_id: currentSyncSessionId || ''
     });
+    localStorage.setItem(storageKey, JSON.stringify(results));
     localStorage.setItem('rostovQuizResults', JSON.stringify(results));
 
     if (currentSyncSessionId) {
@@ -4040,6 +4297,149 @@ function injectExamProctorStyles() {
             transform: translateY(-2px) !important;
             box-shadow: 0 6px 16px rgba(0,0,0,0.08) !important;
         }
+
+        /* 1. Кнопка «Подтвердить ответ» (единый стиль с «Подсказка» и «Завершить викторину») */
+        .btn-confirm, #confirm-button {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+            padding: 12px 16px !important;
+            border-radius: 8px !important;
+            font-size: 13.5px !important;
+            font-weight: 700 !important;
+            line-height: 1.4 !important;
+            letter-spacing: -0.1px !important;
+            background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+            color: #FFFFFF !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3) !important;
+            box-sizing: border-box !important;
+            margin-top: 10px !important;
+            cursor: pointer !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            text-align: center !important;
+            white-space: normal !important;
+            min-height: 44px !important;
+        }
+
+        .btn-confirm:hover, #confirm-button:hover {
+            transform: translateY(-1.5px) !important;
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.42) !important;
+            filter: brightness(1.05) !important;
+        }
+
+        .btn-confirm:active, #confirm-button:active {
+            transform: translateY(0.5px) scale(0.985) !important;
+        }
+
+        .btn-group-vertical > .btn,
+        .btn-group-vertical > button {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 12px 16px !important;
+            border-radius: 8px !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            justify-content: center !important;
+            text-align: center !important;
+            min-height: 44px !important;
+            box-sizing: border-box !important;
+        }
+
+        /* 2. Скрытие стандартной навигации в режиме экзамена (Kiosk Mode) */
+        body.exam-mode #top-nav-panel,
+        body.exam-mode .top-nav-buttons,
+        body.exam-mode #auth-top-btn,
+        body.exam-mode #student-profile-badge,
+        body.exam-mode .leaderboard-top-btn,
+        body.exam-mode .help-circle-btn,
+        body.exam-mode .admin-btn,
+        body.exam-mode .reset-map-btn {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
+        body.exam-mode #quiz-controls,
+        body.exam-mode .app-card {
+            top: 66px !important;
+            max-height: calc(100vh - 80px) !important;
+        }
+
+        body.exam-mode .leaflet-top {
+            top: 62px !important;
+        }
+
+        /* 3. Фиолетовая статус-панель экзамена (Kiosk Bar) */
+        .exam-kiosk-bar {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            height: 52px !important;
+            z-index: 99999 !important;
+            background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%) !important;
+            color: #FFFFFF !important;
+            border-bottom: 2px solid #8B5CF6 !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            padding: 0 20px !important;
+            box-sizing: border-box !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        }
+
+        .exam-kiosk-bar .kiosk-left {
+            display: flex !important;
+            align-items: center !important;
+            gap: 12px !important;
+        }
+
+        .exam-kiosk-bar .kiosk-dot {
+            width: 10px !important;
+            height: 10px !important;
+            border-radius: 50% !important;
+            background: #EF4444 !important;
+            box-shadow: 0 0 10px #EF4444 !important;
+            animation: syncPulse 1.5s infinite !important;
+        }
+
+        .exam-kiosk-bar .kiosk-title {
+            font-size: 13.5px !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.02em !important;
+        }
+
+        .exam-kiosk-bar .kiosk-meta {
+            font-size: 11.5px !important;
+            color: #CBD5E1 !important;
+        }
+
+        .exam-kiosk-bar .kiosk-right {
+            display: flex !important;
+            align-items: center !important;
+            gap: 12px !important;
+        }
+
+        .exam-kiosk-bar .kiosk-timer-box {
+            background: rgba(15, 23, 42, 0.75) !important;
+            padding: 6px 14px !important;
+            border-radius: 8px !important;
+            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+        }
+
+        .exam-kiosk-bar .kiosk-timer-text {
+            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace !important;
+            font-size: 16px !important;
+            font-weight: 800 !important;
+            color: #FBBF24 !important;
+            letter-spacing: 0.5px !important;
+        }
     `;
     document.head.appendChild(style);
 }
@@ -4052,12 +4452,23 @@ window.addEventListener('load', function() {
     setTimeout(setupDistrictClickListeners, 400);
     updateStudentHeader();
 
-    if (!localStorage.getItem('rostovMapHideWelcome')) {
+    const hideWelcomeKey = `geoatlas_hide_welcome_${resolveRegionKey(window.location.pathname)}`;
+    if (!localStorage.getItem(hideWelcomeKey) && !localStorage.getItem('rostovMapHideWelcome')) {
         setTimeout(openWelcomeModal, 400);
     }
 
-    // Проверка и подключение к синхронной экзаменационной сессии
-    setTimeout(checkAndApplySyncExamSession, 600);
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasExam = urlParams.get('exam') === '1' || urlParams.get('session_id') || urlParams.get('mode') === 'exam_mixed';
+    const regionParam = urlParams.get('region');
+
+    if (hasExam) {
+        initExamMode();
+    } else {
+        if (regionParam) {
+            loadRegionData(regionParam);
+        }
+        setTimeout(checkAndApplySyncExamSession, 600);
+    }
 });
 
 // ==================== СИНХРОННЫЙ ЭКЗАМЕНАЦИОННЫЙ ДИСПЕТЧЕР ЮФУ (LMS) ====================
@@ -4069,13 +4480,14 @@ function renderSyncExamBanner(session, remainingSeconds) {
     const mins = Math.floor(remainingSeconds / 60);
     const secs = remainingSeconds % 60;
     const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    const regName = getRegionName(session.region_name || session.regionName || session.map_url || '');
 
     const bannerHtml = `
     <div id="sync-exam-top-banner" style="position: fixed; top: 0; left: 0; right: 0; z-index: 99999; background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%); color: #FFFFFF; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 20px rgba(0,0,0,0.35); border-bottom: 2px solid #8B5CF6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
         <div style="display: flex; align-items: center; gap: 12px;">
             <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #EF4444; box-shadow: 0 0 10px #EF4444; animation: syncPulse 1.5s infinite;"></span>
             <div>
-                <strong style="font-size: 13.5px; letter-spacing: 0.02em;">🔴 СИНХРОННЫЙ ЭКЗАМЕН ЮФУ • ГРУППА: ${session.group_name || 'ВКР'}</strong>
+                <strong style="font-size: 13.5px; letter-spacing: 0.02em;">🔴 СИНХРОННЫЙ ЭКЗАМЕН ЮФУ • ${escapeHtml(regName)} • ГРУППА: ${escapeHtml(session.group_name || 'ВКР')}</strong>
                 <div style="font-size: 11.5px; color: #CBD5E1;">Абсолютное серверное время • Режим контроля Anti-Cheat</div>
             </div>
         </div>
@@ -4102,13 +4514,15 @@ function renderSyncExamBanner(session, remainingSeconds) {
 
 function startSynchronousExamFromBanner() {
     const banner = document.getElementById('sync-exam-top-banner');
-    if (banner) banner.style.opacity = '0.75';
+    if (banner) banner.style.display = 'none';
 
-    const mode = window.currentSyncSessionMode || 'mixed';
-    startSelectedTestMode(mode, {
-        isExam: true,
+    initExamMode({
+        region: window.currentSyncRegion || '',
+        mode: window.currentSyncSessionMode || 'mixed',
         count: window.currentSyncQuestionCount || 15,
-        timeLimit: window.currentSyncTimeLimit || 10
+        timeLimit: window.currentSyncTimeLimit || 10,
+        sessionId: currentSyncSessionId,
+        groupName: currentSyncGroupName
     });
 }
 
@@ -4235,9 +4649,23 @@ async function checkAndApplySyncExamSession() {
 
     if (!isUrlDriven && !isStudentGroupMatched) return;
 
+    const sessionRegion = session.region_name || session.regionName || urlParams.get('region') || session.map_url || session.mapUrl || '';
+    window.currentSyncRegion = sessionRegion;
+
+    const targetMapUrl = session.map_url || session.mapUrl;
+    const currentFile = (window.location.pathname || '').split('/').pop() || '';
+    const resolvedRegion = resolveRegionKey(sessionRegion);
+    const expectedFile = targetMapUrl || `${resolvedRegion}_quiz_map.html`;
+
+    if (isUrlDriven && currentFile && currentFile !== expectedFile && !currentFile.includes(resolvedRegion)) {
+        window.location.href = `${expectedFile}${window.location.search}`;
+        return;
+    }
+
     // Проверяем, сдавал ли студент уже этот экзамен
     const alreadySubmittedLocal = localStorage.getItem('sfedu_exam_submitted_' + session.session_id);
-    const results = JSON.parse(localStorage.getItem('rostovQuizResults') || '[]');
+    const storageKey = getResultsStorageKey();
+    const results = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('rostovQuizResults') || '[]');
     const alreadyInResults = results.some(r => r.session_id === session.session_id);
     if (alreadySubmittedLocal || alreadyInResults) {
         renderExamAlreadySubmittedBanner(session);

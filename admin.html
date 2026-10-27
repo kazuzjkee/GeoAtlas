@@ -2008,7 +2008,7 @@ __SERVER_SESSION_JSON__
 
     function copySessionStudentLink() {
         if (!activeSession) return;
-        const link = `${window.location.origin}/${activeSession.mapUrl}?session_id=${activeSession.sessionId}&group=${encodeURIComponent(activeSession.groupName)}&start=${activeSession.sessionStartedAt}&time=${activeSession.timeLimitMinutes}&limit=${activeSession.questionCount}&mode=${activeSession.quizType}`;
+        const link = `${window.location.origin}/${activeSession.mapUrl}?session_id=${activeSession.sessionId}&group=${encodeURIComponent(activeSession.groupName)}&start=${activeSession.sessionStartedAt}&time=${activeSession.timeLimitMinutes}&limit=${activeSession.questionCount}&mode=${activeSession.quizType}&region=${encodeURIComponent(activeSession.regionName || '')}`;
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(link).then(() => {
                 showToast('Ссылка на тест скопирована в буфер!');

@@ -10,6 +10,7 @@ import json
 import secrets
 import csv
 import io
+import re
 
 app = FastAPI(title="Геоатлас Ростовской области — Портал ЮФУ")
 security = HTTPBasic()
@@ -391,6 +392,64 @@ def export_csv(username: str = Depends(check_admin)):
     response = PlainTextResponse(output.getvalue(), media_type="text/csv; charset=utf-8")
     response.headers["Content-Disposition"] = "attachment; filename=vedomost_sfedu_geos.csv"
     return response
+
+REGION_DATA_CACHE = {}
+
+def get_region_data(region_key: str):
+    clean = region_key.lower().strip().replace('_quiz_map.html', '').replace('.html', '')
+    if clean in REGION_DATA_CACHE:
+        return REGION_DATA_CACHE[clean]
+
+    candidates = [
+        f"{clean}_quiz_map.html",
+        f"{clean}.html"
+    ]
+    matched_file = None
+    for c in candidates:
+        if os.path.exists(c):
+            matched_file = c
+            break
+
+    if not matched_file:
+        return None
+
+    try:
+        with open(matched_file, 'r', encoding='utf-8') as f:
+            html = f.read()
+
+        def extract_var(name, text):
+            m = re.search(r'const\s+' + name + r'\s*=\s*(.*?);\s*(?=const|\n|$)', text, re.DOTALL)
+            if m:
+                try:
+                    return json.loads(m.group(1).strip())
+                except Exception:
+                    return None
+            return None
+
+        data = {
+            "status": "ok",
+            "region": clean,
+            "map_url": matched_file,
+            "bounds": extract_var('REGION_BOUNDS', html),
+            "districts": extract_var('EMBEDDED_DISTRICTS', html),
+            "centers": extract_var('EMBEDDED_CENTERS', html),
+            "neighbors": extract_var('EMBEDDED_NEIGHBORS', html),
+            "rivers": extract_var('EMBEDDED_RIVERS', html),
+            "puzzle_data": extract_var('EMBEDDED_PUZZLE_DATA', html),
+            "outline_geojson": extract_var('REGION_OUTLINE_GEOJSON', html)
+        }
+        REGION_DATA_CACHE[clean] = data
+        return data
+    except Exception as e:
+        print(f"Error extracting region data for {region_key}: {e}")
+        return None
+
+@app.get("/api/region/{region_id}/data")
+def api_region_data(region_id: str):
+    data = get_region_data(region_id)
+    if data:
+        return data
+    raise HTTPException(status_code=404, detail=f"Регион '{region_id}' не найден")
 
 @app.get("/")
 def get_index():
