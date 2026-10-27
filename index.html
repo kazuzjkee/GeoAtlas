@@ -5528,7 +5528,20 @@
             const mapName = session.map_url.includes('rostov') ? 'Ростовская область' : 
                            session.map_url.includes('russia') ? 'Карта России' : 
                            session.map_url.includes('krasnodar') ? 'Краснодарский край' : 'Региональная карта';
-            const modeText = session.mode === 'puzzle' ? 'Сборка-пазл' : 'Тестирование';
+            const modeTitles = {
+                'puzzle': 'Топологический пазл',
+                'river': 'Гидрография (Реки)',
+                'rivers': 'Гидрография (Реки)',
+                'districts': 'Номенклатура районов',
+                'district': 'Номенклатура районов',
+                'center': 'Административные центры',
+                'centers': 'Административные центры',
+                'neighbor': 'Топология смежности',
+                'neighbors': 'Топология смежности',
+                'exam_mixed': 'Комплексный экзамен',
+                'mixed': 'Комплексный экзамен'
+            };
+            const modeText = modeTitles[session.mode] || (session.mode === 'puzzle' ? 'Сборка-пазл' : 'Тестирование');
 
             if (groupTitleEl) {
                 if (student && (student.group === session.group_name || session.group_name.includes(student.group))) {

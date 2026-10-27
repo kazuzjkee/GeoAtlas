@@ -248,18 +248,63 @@ function stopTimer() {
     }
 }
 
+/* ==================== ПРЕМИАЛЬНЫЙ ВИДЖЕТ ТАЙМЕРА И ПРОКТОРИНГА ==================== */
+function ensureExamProctorWidgetDOM() {
+    let tb = document.getElementById('timer-bar-container');
+    if (!tb) return;
+    
+    tb.classList.add('exam-proctor-panel');
+    
+    if (!tb.querySelector('.exam-panel-top')) {
+        tb.innerHTML = `
+            <div class="exam-panel-top">
+                <div class="exam-status-badge">
+                    <span class="exam-status-dot"></span>
+                    <span id="exam-proctor-status-text">Контроль Anti-Cheat</span>
+                </div>
+                <div class="exam-timer-wrapper">
+                    <span class="exam-timer-icon">⏳</span>
+                    <span id="timer-text" class="exam-timer-display">10:00</span>
+                </div>
+            </div>
+            <div class="timer-track">
+                <div id="timer-bar"></div>
+            </div>
+        `;
+    }
+}
+
+function showExamTimeoutBanner() {
+    let banner = document.getElementById('exam-timeout-notification');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'exam-timeout-notification';
+        banner.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); background:linear-gradient(135deg, #7F1D1D 0%, #991B1B 100%); color:#FFFFFF; padding:12px 24px; border-radius:12px; font-weight:700; font-size:13.5px; box-shadow:0 12px 32px rgba(0,0,0,0.45); z-index:100002; display:flex; align-items:center; gap:10px; border:1px solid #F87171; animation:slideDownToast 0.3s ease;';
+        banner.innerHTML = '<span style="font-size:20px;">⏰</span><span>Время контрольной работы истекло! Ваши ответы зафиксированы и сохранены.</span>';
+        document.body.appendChild(banner);
+        setTimeout(() => { if (banner) banner.remove(); }, 6000);
+    }
+}
+
 /* ==================== ГЛОБАЛЬНЫЙ ЭКЗАМЕНАЦИОННЫЙ ТАЙМЕР ==================== */
 function startGlobalExamTimer() {
     stopTimer();
     stopGlobalExamTimer();
 
+    ensureExamProctorWidgetDOM();
+
     const tb = document.getElementById('timer-bar-container');
     if (tb) tb.style.display = 'block';
+
+    // Фиксация абсолютной метки завершения для защиты от засыпания вкладки
+    window.examTimerEndTime = Date.now() + (Math.max(1, examTimeRemaining) * 1000);
 
     updateGlobalExamTimerDisplay();
 
     examGlobalTimer = setInterval(() => {
-        examTimeRemaining--;
+        const now = Date.now();
+        examTimeRemaining = Math.max(0, Math.round((window.examTimerEndTime - now) / 1000));
+
         updateGlobalExamTimerDisplay();
 
         if (examTimeRemaining <= 0) {
@@ -279,28 +324,75 @@ function stopGlobalExamTimer() {
 function updateGlobalExamTimerDisplay() {
     const timerText = document.getElementById('timer-text');
     const timerBar = document.getElementById('timer-bar');
-    const mins = Math.floor(Math.max(0, examTimeRemaining) / 60);
-    const secs = Math.max(0, examTimeRemaining) % 60;
+    const statusText = document.getElementById('exam-proctor-status-text');
+
+    const safeSec = Math.max(0, examTimeRemaining);
+    const mins = Math.floor(safeSec / 60);
+    const secs = safeSec % 60;
     const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
     if (timerText) {
-        const syncLabel = currentSyncGroupName ? ` [${currentSyncGroupName}]` : '';
-        timerText.textContent = `⏳ Экзамен${syncLabel}: ${timeStr}`;
-        timerText.style.fontWeight = '800';
-        timerText.style.color = examTimeRemaining < 120 ? '#EF4444' : '#1E293B';
+        timerText.textContent = timeStr;
+        timerText.classList.add('exam-timer-display');
+        if (safeSec < 60) {
+            timerText.style.color = '#EF4444';
+        } else if (safeSec < 180) {
+            timerText.style.color = '#F59E0B';
+        } else {
+            timerText.style.color = '#38BDF8';
+        }
+    }
+
+    if (statusText) {
+        if (safeSec <= 0) {
+            statusText.textContent = 'Время истекло';
+            statusText.style.color = '#EF4444';
+        } else if (safeSec < 60) {
+            statusText.textContent = 'Финал: Менее 1 мин!';
+            statusText.style.color = '#FCA5A5';
+        } else if (currentSyncGroupName) {
+            statusText.textContent = `Экзамен • ${currentSyncGroupName}`;
+            statusText.style.color = '#CBD5E1';
+        } else {
+            const catTitles = {
+                'mixed': 'Комплексный экзамен',
+                'districts': 'Номенклатура районов',
+                'rivers': 'Гидрография (Реки)',
+                'centers': 'Административные центры',
+                'neighbors': 'Топология смежности',
+                'puzzle': 'Сборка-пазл'
+            };
+            statusText.textContent = catTitles[examCategory] || 'Экзамен (Anti-Cheat)';
+            statusText.style.color = '#CBD5E1';
+        }
     }
 
     if (timerBar) {
         const totalSec = Math.max(1, examTimeLimitMinutes * 60);
-        const percent = Math.max(0, (examTimeRemaining / totalSec) * 100);
+        const percent = Math.min(100, Math.max(0, (safeSec / totalSec) * 100));
         timerBar.style.width = `${percent}%`;
-        timerBar.style.background = percent > 40 ? '#7C3AED' : percent > 20 ? '#F59E0B' : '#EF4444';
+        if (percent > 40) {
+            timerBar.style.background = 'linear-gradient(90deg, #8B5CF6, #38BDF8)';
+            timerBar.style.boxShadow = '0 0 8px rgba(56, 189, 248, 0.4)';
+        } else if (percent > 20) {
+            timerBar.style.background = 'linear-gradient(90deg, #F59E0B, #FBBF24)';
+            timerBar.style.boxShadow = '0 0 8px rgba(245, 158, 11, 0.4)';
+        } else {
+            timerBar.style.background = 'linear-gradient(90deg, #DC2626, #EF4444)';
+            timerBar.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.7)';
+        }
     }
 }
 
 function handleExamTimeout() {
-    alert('⏰ Время контрольной работы истекло! Ваши ответы зафиксированы.');
+    stopGlobalExamTimer();
+    stopTimer();
+
+    // 1. Автоматически завершаем попытку и немедленно отправляем результат на сервер
     finishExamEarly(true);
+
+    // 2. Отображаем неблокирующий баннер об окончании времени
+    showExamTimeoutBanner();
 }
 
 /* ==================== ЗАЩИТА ОТ СПИСЫВАНИЯ (ANTI-CHEAT) ==================== */
@@ -392,13 +484,30 @@ function finishExamEarly(isTimeout = false) {
 }
 
 function updateTimerDisplay() {
+    ensureExamProctorWidgetDOM();
     const timerText = document.getElementById('timer-text');
     const timerBar = document.getElementById('timer-bar');
-    if (timerText) timerText.textContent = `${timeLeft}с`;
+    const statusText = document.getElementById('exam-proctor-status-text');
+
+    const safeSec = Math.max(0, timeLeft);
+    const mins = Math.floor(safeSec / 60);
+    const secs = safeSec % 60;
+    const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    if (timerText) {
+        timerText.textContent = timeStr;
+        timerText.classList.add('exam-timer-display');
+        timerText.style.color = safeSec <= 5 ? '#EF4444' : '#38BDF8';
+    }
+    if (statusText) {
+        statusText.textContent = 'Таймер вопроса';
+        statusText.style.color = '#CBD5E1';
+    }
     if (timerBar) {
-        const percent = Math.max(0, (timeLeft / QUESTION_TIME_LIMIT) * 100);
+        const percent = Math.max(0, (safeSec / QUESTION_TIME_LIMIT) * 100);
         timerBar.style.width = `${percent}%`;
-        timerBar.style.background = percent > 50 ? '#10B981' : percent > 25 ? '#F59E0B' : '#EF4444';
+        timerBar.style.background = percent > 50 ? 'linear-gradient(90deg, #10B981, #34D399)' : percent > 25 ? 'linear-gradient(90deg, #F59E0B, #FBBF24)' : 'linear-gradient(90deg, #DC2626, #EF4444)';
+        timerBar.style.boxShadow = percent <= 25 ? '0 0 8px rgba(239,68,68,0.5)' : 'none';
     }
 }
 
@@ -587,9 +696,30 @@ function exitStudyMode() {
 }
 
 /* ==================== РЕЖИМ КОНТРОЛЬНОЙ (ЭКЗАМЕНА) ==================== */
-function openExamModal() {
+function openExamModal(preselectedCategory) {
     const m = document.getElementById('exam-setup-modal');
-    if (m) m.style.display = 'flex';
+    if (m) {
+        if (preselectedCategory) {
+            const catSelect = document.getElementById('exam-category-select');
+            if (catSelect) {
+                const norm = String(preselectedCategory).toLowerCase();
+                if (norm === 'rivers' || norm === 'river' || norm.includes('гидрограф') || norm.includes('рек')) {
+                    catSelect.value = 'rivers';
+                } else if (norm === 'districts' || norm === 'district' || norm.includes('номенклатур') || norm.includes('территори')) {
+                    catSelect.value = 'districts';
+                } else if (norm === 'puzzle' || norm.includes('пазл')) {
+                    catSelect.value = 'puzzle';
+                } else if (norm === 'centers' || norm === 'center' || norm.includes('центр')) {
+                    catSelect.value = 'centers';
+                } else if (norm === 'neighbors' || norm === 'neighbor' || norm.includes('сосед') || norm.includes('тополог')) {
+                    catSelect.value = 'neighbors';
+                } else {
+                    catSelect.value = preselectedCategory;
+                }
+            }
+        }
+        m.style.display = 'flex';
+    }
 }
 
 function closeExamModal() {
@@ -603,7 +733,51 @@ function startExamFromModal() {
     const tme = document.getElementById('exam-time-select') ? parseInt(document.getElementById('exam-time-select').value) : 10;
     
     closeExamModal();
-    startExamQuiz(cat, cnt, tme);
+    startSelectedTestMode(cat, { isExam: true, count: cnt, timeLimit: tme });
+}
+
+function selectModeFromWelcome(mode) {
+    closeWelcomeModal();
+    startSelectedTestMode(mode, { isExam: false });
+}
+
+function startSelectedTestMode(mode = 'mixed', options = {}) {
+    const count = options.count || 15;
+    const timeLimit = options.timeLimit || 10;
+    const isExam = options.isExam !== undefined ? options.isExam : isExamMode;
+    const normalized = String(mode).toLowerCase().trim();
+
+    if (normalized === 'puzzle' || normalized.includes('пазл')) {
+        startPuzzleMode();
+    } else if (normalized === 'rivers' || normalized === 'river' || normalized.includes('гидрограф') || normalized.includes('рек')) {
+        if (isExam) {
+            startExamQuiz('rivers', count, timeLimit);
+        } else {
+            startRiverQuiz();
+        }
+    } else if (normalized === 'districts' || normalized === 'district' || normalized.includes('номенклатур') || normalized.includes('территори') || normalized.includes('силуэт')) {
+        if (isExam) {
+            startExamQuiz('districts', count, timeLimit);
+        } else {
+            startDistrictQuiz();
+        }
+    } else if (normalized === 'centers' || normalized === 'center' || normalized.includes('центр')) {
+        if (isExam) {
+            startExamQuiz('centers', count, timeLimit);
+        } else {
+            startCenterQuiz();
+        }
+    } else if (normalized === 'neighbors' || normalized === 'neighbor' || normalized.includes('сосед') || normalized.includes('тополог')) {
+        if (isExam) {
+            startExamQuiz('neighbors', count, timeLimit);
+        } else {
+            startNeighborQuiz();
+        }
+    } else if (normalized === 'study' || normalized.includes('обучен')) {
+        startStudyMode(options.category || 'districts');
+    } else {
+        startExamQuiz('mixed', count, timeLimit);
+    }
 }
 
 function startExamQuiz(category = 'mixed', count = 15, timeLimitMinutes = 10) {
@@ -3507,27 +3681,28 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         } catch(e) {}
     }
 
-    if (student) {
-        fetch('/api/results/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                email: student.email,
-                name: student.name,
-                group: student.group,
-                quiz_type: wasExam ? `Контрольная: ${examCategory}` : (currentQuiz || 'quiz'),
-                score: score,
-                max_score: maxPossibleScore,
-                accuracy: accuracy,
-                time_spent: timeStr,
-                is_exam: wasExam,
-                exam_token: token,
-                violations: violations,
-                exam_status: displayStatus,
-                session_id: currentSyncSessionId || ''
-            })
-        }).catch(e => {});
-    }
+    // Всегда отправляем результаты на сервер (даже если студент не авторизовался заранее)
+    const submitPayload = {
+        email: student ? student.email : 'student@sfedu.ru',
+        name: student ? student.name : (currentSyncGroupName ? `Студент (${currentSyncGroupName})` : 'Анонимный студент'),
+        group: student ? student.group : (currentSyncGroupName || '-'),
+        quiz_type: wasExam ? `Контрольная: ${examCategory}` : (currentQuiz || 'quiz'),
+        score: score,
+        max_score: maxPossibleScore,
+        accuracy: accuracy,
+        time_spent: timeStr,
+        is_exam: wasExam,
+        exam_token: token,
+        violations: violations,
+        exam_status: displayStatus,
+        session_id: currentSyncSessionId || ''
+    };
+
+    fetch('/api/results/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submitPayload)
+    }).catch(e => {});
 }
 
 let globalLeaderboardCache = [];
@@ -3767,8 +3942,112 @@ function updateStudentHeader() {
     }
 }
 
+function injectExamProctorStyles() {
+    if (document.getElementById('exam-proctor-injected-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'exam-proctor-injected-styles';
+    style.textContent = `
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap');
+
+        #timer-bar-container.exam-proctor-panel {
+            background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 60%, #1E293B 100%) !important;
+            border: 1px solid rgba(139, 92, 246, 0.4) !important;
+            border-radius: 12px !important;
+            padding: 10px 14px !important;
+            margin-bottom: 12px !important;
+            box-shadow: 0 4px 18px rgba(15, 23, 42, 0.28), 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+            box-sizing: border-box !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .exam-panel-top {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            margin-bottom: 8px !important;
+        }
+
+        .exam-status-badge {
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            font-size: 11px !important;
+            font-weight: 700 !important;
+            color: #CBD5E1 !important;
+            letter-spacing: 0.3px !important;
+            text-transform: uppercase !important;
+        }
+
+        .exam-status-dot {
+            width: 8px !important;
+            height: 8px !important;
+            border-radius: 50% !important;
+            background: #10B981 !important;
+            box-shadow: 0 0 8px #10B981 !important;
+            animation: proctorDotPulse 1.8s infinite !important;
+        }
+
+        @keyframes proctorDotPulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.25); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        .exam-timer-wrapper {
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            background: rgba(15, 23, 42, 0.7) !important;
+            padding: 4px 10px !important;
+            border-radius: 8px !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        }
+
+        .exam-timer-icon {
+            font-size: 13px !important;
+        }
+
+        .exam-timer-display, #timer-text {
+            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace !important;
+            font-size: 15px !important;
+            font-weight: 800 !important;
+            color: #38BDF8 !important;
+            letter-spacing: 0.5px !important;
+        }
+
+        .timer-track {
+            width: 100% !important;
+            height: 6px !important;
+            background: rgba(255, 255, 255, 0.12) !important;
+            border-radius: 999px !important;
+            overflow: hidden !important;
+        }
+
+        #timer-bar {
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 999px !important;
+            background: linear-gradient(90deg, #8B5CF6, #38BDF8) !important;
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.4) !important;
+            transition: width 1s linear, background 0.3s !important;
+        }
+
+        .welcome-feature {
+            cursor: pointer !important;
+            transition: transform 0.2s, box-shadow 0.2s !important;
+        }
+        .welcome-feature:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.08) !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 /* ИНИЦИАЛИЗАЦИЯ И ПРОВЕРКА ТЕМЫ */
 window.addEventListener('load', function() {
+    injectExamProctorStyles();
+    ensureExamProctorWidgetDOM();
     resetMapView();
     setTimeout(setupDistrictClickListeners, 400);
     updateStudentHeader();
@@ -3825,11 +4104,12 @@ function startSynchronousExamFromBanner() {
     const banner = document.getElementById('sync-exam-top-banner');
     if (banner) banner.style.opacity = '0.75';
 
-    if (window.currentSyncSessionMode === 'puzzle' && typeof startPuzzleGame === 'function') {
-        startPuzzleGame();
-    } else {
-        startExamQuiz('mixed', window.currentSyncQuestionCount || 15, window.currentSyncTimeLimit || 10);
-    }
+    const mode = window.currentSyncSessionMode || 'mixed';
+    startSelectedTestMode(mode, {
+        isExam: true,
+        count: window.currentSyncQuestionCount || 15,
+        timeLimit: window.currentSyncTimeLimit || 10
+    });
 }
 
 function renderExamExpiredModal(session) {

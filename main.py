@@ -1423,10 +1423,16 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
                     <div id="quiz-progress">Вопрос: <span id="current-question">1</span>/<span id="total-questions">10</span></div>
                 </div>
 
-                <div id="timer-bar-container" style="display: none; margin-bottom: 10px;">
-                    <div class="timer-flex">
-                        <span>Время:</span>
-                        <span id="timer-text">20с</span>
+                <div id="timer-bar-container" class="exam-proctor-panel" style="display: none; margin-bottom: 12px;">
+                    <div class="exam-panel-top">
+                        <div class="exam-status-badge">
+                            <span class="exam-status-dot"></span>
+                            <span id="exam-proctor-status-text">Контроль Anti-Cheat</span>
+                        </div>
+                        <div class="exam-timer-wrapper">
+                            <span class="exam-timer-icon">⏳</span>
+                            <span id="timer-text" class="exam-timer-display">10:00</span>
+                        </div>
                     </div>
                     <div class="timer-track">
                         <div id="timer-bar"></div>
@@ -1479,28 +1485,28 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
                 <p class="welcome-subtitle">Интерактивный картографический комплекс и система тестирования пространственных знаний</p>
                 
                 <div class="welcome-grid">
-                    <div class="welcome-feature">
+                    <div class="welcome-feature" onclick="selectModeFromWelcome('study')" style="cursor: pointer;" title="Запустить режим обучения номенклатуре">
                         <div class="feature-icon" style="background: #E8F5E9; color: #2E7D32;">🎓</div>
                         <div class="feature-content">
-                            <h4>Режим обучения</h4>
-                            <p>Пошаговое изучение номенклатуры области: территорий, русел рек и административных центров с автофокусом карты.</p>
+                            <h4>Режим обучения (Номенклатура)</h4>
+                            <p>Пошаговое изучение номенклатуры: территорий, русел рек и административных центров с автофокусом карты.</p>
                         </div>
                     </div>
-                    <div class="welcome-feature">
+                    <div class="welcome-feature" onclick="selectModeFromWelcome('rivers')" style="cursor: pointer;" title="Запустить викторину по гидрографии">
                         <div class="feature-icon" style="background: #E0F2FE; color: #0284C7;">🌊</div>
                         <div class="feature-content">
                             <h4>Гидрография</h4>
                             <p>Викторина по главным водным артериям региона. Карта фокусируется на русле реки и предлагает варианты ответа.</p>
                         </div>
                     </div>
-                    <div class="welcome-feature">
+                    <div class="welcome-feature" onclick="selectModeFromWelcome('puzzle')" style="cursor: pointer;" title="Собрать регион из деталей пазла">
                         <div class="feature-icon" style="background: #E0F7FA; color: #00796B;">🧩</div>
                         <div class="feature-content">
-                            <h4>Топология и границы</h4>
-                            <p>Проверка знания смежности территорий («Районы-соседи») и узнавания силуэтов муниципальных образований.</p>
+                            <h4>Топологический пазл</h4>
+                            <p>Интерактивная сборка контура региона из силуэтов муниципальных образований без координатной сетки.</p>
                         </div>
                     </div>
-                    <div class="welcome-feature">
+                    <div class="welcome-feature" onclick="selectModeFromWelcome('centers')" style="cursor: pointer;" title="Найти центры на карте">
                         <div class="feature-icon" style="background: #EFF6FF; color: #1D4ED8;">🎯</div>
                         <div class="feature-content">
                             <h4>Поиск центров с точностью</h4>
@@ -1531,10 +1537,11 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
                         <label style="font-weight: 700; font-size: 13px; color: #1E293B; display: block; margin-bottom: 6px;">Категория вопросов:</label>
                         <select id="exam-category-select" class="exam-select">
                             <option value="mixed">🔀 Комплексный экзамен (все категории)</option>
-                            <option value="districts">🗺️ Территории (по силуэту)</option>
-                            <option value="rivers">🌊 Реки (по руслу)</option>
-                            <option value="centers">📍 Центры (на карте)</option>
-                            <option value="neighbors">🧩 Топология и соседи</option>
+                            <option value="districts">🗺️ Номенклатура районов (по силуэту)</option>
+                            <option value="rivers">🌊 Гидрография (русла рек региона)</option>
+                            <option value="centers">📍 Административные центры (поиск на карте)</option>
+                            <option value="neighbors">🔗 Топология смежности (районы-соседи)</option>
+                            <option value="puzzle">🧩 Топологический пазл (Собрать регион)</option>
                         </select>
                     </div>
 
@@ -2781,25 +2788,98 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
         .quiz-status-header h4 {{ margin: 0; font-size: 13px; font-weight: 700; }}
         #quiz-progress {{ font-size: 11px; opacity: 0.9; margin-top: 2px; }}
 
+        /* ==================== ПРЕМИАЛЬНЫЙ ВИДЖЕТ ТАЙМЕРА И ПРОКТОРИНГА ==================== */
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap');
+
+        .exam-proctor-panel {{
+            background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 60%, #1E293B 100%);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 18px rgba(15, 23, 42, 0.28), 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }}
+
+        .exam-panel-top {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }}
+
+        .exam-status-badge {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #CBD5E1;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }}
+
+        .exam-status-dot {{
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10B981;
+            box-shadow: 0 0 8px #10B981;
+            animation: proctorDotPulse 1.8s infinite;
+        }}
+
+        @keyframes proctorDotPulse {{
+            0% {{ transform: scale(0.95); opacity: 0.8; }}
+            50% {{ transform: scale(1.25); opacity: 1; }}
+            100% {{ transform: scale(0.95); opacity: 0.8; }}
+        }}
+
+        .exam-timer-wrapper {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(15, 23, 42, 0.7);
+            padding: 4px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }}
+
+        .exam-timer-icon {{
+            font-size: 13px;
+        }}
+
+        .exam-timer-display, #timer-text {{
+            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace !important;
+            font-size: 15px !important;
+            font-weight: 800 !important;
+            color: #38BDF8 !important;
+            letter-spacing: 0.5px !important;
+        }}
+
+        .timer-track {{
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 999px;
+            overflow: hidden;
+        }}
+
+        #timer-bar {{
+            width: 100%;
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #8B5CF6, #38BDF8);
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+            transition: width 1s linear, background 0.3s;
+        }}
+
         .timer-flex {{
             display: flex;
             justify-content: space-between;
             font-size: 11.5px;
-            color: #475569;
+            color: #CBD5E1;
             margin-bottom: 4px;
-        }}
-        .timer-track {{
-            width: 100%;
-            height: 6px;
-            background: #E2E8F0;
-            border-radius: 3px;
-            overflow: hidden;
-        }}
-        #timer-bar {{
-            width: 100%;
-            height: 100%;
-            background: #10B981;
-            transition: width 1s linear, background 0.3s;
         }}
 
         .question-text {{

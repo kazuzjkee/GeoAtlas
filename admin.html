@@ -1183,11 +1183,12 @@
             <div class="form-field">
                 <label class="form-label" for="dispatch-type-select">3. Формат тестирования / срез</label>
                 <select id="dispatch-type-select" class="form-select">
-                    <option value="exam_mixed" selected>🛡️ Комплексный экзаменационный срез (Районы + Реки + Экономика)</option>
-                    <option value="puzzle">🧩 Топологический пазл (Сборка контура региона)</option>
-                    <option value="center">📍 Районы и муниципальные образования</option>
-                    <option value="neighbor">🔗 Смежность и соседские связи</option>
-                    <option value="river">🌊 Гидрографическая сеть и водные артерии</option>
+                    <option value="exam_mixed" selected>🛡️ Комплексный экзаменационный срез (все категории)</option>
+                    <option value="districts">🗺️ Номенклатура (Районы по силуэту)</option>
+                    <option value="river">🌊 Гидрографическая сеть и русла рек</option>
+                    <option value="puzzle">🧩 Топологический пазл (Сборка региона)</option>
+                    <option value="center">📍 Административные центры (поиск на карте)</option>
+                    <option value="neighbor">🔗 Топология смежности и соседи</option>
                 </select>
             </div>
 
@@ -2007,7 +2008,7 @@ __SERVER_SESSION_JSON__
 
     function copySessionStudentLink() {
         if (!activeSession) return;
-        const link = `${window.location.origin}/${activeSession.mapUrl}?session_id=${activeSession.sessionId}&group=${encodeURIComponent(activeSession.groupName)}&start=${activeSession.sessionStartedAt}&limit=${activeSession.timeLimitMinutes}`;
+        const link = `${window.location.origin}/${activeSession.mapUrl}?session_id=${activeSession.sessionId}&group=${encodeURIComponent(activeSession.groupName)}&start=${activeSession.sessionStartedAt}&time=${activeSession.timeLimitMinutes}&limit=${activeSession.questionCount}&mode=${activeSession.quizType}`;
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(link).then(() => {
                 showToast('Ссылка на тест скопирована в буфер!');
