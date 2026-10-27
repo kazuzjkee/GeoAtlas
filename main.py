@@ -1208,6 +1208,16 @@ class InteractiveAtlas:
                     "neighbors": n_map["neighbor_names"]
                 })
 
+        server_ctx = {
+            "region": self.region_key or self.slug,
+            "title": self.ru_title,
+            "center": self.center,
+            "zoom": self.zoom,
+            "map_url": self.output_filename,
+            "is_rf": getattr(self, 'is_rf', False)
+        }
+        server_ctx_json = json.dumps(server_ctx, ensure_ascii=False)
+
         dynamic_js = f'''
 const REGION_BOUNDS = {json.dumps(region_bounds)};
 const EMBEDDED_DISTRICTS = {json.dumps(districts_data, ensure_ascii=False)};
@@ -1216,6 +1226,12 @@ const EMBEDDED_NEIGHBORS = {json.dumps(neighbors_data, ensure_ascii=False)};
 const EMBEDDED_RIVERS = {json.dumps(rivers_data, ensure_ascii=False)};
 const EMBEDDED_PUZZLE_DATA = {json.dumps(puzzle_districts, ensure_ascii=False)};
 const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=False)};
+const SERVER_REGION_CONTEXT = {server_ctx_json};
+window.SERVER_REGION_CONTEXT = SERVER_REGION_CONTEXT;
+window.currentRegionKey = {json.dumps(self.region_key or self.slug)};
+window.currentRegionTitle = {json.dumps(self.ru_title)};
+window.serverMapCenter = {json.dumps(self.center)};
+window.serverMapZoom = {self.zoom};
 '''
 
         quiz_js_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'quiz.js')
@@ -3739,6 +3755,26 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
         else:
             html = custom_css_js + html
 
+        reg_id = self.region_key or self.slug
+        body_attrs = (
+            f'data-region="{reg_id}" '
+            f'data-region-title="{self.ru_title}" '
+            f'data-center-lat="{self.center[0]}" '
+            f'data-center-lng="{self.center[1]}" '
+            f'data-zoom="{self.zoom}" '
+            f'data-map-url="{self.output_filename}"'
+        )
+        if '<body' in html:
+            if 'data-region="' in html:
+                html = re.sub(r'data-region="[^"]*"', f'data-region="{reg_id}"', html, count=1)
+                html = re.sub(r'data-region-title="[^"]*"', f'data-region-title="{self.ru_title}"', html, count=1)
+                html = re.sub(r'data-center-lat="[^"]*"', f'data-center-lat="{self.center[0]}"', html, count=1)
+                html = re.sub(r'data-center-lng="[^"]*"', f'data-center-lng="{self.center[1]}"', html, count=1)
+                html = re.sub(r'data-zoom="[^"]*"', f'data-zoom="{self.zoom}"', html, count=1)
+                html = re.sub(r'data-map-url="[^"]*"', f'data-map-url="{self.output_filename}"', html, count=1)
+            else:
+                html = re.sub(r'<body([^>]*)>', rf'<body\1 {body_attrs}>', html, count=1)
+
         if '</body>' in html:
             html = html.replace('</body>', my_attribution_html + '</body>', 1)
         else:
@@ -3898,3 +3934,12 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ==========================================
+# ЭКСПОРТ FASTAPI ДЛЯ RENDER / UVICORN
+# ==========================================
+try:
+    from server import app
+except Exception:
+    app = None

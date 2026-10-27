@@ -17,7 +17,7 @@ import re
 logger = logging.getLogger("geoatlas")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-app = FastAPI(title="Геоатлас Ростовской области — Портал ЮФУ")
+app = FastAPI(title="GeoAtlas — Учебно-картографический атлас ЮФУ (Ростов, Краснодар, Россия)")
 security = HTTPBasic()
 
 app.add_middleware(
@@ -456,13 +456,186 @@ def api_region_data(region_id: str) -> Dict[str, Any]:
         return data
     raise HTTPException(status_code=404, detail=f"Регион '{region_id}' не найден")
 
+# ==========================================
+# ДИНАМИЧЕСКИЙ РЕГИОНАЛЬНЫЙ КОНТЕКСТ И МАРШРУТИЗАЦИЯ
+# ==========================================
+REGIONS_INFO: Dict[str, Dict[str, Any]] = {
+    "rostov": {
+        "id": "rostov",
+        "title": "Ростовская область",
+        "center": [47.5, 40.5],
+        "zoom": 8,
+        "map_file": "rostov_quiz_map.html",
+        "geojson_file": "raion.shp",
+        "is_rf": False,
+        "aliases": ["rostov", "ростов", "ростовская", "ростовская область", "rnd", "ростов-на-дону"]
+    },
+    "krasnodar": {
+        "id": "krasnodar",
+        "title": "Краснодарский край",
+        "center": [45.2, 39.0],
+        "zoom": 8,
+        "map_file": "krasnodar_quiz_map.html",
+        "geojson_file": "boundary-3857.shp",
+        "is_rf": False,
+        "aliases": ["krasnodar", "краснодар", "краснодарский", "краснодарский край", "кубань", "kuban"]
+    },
+    "russia": {
+        "id": "russia",
+        "title": "Российская Федерация",
+        "center": [63.0, 95.0],
+        "zoom": 3,
+        "map_file": "russia_quiz_map.html",
+        "geojson_file": "gadm41_RUS_1.shp",
+        "is_rf": True,
+        "aliases": ["russia", "россия", "рф", "rf", "российская федерация", "rus"]
+    }
+}
+
+def resolve_region_info(region_query: Optional[str] = None) -> Dict[str, Any]:
+    """Разрешает идентификатор региона, проверяя канонические ключи, алиасы и существующие файлы карт."""
+    if not region_query:
+        return REGIONS_INFO["rostov"]
+    
+    clean = str(region_query).lower().strip()
+    clean = clean.replace("_quiz_map.html", "").replace(".html", "").replace("/", "").replace("\\", "").strip()
+
+    # 1. Прямое совпадение или через псевдонимы
+    for key, info in REGIONS_INFO.items():
+        if clean == key or clean in info.get("aliases", []):
+            return info
+
+    # 2. Проверка наличия файла карты на диске
+    candidate_file = f"{clean}_quiz_map.html"
+    if os.path.exists(candidate_file):
+        title = clean.replace("_", " ").title()
+        return {
+            "id": clean,
+            "title": title,
+            "center": [55.75, 37.61],
+            "zoom": 7,
+            "map_file": candidate_file,
+            "geojson_file": f"{clean}.geojson",
+            "is_rf": False,
+            "aliases": [clean]
+        }
+
+    # 3. Частичное совпадение с известными регионами
+    for key, info in REGIONS_INFO.items():
+        if key in clean or any(a in clean for a in info.get("aliases", [])):
+            return info
+
+    return REGIONS_INFO["rostov"]
+
+def render_dynamic_map_response(region_query: Optional[str] = None) -> HTMLResponse:
+    """Динамически формирует HTML-ответ карты с контекстом, data-атрибутами и серверными переменными."""
+    info = resolve_region_info(region_query)
+    map_file = info.get("map_file")
+    if not map_file or not os.path.exists(map_file):
+        map_file = "rostov_quiz_map.html"
+        if not os.path.exists(map_file):
+            return HTMLResponse(
+                "<h2>Карта еще не сгенерирована. Запустите 'python main.py' локально.</h2>",
+                status_code=503
+            )
+
+    try:
+        with open(map_file, "r", encoding="utf-8", errors="ignore") as f:
+            html = f.read()
+    except Exception as e:
+        logger.error("Ошибка чтения карты %s: %s", map_file, e)
+        raise HTTPException(status_code=500, detail=f"Ошибка чтения файла карты: {map_file}")
+
+    context_obj = {
+        "region": info["id"],
+        "title": info["title"],
+        "center": info["center"],
+        "zoom": info["zoom"],
+        "map_url": info["map_file"],
+        "geojson_file": info.get("geojson_file", ""),
+        "is_rf": info.get("is_rf", False)
+    }
+    context_json = json.dumps(context_obj, ensure_ascii=False)
+
+    # 1. Инъекция динамических data-атрибутов в тег <body>
+    body_attrs = (
+        f'data-region="{info["id"]}" '
+        f'data-region-title="{info["title"]}" '
+        f'data-center-lat="{info["center"][0]}" '
+        f'data-center-lng="{info["center"][1]}" '
+        f'data-zoom="{info["zoom"]}" '
+        f'data-map-url="{info["map_file"]}"'
+    )
+    if "<body" in html:
+        if 'data-region="' in html:
+            html = re.sub(r'data-region="[^"]*"', f'data-region="{info["id"]}"', html, count=1)
+            html = re.sub(r'data-region-title="[^"]*"', f'data-region-title="{info["title"]}"', html, count=1)
+            html = re.sub(r'data-center-lat="[^"]*"', f'data-center-lat="{info["center"][0]}"', html, count=1)
+            html = re.sub(r'data-center-lng="[^"]*"', f'data-center-lng="{info["center"][1]}"', html, count=1)
+            html = re.sub(r'data-zoom="[^"]*"', f'data-zoom="{info["zoom"]}"', html, count=1)
+            html = re.sub(r'data-map-url="[^"]*"', f'data-map-url="{info["map_file"]}"', html, count=1)
+        else:
+            html = re.sub(r'<body([^>]*)>', rf'<body\1 {body_attrs}>', html, count=1)
+
+    # 2. Инъекция глобального серверного контекста JavaScript
+    context_script = f"""<script id="server-region-context" type="application/json">
+{context_json}
+</script>
+<script>
+window.SERVER_REGION_CONTEXT = {context_json};
+window.currentRegionKey = "{info['id']}";
+window.currentRegionTitle = "{info['title']}";
+window.serverMapCenter = {json.dumps(info['center'])};
+window.serverMapZoom = {info['zoom']};
+</script>"""
+
+    # Очищаем старый контекстный блок, если он уже существовал
+    html = re.sub(r'<script id="server-region-context"[^>]*>[\s\S]*?</script>\s*<script>[\s\S]*?window\.SERVER_REGION_CONTEXT[\s\S]*?</script>', '', html)
+
+    if "<body" in html:
+        html = re.sub(r'(<body[^>]*>)', rf'\1\n{context_script}', html, count=1)
+    elif "</head>" in html:
+        html = html.replace("</head>", f"{context_script}\n</head>", 1)
+    else:
+        html = f"{context_script}\n{html}"
+
+    return HTMLResponse(content=html, media_type="text/html")
+
 @app.get("/", response_model=None)
-def get_index():
+def get_index(region: Optional[str] = None):
+    """Корневой эндпоинт: при наличии параметра ?region=... отдает карту указанного региона, иначе стартовый портал index.html."""
+    if region:
+        return render_dynamic_map_response(region)
     if os.path.exists("index.html"):
         return FileResponse("index.html")
-    if os.path.exists("rostov_quiz_map.html"):
-        return FileResponse("rostov_quiz_map.html")
-    return HTMLResponse("<h2>Карта еще не сгенерирована. Запустите 'python main.py' локально.</h2>", status_code=503)
+    return render_dynamic_map_response("rostov")
+
+@app.get("/map", response_model=None)
+def get_map_query(region: Optional[str] = "rostov"):
+    """Эндпоинт карты с query-параметром /map?region=krasnodar|russia|rostov."""
+    return render_dynamic_map_response(region)
+
+@app.get("/map/{region}", response_model=None)
+def get_map_path(region: str):
+    """Эндпоинт карты с path-параметром /map/{region}."""
+    return render_dynamic_map_response(region)
+
+@app.get("/region/{region}", response_model=None)
+def get_region_path(region: str):
+    """Эндпоинт карты с path-параметром /region/{region}."""
+    return render_dynamic_map_response(region)
+
+@app.get("/api/region/context", response_model=None)
+def api_get_region_context(region: Optional[str] = "rostov") -> Dict[str, Any]:
+    """Возвращает метаданные и настройки региона (центр, зум, файлы)."""
+    info = resolve_region_info(region)
+    return {"status": "ok", "context": info}
+
+@app.get("/api/region/{region_id}/context", response_model=None)
+def api_get_region_context_by_id(region_id: str) -> Dict[str, Any]:
+    """Возвращает метаданные и настройки региона по path-параметру."""
+    info = resolve_region_info(region_id)
+    return {"status": "ok", "context": info}
 
 @app.get("/quiz.js", response_model=None)
 def get_quiz_js():
@@ -470,12 +643,38 @@ def get_quiz_js():
         return FileResponse("quiz.js", media_type="application/javascript")
     raise HTTPException(status_code=404, detail="quiz.js не найден")
 
-@app.get("/{file_name}.html", response_model=None)
-def get_html_page(file_name: str):
-    file_path = f"{file_name}.html"
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    raise HTTPException(status_code=404, detail=f"Страница {file_name}.html не найдена")
+@app.get("/{slug}", response_model=None)
+def get_slug_route(slug: str):
+    """Динамический роутинг для прямых URL регионов (/krasnodar, /russia, /rostov) и HTML-страниц."""
+    clean = slug.lower().strip()
+
+    # Зарезервированные системные эндпоинты
+    if clean in ["admin", "admin.html"]:
+        return admin_panel()
+    if clean in ["index", "index.html"]:
+        return FileResponse("index.html") if os.path.exists("index.html") else render_dynamic_map_response("rostov")
+    if clean == "quiz.js":
+        return get_quiz_js()
+
+    # Проверка совпадения со slug региона (например, /krasnodar, /russia, /rostov)
+    if clean in REGIONS_INFO or any(clean in info.get("aliases", []) for info in REGIONS_INFO.values()):
+        return render_dynamic_map_response(clean)
+
+    # Проверка прямого вызова .html файлов
+    if clean.endswith(".html"):
+        if os.path.exists(clean):
+            if "_quiz_map" in clean:
+                return render_dynamic_map_response(clean)
+            return FileResponse(clean)
+    else:
+        candidate_map = f"{clean}_quiz_map.html"
+        if os.path.exists(candidate_map):
+            return render_dynamic_map_response(clean)
+        candidate_html = f"{clean}.html"
+        if os.path.exists(candidate_html):
+            return FileResponse(candidate_html)
+
+    raise HTTPException(status_code=404, detail=f"Страница или регион '{slug}' не найден")
 
 if __name__ == "__main__":
     import uvicorn

@@ -94,19 +94,79 @@ function getRegionBoundsData() {
 }
 
 /**
+ * Инициализирует и возвращает динамический контекст региона, переданный сервером FastAPI через:
+ * - глобальный объект window.SERVER_REGION_CONTEXT
+ * - script-тег с JSON (#server-region-context)
+ * - data-атрибуты тега <body> (data-region, data-center-lat, data-center-lng, data-zoom, etc.)
+ * @returns {Object|null}
+ */
+function initServerRegionContext() {
+    let ctx = null;
+    if (typeof window !== 'undefined' && window.SERVER_REGION_CONTEXT && typeof window.SERVER_REGION_CONTEXT === 'object') {
+        ctx = Object.assign({}, window.SERVER_REGION_CONTEXT);
+    } else if (typeof document !== 'undefined') {
+        const scriptEl = document.getElementById('server-region-context');
+        if (scriptEl && scriptEl.textContent) {
+            try {
+                ctx = JSON.parse(scriptEl.textContent);
+            } catch (e) {}
+        }
+    }
+
+    if (typeof document !== 'undefined' && document.body && document.body.dataset) {
+        const ds = document.body.dataset;
+        if (ds.region) {
+            ctx = ctx || {};
+            ctx.region = ctx.region || ds.region;
+            ctx.title = ctx.title || ds.regionTitle;
+            if (ds.centerLat && ds.centerLng) {
+                ctx.center = ctx.center || [parseFloat(ds.centerLat), parseFloat(ds.centerLng)];
+            }
+            if (ds.zoom) {
+                ctx.zoom = ctx.zoom || parseInt(ds.zoom, 10);
+            }
+            if (ds.mapUrl) {
+                ctx.map_url = ctx.map_url || ds.mapUrl;
+            }
+        }
+    }
+
+    if (ctx && ctx.region) {
+        const cleanKey = resolveRegionKey(ctx.region);
+        window.SERVER_REGION_CONTEXT = ctx;
+        window.currentRegionKey = cleanKey;
+        window.currentRegionTitle = ctx.title || getRegionName(cleanKey);
+        if (ctx.center) window.serverMapCenter = ctx.center;
+        if (ctx.zoom) window.serverMapZoom = ctx.zoom;
+        return ctx;
+    }
+    return null;
+}
+window.initServerRegionContext = initServerRegionContext;
+try { initServerRegionContext(); } catch(e) {}
+
+/**
  * Преобразует произвольное название региона, имя файла или URL в канонический идентификатор региона.
- * Динамически определяет регион по активному ключу, параметрам URL или имени текущего HTML-файла.
+ * Динамически определяет регион по активному ключу, серверному контексту, параметрам URL или имени текущего HTML-файла.
  * @param {string|null} [raw] - Название региона, slug или путь файла.
  * @returns {string} Канонический ключ региона (например, 'rostov', 'krasnodar', 'russia').
  */
 function resolveRegionKey(raw) {
     let s = raw;
     if (!s) {
-        if (window.currentRegionKey) return window.currentRegionKey;
-        try {
-            const params = new URLSearchParams(window.location.search);
-            s = params.get('region') || params.get('map') || '';
-        } catch (e) {}
+        if (typeof window !== 'undefined' && window.SERVER_REGION_CONTEXT && window.SERVER_REGION_CONTEXT.region) {
+            s = window.SERVER_REGION_CONTEXT.region;
+        } else if (typeof document !== 'undefined' && document.body && document.body.dataset && document.body.dataset.region) {
+            s = document.body.dataset.region;
+        } else if (typeof window !== 'undefined' && window.currentRegionKey) {
+            return window.currentRegionKey;
+        }
+        if (!s) {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                s = params.get('region') || params.get('map') || '';
+            } catch (e) {}
+        }
         if (!s && typeof window !== 'undefined' && window.location && window.location.pathname) {
             const pathParts = window.location.pathname.split('/');
             const pageName = (pathParts.pop() || '').toLowerCase();
@@ -364,10 +424,13 @@ function removeExamKioskTopBar() {
  * @returns {Promise<void>}
  */
 async function initExamMode(options = {}) {
+    initServerRegionContext();
     const urlParams = new URLSearchParams(window.location.search);
 
     const regionParam = options.region || options.regionKey || options.regionName || options.region_name || 
                         urlParams.get('region') || urlParams.get('map') || 
+                        (window.SERVER_REGION_CONTEXT && (window.SERVER_REGION_CONTEXT.region || window.SERVER_REGION_CONTEXT.title)) ||
+                        (typeof document !== 'undefined' && document.body && document.body.dataset && document.body.dataset.region) ||
                         (options.session && (options.session.regionName || options.session.region_name || options.session.mapUrl || options.session.map_url)) ||
                         window.currentRegionKey ||
                         '';
@@ -486,7 +549,19 @@ function restoreAllRiverStyles() {
 function resetMapView() {
     const map = getMapObject();
     if (map) {
-        try { map.fitBounds(getRegionBoundsData() || (typeof REGION_BOUNDS !== 'undefined' ? REGION_BOUNDS : null), {padding: [15, 15]}); } catch(e) {}
+        const bounds = getRegionBoundsData() || (typeof REGION_BOUNDS !== 'undefined' ? REGION_BOUNDS : null);
+        if (bounds) {
+            try {
+                map.fitBounds(bounds, {padding: [15, 15]});
+                return;
+            } catch(e) {}
+        }
+        if (window.serverMapCenter && window.serverMapZoom) {
+            try {
+                map.setView(window.serverMapCenter, window.serverMapZoom);
+                return;
+            } catch(e) {}
+        }
     }
 }
 
@@ -4572,6 +4647,7 @@ function injectExamProctorStyles() {
 
 /* ИНИЦИАЛИЗАЦИЯ И ПРОВЕРКА ТЕМЫ */
 window.addEventListener('load', function() {
+    initServerRegionContext();
     injectExamProctorStyles();
     ensureExamProctorWidgetDOM();
     resetMapView();
