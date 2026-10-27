@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
+from typing import Dict, List, Any, Optional, Union
+import logging
 import random
 import time
 import os
@@ -11,6 +13,9 @@ import secrets
 import csv
 import io
 import re
+
+logger = logging.getLogger("geoatlas")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 app = FastAPI(title="Геоатлас Ростовской области — Портал ЮФУ")
 security = HTTPBasic()
@@ -106,7 +111,7 @@ class LaunchSessionRequest(BaseModel):
     questionCount: int = 15
     timeLimitMinutes: int = 10
 
-def load_results():
+def load_results() -> List[Dict[str, Any]]:
     if os.path.exists(RESULTS_FILE):
         try:
             with open(RESULTS_FILE, "r", encoding="utf-8") as f:
@@ -115,13 +120,13 @@ def load_results():
             return []
     return []
 
-def save_result_to_file(result_data):
+def save_result_to_file(result_data: Dict[str, Any]) -> None:
     results = load_results()
     results.append(result_data)
     with open(RESULTS_FILE, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
-def load_groups():
+def load_groups() -> List[Dict[str, Any]]:
     if os.path.exists(GROUPS_FILE):
         try:
             with open(GROUPS_FILE, "r", encoding="utf-8") as f:
@@ -134,11 +139,11 @@ def load_groups():
     save_groups_to_file(DEFAULT_GROUPS)
     return DEFAULT_GROUPS
 
-def save_groups_to_file(groups_data):
+def save_groups_to_file(groups_data: List[Dict[str, Any]]) -> None:
     with open(GROUPS_FILE, "w", encoding="utf-8") as f:
         json.dump(groups_data, f, ensure_ascii=False, indent=2)
 
-def load_active_session():
+def load_active_session() -> Optional[Dict[str, Any]]:
     if os.path.exists(ACTIVE_SESSION_FILE):
         try:
             with open(ACTIVE_SESSION_FILE, "r", encoding="utf-8") as f:
@@ -147,11 +152,11 @@ def load_active_session():
             return None
     return None
 
-def save_active_session(session_data):
+def save_active_session(session_data: Optional[Dict[str, Any]]) -> None:
     with open(ACTIVE_SESSION_FILE, "w", encoding="utf-8") as f:
         json.dump(session_data, f, ensure_ascii=False, indent=2)
 
-def check_admin(credentials: HTTPBasicCredentials = Depends(security)):
+def check_admin(credentials: HTTPBasicCredentials = Depends(security)) -> str:
     correct_user = secrets.compare_digest(credentials.username, "sfedu_admin")
     correct_pass = secrets.compare_digest(credentials.password, "geodean2026")
     if not (correct_user and correct_pass):
@@ -163,7 +168,7 @@ def check_admin(credentials: HTTPBasicCredentials = Depends(security)):
     return credentials.username
 
 @app.post("/api/auth/send-code")
-def send_code(req: AuthRequest):
+def send_code(req: AuthRequest) -> Dict[str, Any]:
     email = req.email.strip().lower()
     if not (email.endswith("@sfedu.ru") or email.endswith(".sfedu.ru")):
         raise HTTPException(status_code=400, detail="Разрешена авторизация только по корпоративной почте ЮФУ (@sfedu.ru)")
@@ -175,11 +180,11 @@ def send_code(req: AuthRequest):
         "name": req.full_name.strip(),
         "group": req.group_num.strip()
     }
-    print(f"\n🔑 [ЮФУ АВТОРИЗАЦИЯ] Сгенерирован код для {email}: {code}\n")
+    logger.info("ЮФУ Авторизация: сгенерирован код подтверждения для %s", email)
     return {"status": "ok", "message": "Код подтверждения отправлен", "dev_code": code}
 
 @app.post("/api/auth/verify-code")
-def verify_code(req: VerifyRequest):
+def verify_code(req: VerifyRequest) -> Dict[str, Any]:
     email = req.email.strip().lower()
     record = verification_storage.get(email)
     if not record or time.time() > record["expires_at"] or record["code"] != req.code.strip():
@@ -190,7 +195,7 @@ def verify_code(req: VerifyRequest):
     return {"status": "ok", "user": user_data}
 
 @app.post("/api/results/save")
-def save_quiz_result(res: ResultSubmit):
+def save_quiz_result(res: ResultSubmit) -> Dict[str, str]:
     data = {
         "date": time.strftime("%d.%m.%Y %H:%M"),
         "email": res.email,
@@ -211,7 +216,7 @@ def save_quiz_result(res: ResultSubmit):
     return {"status": "ok"}
 
 @app.get("/api/results/leaderboard")
-def get_leaderboard():
+def get_leaderboard() -> List[Dict[str, Any]]:
     results = load_results()
     sorted_res = sorted(results, key=lambda x: (x.get("accuracy", 0), x.get("score", 0)), reverse=True)
     return sorted_res[:25]
@@ -220,11 +225,11 @@ def get_leaderboard():
 # LMS УПРАВЛЕНИЕ ГРУППАМИ И СИНХРОННЫМИ СЕССИЯМИ
 # ==========================================
 @app.get("/api/admin/groups")
-def get_admin_groups():
+def get_admin_groups() -> List[Dict[str, Any]]:
     return load_groups()
 
 @app.post("/api/admin/groups")
-def save_or_update_group(group: GroupModel):
+def save_or_update_group(group: GroupModel) -> Dict[str, Any]:
     groups = load_groups()
     group_dict = group.model_dump()
     if not group_dict.get("created_at"):
@@ -238,14 +243,14 @@ def save_or_update_group(group: GroupModel):
     return {"status": "ok", "groups": groups}
 
 @app.delete("/api/admin/groups/{group_id}")
-def delete_group(group_id: str):
+def delete_group(group_id: str) -> Dict[str, Any]:
     groups = load_groups()
     groups = [g for g in groups if g.get("id") != group_id]
     save_groups_to_file(groups)
     return {"status": "ok", "groups": groups}
 
 @app.get("/api/admin/students")
-def get_all_students():
+def get_all_students() -> List[Dict[str, Any]]:
     groups = load_groups()
     results = load_results()
     students_map = {}
@@ -262,11 +267,11 @@ def get_all_students():
     return list(students_map.values())
 
 @app.get("/api/server-time")
-def get_server_time():
+def get_server_time() -> Dict[str, int]:
     return {"server_time": int(time.time() * 1000)}
 
 @app.post("/api/exam/launch")
-def launch_exam_session(req: LaunchSessionRequest):
+def launch_exam_session(req: LaunchSessionRequest) -> Dict[str, Any]:
     now_ms = int(time.time() * 1000)
     duration_ms = req.timeLimitMinutes * 60 * 1000
     sess_id = f"SES-SFEDU-{int(time.time())}"
@@ -303,7 +308,7 @@ def launch_exam_session(req: LaunchSessionRequest):
     return {"status": "ok", "session": session_data, "server_time": now_ms}
 
 @app.get("/api/exam/active-session")
-def get_active_exam_session():
+def get_active_exam_session() -> Dict[str, Any]:
     session = load_active_session()
     now_ms = int(time.time() * 1000)
     if not session or session.get("status") in ["stopped", "completed"]:
@@ -324,7 +329,7 @@ def get_active_exam_session():
     return {"session": session_copy, "current_server_time": now_ms, "remaining_seconds": remaining_sec}
 
 @app.post("/api/exam/stop")
-def stop_exam_session():
+def stop_exam_session() -> Dict[str, str]:
     session = load_active_session()
     if session:
         session["status"] = "stopped"
@@ -333,7 +338,7 @@ def stop_exam_session():
 
 @app.get("/admin", response_class=HTMLResponse)
 @app.get("/admin.html", response_class=HTMLResponse)
-def admin_panel(username: str = Depends(check_admin)):
+def admin_panel(username: str = Depends(check_admin)) -> HTMLResponse:
     results = load_results()
     groups = load_groups()
     active_session = load_active_session()
@@ -354,11 +359,11 @@ def admin_panel(username: str = Depends(check_admin)):
     return HTMLResponse(f"<h2>Институт наук о Земле ЮФУ</h2><p>Всего сдано тестов: {total_tests}, средняя точность: {avg_accuracy}%</p>")
 
 @app.get("/api/admin/results")
-def get_admin_results(username: str = Depends(check_admin)):
+def get_admin_results(username: str = Depends(check_admin)) -> List[Dict[str, Any]]:
     return load_results()
 
 @app.get("/admin/export-csv", response_class=PlainTextResponse)
-def export_csv(username: str = Depends(check_admin)):
+def export_csv(username: str = Depends(check_admin)) -> PlainTextResponse:
     results = load_results()
     output = io.StringIO()
     # Add BOM for Excel Russian character support
@@ -395,7 +400,7 @@ def export_csv(username: str = Depends(check_admin)):
 
 REGION_DATA_CACHE = {}
 
-def get_region_data(region_key: str):
+def get_region_data(region_key: str) -> Optional[Dict[str, Any]]:
     clean = region_key.lower().strip().replace('_quiz_map.html', '').replace('.html', '')
     if clean in REGION_DATA_CACHE:
         return REGION_DATA_CACHE[clean]
@@ -441,18 +446,18 @@ def get_region_data(region_key: str):
         REGION_DATA_CACHE[clean] = data
         return data
     except Exception as e:
-        print(f"Error extracting region data for {region_key}: {e}")
+        logger.warning("Ошибка извлечения данных региона %s: %s", region_key, e)
         return None
 
 @app.get("/api/region/{region_id}/data")
-def api_region_data(region_id: str):
+def api_region_data(region_id: str) -> Dict[str, Any]:
     data = get_region_data(region_id)
     if data:
         return data
     raise HTTPException(status_code=404, detail=f"Регион '{region_id}' не найден")
 
 @app.get("/")
-def get_index():
+def get_index() -> Union[FileResponse, HTMLResponse]:
     if os.path.exists("index.html"):
         return FileResponse("index.html")
     if os.path.exists("rostov_quiz_map.html"):
@@ -460,13 +465,13 @@ def get_index():
     return HTMLResponse("<h2>Карта еще не сгенерирована. Запустите 'python main.py' локально.</h2>", status_code=503)
 
 @app.get("/quiz.js")
-def get_quiz_js():
+def get_quiz_js() -> FileResponse:
     if os.path.exists("quiz.js"):
         return FileResponse("quiz.js", media_type="application/javascript")
     raise HTTPException(status_code=404, detail="quiz.js не найден")
 
 @app.get("/{file_name}.html")
-def get_html_page(file_name: str):
+def get_html_page(file_name: str) -> FileResponse:
     file_path = f"{file_name}.html"
     if os.path.exists(file_path):
         return FileResponse(file_path)

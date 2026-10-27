@@ -1277,27 +1277,27 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
 
                 <div class="btn-group-vertical">
                     <button onclick="openExamModal()" class="btn btn-exam btn-block" id="btn-open-exam">
-                        <span>📝 Режим контрольной (Экзамен)</span>
+                        <span>📝 Экзамен</span>
                     </button>
 
                     <button onclick="startPuzzleMode()" class="btn btn-puzzle btn-block" id="btn-start-puzzle">
-                        <span>🧩 Собрать регион (Пазл)</span>
+                        <span>🧩 Собрать пазл</span>
                     </button>
 
-                    <button onclick="startDistrictQuiz()" class="btn btn-district btn-block">
-                        Узнать территорию по силуэту
+                    <button onclick="startDistrictQuiz()" class="btn btn-district btn-block" id="btn-start-district">
+                        <span>🗺️ Угадать силуэт</span>
                     </button>
 
-                    <button onclick="startNeighborQuiz()" class="btn btn-neighbor btn-block">
-                        Топология и соседи (тест)
+                    <button onclick="startNeighborQuiz()" class="btn btn-neighbor btn-block" id="btn-start-neighbor">
+                        <span>🔗 Топология</span>
                     </button>
 
-                    <button onclick="startRiverQuiz()" class="btn btn-river btn-block">
-                        Определить реку по руслу
+                    <button onclick="startRiverQuiz()" class="btn btn-river btn-block" id="btn-start-river">
+                        <span>🌊 Определение реки</span>
                     </button>
 
-                    <button onclick="startCenterQuiz()" class="btn btn-center btn-block">
-                        Найти центр на карте
+                    <button onclick="startCenterQuiz()" class="btn btn-center btn-block" id="btn-start-center">
+                        <span>📍 Поиск центра</span>
                     </button>
                 </div>
 
@@ -1759,7 +1759,7 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
             background: linear-gradient(135deg, #0D9488, #0F766E) !important;
             color: #FFFFFF !important;
             box-shadow: 0 3px 10px rgba(13, 148, 136, 0.25) !important;
-            border-radius: 10px !important;
+            border-radius: 8px !important;
         }}
         .btn-district:hover {{
             box-shadow: 0 5px 14px rgba(13, 148, 136, 0.35) !important;
@@ -1769,7 +1769,7 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
             background: linear-gradient(135deg, #2563EB, #1D4ED8) !important;
             color: #FFFFFF !important;
             box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25) !important;
-            border-radius: 10px !important;
+            border-radius: 8px !important;
         }}
         .btn-neighbor:hover {{
             box-shadow: 0 5px 14px rgba(37, 99, 235, 0.35) !important;
@@ -1779,7 +1779,7 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
             background: linear-gradient(135deg, #0EA5E9, #0284C7) !important;
             color: #FFFFFF !important;
             box-shadow: 0 3px 10px rgba(14, 165, 233, 0.25) !important;
-            border-radius: 10px !important;
+            border-radius: 8px !important;
         }}
         .btn-river:hover {{
             box-shadow: 0 5px 14px rgba(14, 165, 233, 0.35) !important;
@@ -1789,7 +1789,7 @@ const REGION_OUTLINE_GEOJSON = {json.dumps(region_outline_geojson, ensure_ascii=
             background: linear-gradient(135deg, #475569, #334155) !important;
             color: #FFFFFF !important;
             box-shadow: 0 3px 10px rgba(51, 65, 85, 0.25) !important;
-            border-radius: 10px !important;
+            border-radius: 8px !important;
         }}
         .btn-center:hover {{
             box-shadow: 0 5px 14px rgba(51, 65, 85, 0.35) !important;
