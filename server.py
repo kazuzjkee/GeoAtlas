@@ -336,9 +336,9 @@ def stop_exam_session() -> Dict[str, str]:
         save_active_session(session)
     return {"status": "ok"}
 
-@app.get("/admin", response_class=HTMLResponse)
-@app.get("/admin.html", response_class=HTMLResponse)
-def admin_panel(username: str = Depends(check_admin)) -> HTMLResponse:
+@app.get("/admin", response_class=HTMLResponse, response_model=None)
+@app.get("/admin.html", response_class=HTMLResponse, response_model=None)
+def admin_panel(username: str = Depends(check_admin)):
     results = load_results()
     groups = load_groups()
     active_session = load_active_session()
@@ -362,8 +362,8 @@ def admin_panel(username: str = Depends(check_admin)) -> HTMLResponse:
 def get_admin_results(username: str = Depends(check_admin)) -> List[Dict[str, Any]]:
     return load_results()
 
-@app.get("/admin/export-csv", response_class=PlainTextResponse)
-def export_csv(username: str = Depends(check_admin)) -> PlainTextResponse:
+@app.get("/admin/export-csv", response_class=PlainTextResponse, response_model=None)
+def export_csv(username: str = Depends(check_admin)):
     results = load_results()
     output = io.StringIO()
     # Add BOM for Excel Russian character support
@@ -456,22 +456,22 @@ def api_region_data(region_id: str) -> Dict[str, Any]:
         return data
     raise HTTPException(status_code=404, detail=f"Регион '{region_id}' не найден")
 
-@app.get("/")
-def get_index() -> Union[FileResponse, HTMLResponse]:
+@app.get("/", response_model=None)
+def get_index():
     if os.path.exists("index.html"):
         return FileResponse("index.html")
     if os.path.exists("rostov_quiz_map.html"):
         return FileResponse("rostov_quiz_map.html")
     return HTMLResponse("<h2>Карта еще не сгенерирована. Запустите 'python main.py' локально.</h2>", status_code=503)
 
-@app.get("/quiz.js")
-def get_quiz_js() -> FileResponse:
+@app.get("/quiz.js", response_model=None)
+def get_quiz_js():
     if os.path.exists("quiz.js"):
         return FileResponse("quiz.js", media_type="application/javascript")
     raise HTTPException(status_code=404, detail="quiz.js не найден")
 
-@app.get("/{file_name}.html")
-def get_html_page(file_name: str) -> FileResponse:
+@app.get("/{file_name}.html", response_model=None)
+def get_html_page(file_name: str):
     file_path = f"{file_name}.html"
     if os.path.exists(file_path):
         return FileResponse(file_path)
