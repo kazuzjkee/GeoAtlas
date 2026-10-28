@@ -3,6 +3,7 @@ import folium
 from folium import plugins
 import os
 import json
+import re
 import webbrowser
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point
 
