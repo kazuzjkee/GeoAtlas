@@ -709,7 +709,7 @@ async def upload_map(
 
         # Дополнительные слои (если присутствуют в архиве)
         rivers_shp = next((s for s in shp_files if s != main_shp and any(k in os.path.basename(s).lower() for k in ['river', 'река', 'reka', 'water_line', 'water-line'])), None)
-        lakes_shp = next((s for s in shp_files if s != main_shp and any(k in os.path.basename(s).lower() for k in ['lake', 'водоем', 'ozero', 'water_poly', 'water-poly'])), None)
+        lakes_shp = next((s for s in shp_files if s != main_shp and any(k in os.path.basename(s).lower() for k in ['lake', 'водоем', 'ozero', 'water_bodies', 'water-bodies', 'water_poly', 'water-poly'])), None)
         cities_shp = next((s for s in shp_files if s != main_shp and any(k in os.path.basename(s).lower() for k in ['city', 'cities', 'center', 'gorod', 'raicentr'])), None)
 
         try:
