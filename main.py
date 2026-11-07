@@ -7,9 +7,6 @@ import re
 import webbrowser
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point
 
-# ==========================================
-# КОНФИГУРАЦИЯ И ТРАНСЛИТЕРАЦИЯ
-# ==========================================
 BASE_SHP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Py_Geo', 'shape', 'russia_unified')
 
 REGION_TRANSLATIONS = {
@@ -134,7 +131,6 @@ def clean_geom(geom):
     except Exception:
         return None
 
-    # 1. Восстановление валидности геометрии
     try:
         if not geom.is_valid:
             try:
@@ -160,7 +156,7 @@ def clean_geom(geom):
     except Exception:
         return None
 
-    # 2. Безопасное распаковывание GeometryCollection в однородную геометрию
+    # Распаковка разнородной коллекции (GeometryCollection)
     if getattr(geom, 'geom_type', '') == 'GeometryCollection':
         try:
             from shapely.ops import unary_union
@@ -189,7 +185,6 @@ def clean_geom(geom):
         except Exception:
             pass
 
-    # 3. Финальная проверка валидности
     try:
         if geom is not None and not geom.is_empty and not geom.is_valid:
             try:
@@ -202,9 +197,6 @@ def clean_geom(geom):
 
     return geom
 
-# ==========================================
-# ГИБРИДНАЯ КОНФИГУРАЦИЯ РЕГИОНОВ (ДЕТАЛЬНЫЕ КАРТЫ)
-# ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MAPS_DIR = os.path.join(BASE_DIR, 'public', 'maps')
 os.makedirs(MAPS_DIR, exist_ok=True)
@@ -285,11 +277,7 @@ LAYER_NAMES = {
     'water_bodies': 'Водоемы'
 }
 
-# ==========================================
-# ОБЪЕДИНЕННАЯ БАЗА ДАННЫХ НАСЕЛЕНИЯ
-# ==========================================
 KNOWN_POPULATION = {
-    # 1. Города федерального значения и составные / специфичные основы (ДОЛЖНЫ идти ДО общих корней)
     'санкт-петербург': 5597763,
     'петербург': 5597763,
     'севастопол': 561374,
@@ -333,7 +321,6 @@ KNOWN_POPULATION = {
     'орел': 700000,
     'калининград': 1030000,     # Должен идти ДО 'калинин' (район в крае)
 
-    # 2. Сибирь, Север и Дальний Восток (по основам)
     'иркут': 2340000,
     'краснояр': 2846000,
     'хабаров': 1278000,
@@ -359,7 +346,6 @@ KNOWN_POPULATION = {
     'коми': 720000,
     'карел': 523000,
 
-    # 3. Поволжье, Урал, Центр, Северо-Запад, Юг, Кавказ (по основам)
     'башкорт': 4077600,
     'татар': 4001625,
     'челябин': 3396739,
@@ -404,7 +390,6 @@ KNOWN_POPULATION = {
     'адыге': 498000,
     'ставропол': 2890000,
 
-    # 4. Районы и города Ростовской области (по основам)
     'таганрог': 245000, 'шахты': 226000,
     'новочеркасск': 163000, 'батайск': 126000, 'новошахтинск': 103000,
     'гуково': 62000, 'зверево': 19000,
@@ -419,7 +404,6 @@ KNOWN_POPULATION = {
     'родионово-несветай': 22000, 'советск': 6000, 'тарасов': 27000,
     'целин': 29000, 'боков': 14000, 'верхнедон': 17000, 'веселов': 25000, 'егорлык': 34000,
 
-    # 5. Краснодарский край (Городские округа и районы по основам)
     'сочи': 430000, 'новороссийск': 340000, 'армавир': 208000,
     'анапа': 205000, 'геленджик': 116000, 'горячий ключ': 69000,
     'апшерон': 98000, 'белоглин': 29000, 'белоречен': 108000,
@@ -434,12 +418,7 @@ KNOWN_POPULATION = {
     'щербинов': 35000
 }
 
-
-# ==========================================
-# ОБЪЕДИНЕННАЯ БАЗА ДАННЫХ ЭКОНОМИКИ (ВРП, млрд руб.)
-# ==========================================
 KNOWN_ECONOMY = {
-    # 1. Города федерального значения и составные / специфичные основы (ДОЛЖНЫ идти ДО общих корней)
     'санкт-петербург': 7300,
     'петербург': 7300,
     'севастопол': 240,
@@ -483,7 +462,6 @@ KNOWN_ECONOMY = {
     'орел': 320,
     'калининград': 700,
 
-    # 2. Субъекты РФ (по основам)
     'хмао': 5900,
     'ханты': 5900,
     'татар': 3300,
@@ -553,7 +531,6 @@ KNOWN_ECONOMY = {
     'еврей': 75,
     'врей': 75,
 
-    # 3. Районы и города Ростовской области
     'таганрог': 140, 'шахты': 110,
     'новочеркасск': 95, 'батайск': 75, 'новошахтинск': 50,
     'гуково': 28, 'зверево': 15,
@@ -568,7 +545,6 @@ KNOWN_ECONOMY = {
     'родионово-несветай': 16, 'советск': 6, 'тарасов': 18,
     'целин': 20, 'боков': 11, 'верхнедон': 12, 'веселов': 16, 'егорлык': 22,
 
-    # 4. Краснодарский край (Городские округа и районы)
     'новороссийск': 280, 'сочи': 240, 'армавир': 90,
     'анапа': 85, 'геленджик': 65, 'горячий ключ': 35,
     'апшерон': 45, 'белоглин': 20, 'белоречен': 55,
@@ -583,10 +559,8 @@ KNOWN_ECONOMY = {
     'щербинов': 22
 }
 
-
 class InteractiveAtlas:
     def __init__(self, region_key=None, region_name=None, region_districts=None, clipped_rivers=None, clipped_lakes=None, clipped_cities=None, is_rf=False):
-        # Автоматическое определение: передан ли region_key или region_name
         cfg = None
         if isinstance(region_key, str) and region_key.lower() in REGIONS_CONFIG:
             self.region_key = region_key.lower()
@@ -629,7 +603,7 @@ class InteractiveAtlas:
         self.input_lakes = clipped_lakes
         self.input_cities = clipped_cities
 
-        # Вычисляем индивидуальный центр и zoom карты через total_bounds (для нарезанных регионов)
+        # Расчет центра и масштаба по границам геометрии
         if not self.cfg and self.input_districts is not None and not self.input_districts.empty:
             bounds = self.input_districts.total_bounds
             center_lat = (bounds[1] + bounds[3]) / 2.0
@@ -645,7 +619,6 @@ class InteractiveAtlas:
             elif max_diff > 1.5: self.zoom = 8
             else: self.zoom = 9
 
-        # Инициализируем карту без жестко привязанной подложки, добавляем 3 переключаемые подложки
         self.map = folium.Map(
             location=self.center,
             zoom_start=self.zoom,
@@ -655,12 +628,10 @@ class InteractiveAtlas:
             height='100%'
         )
 
-        # Фит границ только для локальных нарезанных регионов (не для РФ, чтобы не ломать начальный масштаб)
         if not self.is_rf and not self.cfg and self.input_districts is not None and not self.input_districts.empty:
             bounds = self.input_districts.total_bounds
             self.map.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
 
-        # 1. Светлая подложка (Carto Voyager) - по умолчанию
         folium.TileLayer(
             tiles=f'https://basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}.png?key={CARTO_KEY}',
             name='Carto Voyager',
@@ -669,7 +640,6 @@ class InteractiveAtlas:
             show=True
         ).add_to(self.map)
 
-        # 2. Спутниковая подложка (Esri World Imagery)
         folium.TileLayer(
             tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
             name='Спутник (Esri)',
@@ -678,7 +648,6 @@ class InteractiveAtlas:
             show=False
         ).add_to(self.map)
 
-        # 3. Темная тема (CartoDB dark_matter)
         folium.TileLayer(
             tiles=f'https://basemaps.cartocdn.com/rastertiles/dark_all/{{z}}/{{x}}/{{y}}.png?key={CARTO_KEY}',
             name='Темная тема (Carto)',
@@ -749,14 +718,13 @@ class InteractiveAtlas:
                 fixed_coll = [self._fix_antimeridian(g) for g in geom.geoms if g is not None and not g.is_empty]
                 return clean_geom(GeometryCollection(fixed_coll)) if fixed_coll else geom
             elif g_type in ['Point', 'MultiPoint']:
-                # Точки НЕ сдвигаем за 180 меридиан, иначе в Leaflet маркеры улетают за пределы карты
+                # Точки не смещаются за 180 меридиан для корректного отображения маркеров в Leaflet
                 return geom
         except Exception:
             pass
 
         return geom
 
-    # БРОНЕБОЙНЫЙ ПРЕДОХРАНИТЕЛЬ CRS
     def _safe_to_crs(self, gdf):
         if gdf is None or gdf.empty:
             return gdf
@@ -764,7 +732,6 @@ class InteractiveAtlas:
         if 'geometry' not in gdf.columns:
             return gdf
 
-        # 1. Первичная фильтрация отсутствующих и пустых геометрий
         gdf = gdf.dropna(subset=['geometry']).copy()
         gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty].copy()
         if gdf.empty:
@@ -779,7 +746,6 @@ class InteractiveAtlas:
             minx, miny, maxx, maxy = bounds
             return (-360.0 <= minx <= 360.0) and (-90.0 <= miny <= 90.0) and (-360.0 <= maxx <= 360.0) and (-90.0 <= maxy <= 90.0)
 
-        # 2. Безопасное определение проекции и переход в EPSG:4326
         try:
             if gdf.crs:
                 crs_str = str(gdf.crs).upper()
@@ -807,7 +773,6 @@ class InteractiveAtlas:
             except Exception:
                 pass
 
-        # 3. Очистка и восстановление геометрии (GeometryCollection, bowtie, invalid rings)
         gdf = gdf.dropna(subset=['geometry'])
         try:
             bounds = gdf.bounds
@@ -823,13 +788,13 @@ class InteractiveAtlas:
 
         gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty]
 
-        # 4. Фикс Чукотки и территорий за 180 меридианом
+        # Нормализация координат полигонов восточнее 180 меридиана
         try:
             gdf.geometry = gdf.geometry.apply(self._fix_antimeridian)
         except Exception:
             pass
 
-        # 5. Упрощение полигонов: ТОЛЬКО для карты всей России (для сохранения компактного размера)
+        # Упрощение полигонов для масштаба РФ
         if getattr(self, 'is_rf', False) or getattr(self, 'region_key', '') == 'russia':
             try:
                 gdf.geometry = gdf.geometry.simplify(0.015, preserve_topology=True)
@@ -910,7 +875,6 @@ class InteractiveAtlas:
         gdf['display_name'] = gdf.apply(lambda r: self._extract_valid_name(r), axis=1)
         gdf['display_name'] = gdf['display_name'].apply(lambda n: n if n else self.ru_title)
         
-        # МАГИЧЕСКАЯ МЕТКА: отделяет территории от гидрографии
         gdf['is_district_layer'] = 1
         self.districts_gdf = gdf
 
@@ -1035,7 +999,7 @@ class InteractiveAtlas:
         
         gdf = gdf.copy()
         
-        # 1. Если есть колонка CAPITAL (как в Cities.shp для РФ) — оставляем только столицы регионов
+        # Фильтр региональных столиц
         if 'CAPITAL' in gdf.columns:
             gdf = gdf[gdf['CAPITAL'].astype(str).str.strip().str.lower().isin(['c', 'с'])].copy()
 
@@ -1068,7 +1032,7 @@ class InteractiveAtlas:
             lon = float(geom.x if hasattr(geom, 'x') else geom.centroid.x)
             lat = float(geom.y if hasattr(geom, 'y') else geom.centroid.y)
 
-            # Строгая фильтрация координат: точка должна лежать в пределах территории РФ
+            # Фильтрация точек вне территории РФ
             if not (19.0 <= lon <= 180.0 and 41.0 <= lat <= 82.0):
                 continue
 
@@ -1095,7 +1059,6 @@ class InteractiveAtlas:
         search_name = str(name or '').lower().replace('\u0301', '').replace('e', 'е').replace('ё', 'е').strip()
         area_sq_km = float(area_sq_km or 0)
 
-        # 1. Поиск населения
         population = None
         for key, val in KNOWN_POPULATION.items():
             if key in search_name:
@@ -1114,7 +1077,6 @@ class InteractiveAtlas:
             else:
                 population = int(area_sq_km * 25)
 
-        # 2. Поиск и расчет ВРП (Экономика)
         grp = None
         for key, val in KNOWN_ECONOMY.items():
             if key in search_name:
@@ -1141,7 +1103,7 @@ class InteractiveAtlas:
         valid_gdf = valid_gdf[valid_gdf['display_name'] != ''].copy()
         
         try:
-            # Цилиндрическая равновеликая проекция (Cylindrical Equal-Area) без искажения площадей
+            # Проекция EPSG:6933 для расчета площадей без искажений
             metric_gdf = valid_gdf.to_crs('EPSG:6933')
         except Exception:
             metric_gdf = valid_gdf
@@ -1155,7 +1117,7 @@ class InteractiveAtlas:
             except Exception:
                 centers_wgs = self.centers_gdf
 
-        # Пространственный индекс для ускорения поиска соседей
+        # Поиск смежных полигонов через sindex
         valid_rows = [(idx, row.geometry, str(row['display_name'])) for idx, row in valid_gdf.iterrows()]
         gdf_search = gpd.GeoDataFrame(geometry=[geom for _, geom, _ in valid_rows])
         sindex = gdf_search.sindex if (hasattr(gdf_search, 'sindex') and gdf_search.sindex is not None) else None
@@ -1192,7 +1154,6 @@ class InteractiveAtlas:
 
             area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if (idx in metric_gdf.index and metric_gdf.loc[idx].geometry is not None and not metric_gdf.loc[idx].geometry.is_empty) else 0
 
-            # Единая оценка населения и ВРП через приватный метод (DRY)
             population, grp = self._estimate_metrics(current_name, area_sq_km)
 
             neighbors_data.append({
@@ -1305,7 +1266,6 @@ class InteractiveAtlas:
 
             neighbor_lookup = {d['name']: d for d in neighbors_data}
 
-            # Топологический расчет соседства районов для режима конструктора (оптимизирован через sindex)
             district_list = []
             for idx, row in valid_districts.iterrows():
                 if row.geometry is not None and not row.geometry.is_empty:
@@ -1921,7 +1881,6 @@ window.serverMapZoom = {self.zoom};
             box-shadow: 0 6px 20px rgba(124, 58, 237, 0.38) !important;
         }}
 
-        /* 4. Второстепенные действия (Вспомогательный приоритет) */
         .btn-secondary {{
             background: #FFFFFF !important;
             color: #334155 !important;
@@ -3464,7 +3423,6 @@ window.serverMapZoom = {self.zoom};
         gdf['is_district_layer'] = 0
         gdf['is_choropleth'] = 1
 
-        # --- Вычисляем население для каждого полигона ---
         try:
             metric_gdf = gdf.to_crs('EPSG:6933')
         except Exception:
@@ -3478,17 +3436,15 @@ window.serverMapZoom = {self.zoom};
 
         gdf['population'] = populations
 
-        # --- Рассчитываем границы для 6-ступенчатого градиента ---
         import numpy as np
         pop_values = sorted([p for p in populations if p and p > 0])
         if not pop_values:
             return
 
-        # 6 квантильных интервалов для плавного распределения цветов
         q_levels = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
         thresholds = [float(np.quantile(pop_values, q)) for q in q_levels]
 
-        # Палитра ColorBrewer YlOrRd: светло-желтый -> янтарный -> оранжевый -> темно-красный
+        # Палитра YlOrRd
         colors = ['#FFFFCC', '#FED976', '#FEB24C', '#FD8D3C', '#E31A1C', '#800026']
 
         def get_color(pop):
@@ -3526,7 +3482,6 @@ window.serverMapZoom = {self.zoom};
                 'fillOpacity': 0.90
             }
 
-        # Форматирование отображаемого населения
         gdf['pop_display'] = gdf['population'].apply(
             lambda p: f"{p:,.0f} чел.".replace(',', ' ') if (p and p > 0) else 'Нет данных'
         )
@@ -3581,11 +3536,10 @@ window.serverMapZoom = {self.zoom};
         if not grp_values:
             return
 
-        # 6 квантильных интервалов для плавного распределения цветов
         q_levels = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
         thresholds = [float(np.quantile(grp_values, q)) for q in q_levels]
 
-        # 6-ступенчатая зеленая палитра ColorBrewer Greens: от светло-зеленого к темно-зеленому
+        # Палитра Greens
         colors = ['#EDF8E9', '#BAE4B3', '#74C476', '#31A354', '#006D2C', '#005A32']
 
         def get_color(g):
@@ -3623,7 +3577,6 @@ window.serverMapZoom = {self.zoom};
                 'fillOpacity': 0.90
             }
 
-        # Форматирование отображаемого ВРП
         gdf['grp_display'] = gdf['grp'].apply(
             lambda g: f"{g:,.1f} млрд ₽".replace(',', ' ').replace('.', ',') if (g and g > 0) else 'Нет данных'
         )
@@ -3964,7 +3917,6 @@ def generate_region_map(region_name, region_districts, clipped_rivers=None, clip
     output_file = atlas.save(open_browser=open_browser)
     return output_file
 
-
 def build_configured_region(region_key, open_browser=False):
     if region_key not in REGIONS_CONFIG:
         raise ValueError(f"Unknown region key: {region_key}")
@@ -3977,7 +3929,6 @@ def build_configured_region(region_key, open_browser=False):
     atlas.add_district_centers()
     output_file = atlas.save(open_browser=open_browser)
     return output_file
-
 
 def main():
     import sys
@@ -3993,13 +3944,11 @@ def main():
 
     generated_files = []
 
-    # 1. Если указан конкретный регион из REGIONS_CONFIG (rostov, krasnodar, russia/rf)
     if target in REGIONS_CONFIG or target in ['rf', 'российская федерация', 'россия']:
         key = 'russia' if target in ['rf', 'российская федерация', 'россия'] else target
         out = build_configured_region(key, open_browser=True)
         generated_files.append((REGIONS_CONFIG[key]['title'], out))
 
-    # 2. Если аргументов нет (запуск по умолчанию): строим 3 базовые детальные карты!
     elif target is None and not do_all:
         print("\n⚙️  Запуск в стандартном режиме: генерация 3 ключевых карт (Ростов, Краснодар, РФ)...")
         for key in ['rostov', 'krasnodar', 'russia']:
@@ -4009,9 +3958,7 @@ def main():
             except Exception as e:
                 print(f" ❌ Ошибка при сборке {key}: {e}")
 
-    # 3. Если передан фильтр для нарезки из russia_unified или флаг --all:
     else:
-        # Сначала строим 3 детальные карты, если флаг --all
         if do_all:
             print("\n⚙️  Генерация ключевых детальных карт...")
             for key in ['rostov', 'krasnodar', 'russia']:
@@ -4021,7 +3968,6 @@ def main():
                 except Exception as e:
                     print(f" ❌ Ошибка при сборке {key}: {e}")
 
-        # Читаем unified shapefiles для остальных регионов
         base_shp_dir = os.path.join(BASE_DIR, 'Py_Geo', 'shape', 'russia_unified')
         districts_shp = os.path.join(base_shp_dir, 'districts.shp')
         rivers_shp = os.path.join(base_shp_dir, 'rivers.shp')
@@ -4059,7 +4005,6 @@ def main():
                 if matched:
                     unique_regions = matched
 
-            # Исключаем Ростов и Краснодар из нарезки, так как у них свои детальные шейпы
             if not target:
                 unique_regions = [r for r in unique_regions if slugify_name(r) not in ['rostov', 'krasnodar']]
 
@@ -4089,14 +4034,9 @@ def main():
     print("=" * 65)
     return generated_files
 
-
 if __name__ == "__main__":
     main()
 
-
-# ==========================================
-# ЭКСПОРТ FASTAPI ДЛЯ RENDER / UVICORN
-# ==========================================
 try:
     from server import app
 except Exception:

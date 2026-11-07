@@ -18,7 +18,6 @@ const QUESTION_TIME_LIMIT = 20;
 let timeLeft = QUESTION_TIME_LIMIT;
 let quizStartTime = 0;
 
-// ==================== РЕЖИМ КОНТРОЛЬНОЙ (ЭКЗАМЕНА) ====================
 let isExamMode = false;
 let examCategory = 'mixed';
 let examQuestionCount = 15;
@@ -31,7 +30,6 @@ let examToken = '';
 let antiCheatActive = false;
 let blurCooldown = false;
 
-// ==================== СИНХРОННЫЙ ЭКЗАМЕНАЦИОННЫЙ ДИСПЕТЧЕР (LMS) ====================
 let currentSyncSessionId = null;
 let currentSyncGroupName = null;
 let syncExamRemainingSec = null;
@@ -42,7 +40,6 @@ let studyQueue = [];
 let studyIndex = 0;
 let studyCenterMarker = null;
 
-// ==================== РЕЖИМ ПАЗЛА (СОБЕРИ РЕГИОН) ====================
 let isPuzzleMode = false;
 let puzzleDistricts = [];
 let puzzleUnplacedQueue = [];
@@ -70,7 +67,6 @@ function getPuzzlePieceColor(index) {
     return PUZZLE_PALETTE[index % PUZZLE_PALETTE.length];
 }
 
-// ==================== ДИНАМИЧЕСКИЙ ДОСТУП К ДАННЫМ РЕГИОНА ====================
 function getDistrictsData() {
     return window._dynamicDistricts || (typeof EMBEDDED_DISTRICTS !== 'undefined' ? EMBEDDED_DISTRICTS : []);
 }
@@ -93,13 +89,6 @@ function getRegionBoundsData() {
     return window._dynamicBounds || (typeof REGION_BOUNDS !== 'undefined' ? REGION_BOUNDS : null);
 }
 
-/**
- * Инициализирует и возвращает динамический контекст региона, переданный сервером FastAPI через:
- * - глобальный объект window.SERVER_REGION_CONTEXT
- * - script-тег с JSON (#server-region-context)
- * - data-атрибуты тега <body> (data-region, data-center-lat, data-center-lng, data-zoom, etc.)
- * @returns {Object|null}
- */
 function initServerRegionContext() {
     let ctx = null;
     if (typeof window !== 'undefined' && window.SERVER_REGION_CONTEXT && typeof window.SERVER_REGION_CONTEXT === 'object') {
@@ -145,12 +134,6 @@ function initServerRegionContext() {
 window.initServerRegionContext = initServerRegionContext;
 try { initServerRegionContext(); } catch(e) {}
 
-/**
- * Преобразует произвольное название региона, имя файла или URL в канонический идентификатор региона.
- * Динамически определяет регион по активному ключу, серверному контексту, параметрам URL или имени текущего HTML-файла.
- * @param {string|null} [raw] - Название региона, slug или путь файла.
- * @returns {string} Канонический ключ региона (например, 'rostov', 'krasnodar', 'russia').
- */
 function resolveRegionKey(raw) {
     let s = raw;
     if (!s) {
@@ -181,7 +164,6 @@ function resolveRegionKey(raw) {
         .replace(/_quiz_map\.html$/, '')
         .replace(/\.html$/, '');
 
-    // Карта известных псевдонимов
     if (s.includes('krasnodar') || s.includes('краснодар')) return 'krasnodar';
     if (s.includes('adygey') || s.includes('адыге')) return 'adygey';
     if (s.includes('volgograd') || s.includes('волгоград')) return 'volgograd';
@@ -193,16 +175,10 @@ function resolveRegionKey(raw) {
     if (s.includes('crimea') || s.includes('крым')) return 'crimea';
     if (s.includes('rostov') || s.includes('ростов')) return 'rostov';
 
-    // Очистка от спецсимволов для любых других субъектов РФ
     const clean = s.replace(/[^a-z0-9_]/gi, '');
     return clean || 'rostov';
 }
 
-/**
- * Возвращает официальное русскоязычное наименование региона по его каноническому ключу.
- * @param {string} key - Канонический ключ региона.
- * @returns {string} Человекочитаемое наименование.
- */
 function getRegionName(key) {
     const k = resolveRegionKey(key);
     const names = {
@@ -235,11 +211,6 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
-/**
- * Асинхронно загружает геоданные региона с бэкенда FastAPI либо синхронизирует локально встроенные переменные.
- * @param {string} regionKey - Ключ или название региона.
- * @returns {Promise<boolean>} Успешность загрузки данных.
- */
 async function loadRegionData(regionKey) {
     if (!regionKey) return false;
     const resolved = resolveRegionKey(regionKey);
@@ -248,8 +219,7 @@ async function loadRegionData(regionKey) {
     const currentFile = (window.location.pathname || '').split('/').pop() || '';
     const targetMapFile = `${resolved}_quiz_map.html`;
 
-    // Если мы уже на целевой карте этого региона, синхронизируем данные
-    if ((currentFile === targetMapFile || currentFile.includes(resolved)) && typeof EMBEDDED_DISTRICTS !== 'undefined') {
+        if ((currentFile === targetMapFile || currentFile.includes(resolved)) && typeof EMBEDDED_DISTRICTS !== 'undefined') {
         window._dynamicDistricts = EMBEDDED_DISTRICTS;
         if (typeof EMBEDDED_CENTERS !== 'undefined') window._dynamicCenters = EMBEDDED_CENTERS;
         if (typeof EMBEDDED_NEIGHBORS !== 'undefined') window._dynamicNeighbors = EMBEDDED_NEIGHBORS;
@@ -273,8 +243,7 @@ async function loadRegionData(regionKey) {
         console.warn('API /api/region/ data недоступен, выполняем локальный fallback', e);
     }
 
-    // Если мы на другой странице и API недоступен, выполняем перенаправление на страницу карты региона
-    if (currentFile && currentFile !== targetMapFile && !currentFile.includes(resolved)) {
+        if (currentFile && currentFile !== targetMapFile && !currentFile.includes(resolved)) {
         const search = window.location.search;
         window.location.href = `${targetMapFile}${search}`;
         return true;
@@ -282,10 +251,6 @@ async function loadRegionData(regionKey) {
     return false;
 }
 
-/**
- * Применяет загруженный датасет региона к текущей сессии атласа и динамически отображает слои на Leaflet карте.
- * @param {Object} data - Объект с геометрией, центрами, реками и границами региона.
- */
 function applyRegionDataset(data) {
     if (!data) return;
     if (data.bounds) window._dynamicBounds = data.bounds;
@@ -305,8 +270,7 @@ function applyRegionDataset(data) {
         } catch (e) {}
     }
 
-    // Динамическая отрисовка слоев при переключении региона поверх существующей карты
-    if (typeof L !== 'undefined' && data.puzzle_data && Array.isArray(data.puzzle_data)) {
+        if (typeof L !== 'undefined' && data.puzzle_data && Array.isArray(data.puzzle_data)) {
         if (!window._dynamicRegionLayerGroup) {
             window._dynamicRegionLayerGroup = L.layerGroup().addTo(map);
         } else {
@@ -364,25 +328,18 @@ function applyRegionDataset(data) {
     }
 }
 
-// ==================== СТАТУС-ПАНЕЛЬ ЭКЗАМЕНА И KIOSK MODE ====================
-/**
- * Создает или обновляет верхнюю статус-панель защищенного экзаменационного режима (Kiosk Mode).
- * @param {Object} [opts={}] - Настройки: регион, имя группы, лимит времени.
- */
 function ensureExamKioskTopBar(opts = {}) {
     const student = getCurrentStudentInfo();
     const groupName = opts.groupName || currentSyncGroupName || (student ? student.group : '') || 'ВКР ЮФУ';
     const studentName = (student && student.name) ? student.name : 'Студент';
 
-    // Удаляем старую фиксированную полосу если была в DOM
-    const oldBar = document.getElementById('exam-kiosk-top-bar');
+        const oldBar = document.getElementById('exam-kiosk-top-bar');
     if (oldBar) oldBar.remove();
 
     const oldBanner = document.getElementById('sync-exam-top-banner');
     if (oldBanner) oldBanner.style.display = 'none';
 
-    // Находим или создаем блок вверху боковой панели #quiz-controls
-    let sidebarHeader = document.getElementById('exam-sidebar-header');
+        let sidebarHeader = document.getElementById('exam-sidebar-header');
     if (!sidebarHeader) {
         const quizControls = document.getElementById('quiz-controls');
         if (quizControls) {
@@ -434,12 +391,6 @@ function removeExamKioskTopBar() {
     _cachedTimerElements = null;
 }
 
-// ==================== ИНИЦИАЛИЗАЦИЯ ЭКЗАМЕНА (БЕЗ ХАРДКОДА РЕГИОНА) ====================
-/**
- * Инициализирует экзаменационный режим с динамическим определением региона и активацией Kiosk-интерфейса.
- * @param {Object} [options={}] - Опции экзамена: регион, режим вопросов, лимит времени, группа.
- * @returns {Promise<void>}
- */
 async function initExamMode(options = {}) {
     initServerRegionContext();
     const urlParams = new URLSearchParams(window.location.search);
@@ -590,8 +541,7 @@ function setQuizLayers(quizMode) {
             const input = label.querySelector('input[type="checkbox"]');
             if (!input) return;
 
-            // Аналитические слои (Население, ВРП) отключаем на время викторин
-            if (text.includes('Население') || text.includes('Choropleth') || text.includes('Экономика') || text.includes('ВРП')) {
+                        if (text.includes('Население') || text.includes('Choropleth') || text.includes('Экономика') || text.includes('ВРП')) {
                 if (quizMode !== 'normal') {
                     if (input.checked) input.click();
                 }
@@ -645,8 +595,7 @@ function toggleTimer() {
 function startTimer() {
     stopTimer();
     if (isExamMode) {
-        // В режиме контрольной работает глобальный таймер на весь тест
-        return;
+                return;
     }
     const tb = document.getElementById('timer-bar-container');
     if (!timerEnabled) {
@@ -674,7 +623,6 @@ function stopTimer() {
     }
 }
 
-/* ==================== ПРЕМИАЛЬНЫЙ ВИДЖЕТ ТАЙМЕРА И ПРОКТОРИНГА ==================== */
 function ensureExamProctorWidgetDOM() {
     let tb = document.getElementById('timer-bar-container');
     if (!tb) return;
@@ -712,7 +660,6 @@ function showExamTimeoutBanner() {
     }
 }
 
-/* ==================== ГЛОБАЛЬНЫЙ ЭКЗАМЕНАЦИОННЫЙ ТАЙМЕР ==================== */
 function startGlobalExamTimer() {
     stopTimer();
     stopGlobalExamTimer();
@@ -760,9 +707,6 @@ function stopGlobalExamTimer() {
     resetTimerDOMCache();
 }
 
-/**
- * Оптимизированный рендерер таймера экзамена, устраняющий лишние перерисовки DOM (Layout Thrashing).
- */
 function updateGlobalExamTimerDisplay() {
     if (!_cachedTimerElements) {
         _cachedTimerElements = {
@@ -790,7 +734,6 @@ function updateGlobalExamTimerDisplay() {
             if (els.timerText.style.color !== color) els.timerText.style.color = color;
         }
 
-        // Обновляем таймер в новом блоке боковой панели (#exam-sidebar-timer)
         const activeTimer = els.sidebarTimer || document.getElementById('exam-sidebar-timer') || els.kioskTimer;
         if (activeTimer) {
             activeTimer.textContent = timeStr;
@@ -851,14 +794,11 @@ function handleExamTimeout() {
     stopGlobalExamTimer();
     stopTimer();
 
-    // 1. Автоматически завершаем попытку и немедленно отправляем результат на сервер
     finishExamEarly(true);
 
-    // 2. Отображаем неблокирующий баннер об окончании времени
     showExamTimeoutBanner();
 }
 
-/* ==================== ЗАЩИТА ОТ СПИСЫВАНИЯ (ANTI-CHEAT) ==================== */
 function enableAntiCheat() {
     antiCheatActive = true;
     document.addEventListener('visibilitychange', handleExamVisibilityChange);
@@ -1002,7 +942,6 @@ function handleTimeout() {
     }, 1800);
 }
 
-/* ==================== ОБУЧАЮЩИЙ РЕЖИМ ==================== */
 function startStudyMode(category = 'districts') {
     studyCategory = category;
     currentQuiz = 'study';
@@ -1160,7 +1099,6 @@ function exitStudyMode() {
     setTimeout(setupDistrictClickListeners, 300);
 }
 
-/* ==================== РЕЖИМ КОНТРОЛЬНОЙ (ЭКЗАМЕНА) ==================== */
 function openExamModal(preselectedCategory) {
     const m = document.getElementById('exam-setup-modal');
     if (m) {
@@ -1522,7 +1460,6 @@ function generateExamQuestions(category, count) {
     showQuestion();
 }
 
-/* ==================== ИНТЕРАКТИВНЫЙ ПАЗЛ: СОБЕРИ РЕГИОН ==================== */
 function startPuzzleMode() {
     if (typeof EMBEDDED_PUZZLE_DATA === 'undefined' || !EMBEDDED_PUZZLE_DATA || EMBEDDED_PUZZLE_DATA.length < 2) {
         alert('Для запуска режима пазла требуются пространственные данные районов этого региона.');
@@ -1538,7 +1475,6 @@ function startPuzzleMode() {
     currentQuiz = 'puzzle';
     isPuzzleMode = true;
 
-    // Сброс прочих режимов и таймеров
     removePuzzleGhost();
     stopTimer();
     stopGlobalExamTimer();
@@ -1548,7 +1484,6 @@ function startPuzzleMode() {
     resetActiveHighlight(false);
     disablePopups();
 
-    // Скрываем другие экраны интерфейса, показываем панель пазла
     document.getElementById('normal-mode').style.display = 'none';
     document.getElementById('study-mode').style.display = 'none';
     document.getElementById('quiz-mode').style.display = 'none';
@@ -1556,13 +1491,10 @@ function startPuzzleMode() {
     const pm = document.getElementById('puzzle-mode');
     if (pm) pm.style.display = 'block';
 
-    // Скрываем базовые тайлы карты, оставляем чистый контурный холст
     setBasemapVisible(false);
 
-    // Скрываем все штатные слои карты, сохраняя их параметры
     hideAllMapLayersForPuzzle();
 
-    // Инициализация структуры данных пазла
     puzzleDistricts = JSON.parse(JSON.stringify(EMBEDDED_PUZZLE_DATA));
     puzzlePlacedDistricts = new Set();
     puzzleSlotLayers = {};
@@ -1571,39 +1503,29 @@ function startPuzzleMode() {
     puzzleHintsUsed = 0;
     puzzleStartTime = Date.now();
 
-    // 1. Отрисовка чистого внешнего контура региона (БЕЗ внутренних сеток и пунктиров)
     renderPuzzleRegionOutline();
 
-    // 2. Выбор случайного стартового опорного района
     const randomIndex = Math.floor(Math.random() * puzzleDistricts.length);
     puzzleAnchorDistrict = puzzleDistricts[randomIndex];
 
-    // 3. Фиксируем стартовый опорный район на карте с самого начала
     placeDistrictOnMap(puzzleAnchorDistrict, true);
 
-    // 4. Все остальные районы отправляем в пул боковой панели
     puzzleUnplacedQueue = puzzleDistricts.filter(d => d.id !== puzzleAnchorDistrict.id);
     shuffleArray(puzzleUnplacedQueue);
 
-    // 5. Выбираем первую деталь (предпочтительно соседа опорного района)
     const initialNeighbor = puzzleUnplacedQueue.find(d => isDistrictNeighborOfPlaced(d)) || puzzleUnplacedQueue[0];
     if (initialNeighbor) {
         setActivePuzzlePiece(initialNeighbor);
     }
 
-    // 6. Отрисовка списка районов в трее (с реальными силуэтами и топологической индикацией)
     renderPuzzleTray();
 
-    // 7. Обновление шкалы и счетчиков
     updatePuzzleProgress();
 
-    // Центрирование карты по границам региона
     resetMapView();
 
-    // Запуск таймера
     startPuzzleTimer();
 
-    // Настройка зоны сброса Drag-and-Drop на контейнере карты
     setupPuzzleDropZone();
 
     showPuzzleFloatingMessage(`⭐ Опорный район: «${puzzleAnchorDistrict.name}» зафиксирован! Присоединяйте соседние районы к нему.`, '#0284C7');
@@ -1687,7 +1609,6 @@ function renderPuzzleRegionOutline() {
 }
 
 function renderPuzzleSlots() {
-    // Чистое поле: предварительные внутренние линии, сетки и пунктирные слоты полностью убраны!
     const map = getMapObject();
     if (!map) return;
 
@@ -1769,14 +1690,12 @@ function isDistrictNeighborOfPlaced(district) {
     if (!district) return false;
     if (!puzzlePlacedDistricts || puzzlePlacedDistricts.size === 0) return true;
 
-    // 1. Проверка по IDs соседей
     if (district.neighbor_ids && Array.isArray(district.neighbor_ids)) {
         for (let nId of district.neighbor_ids) {
             if (puzzlePlacedDistricts.has(nId)) return true;
         }
     }
 
-    // 2. Проверка по именам соседей
     const placedNames = new Set();
     for (let pId of puzzlePlacedDistricts) {
         const p = puzzleDistricts.find(d => d.id === pId);
@@ -1791,7 +1710,7 @@ function isDistrictNeighborOfPlaced(district) {
         }
     }
 
-    // 3. Пространственный fallback по пересечению bounding-box с допуском 0.015° (~1.5 км)
+    // Поиск пересечений bounding box с допуском 0.015°
     if (district.bounds) {
         for (let pId of puzzlePlacedDistricts) {
             const placedD = puzzleDistricts.find(d => d.id === pId);
@@ -1811,7 +1730,6 @@ function isDistrictNeighborOfPlaced(district) {
     return false;
 }
 
-/* ==================== ГЕО-ПРОВЕРКА И DRAG-AND-DROP ПАЗЛА ==================== */
 function isPointInGeoJsonPolygon(lat, lng, geojson) {
     if (!geojson || !geojson.type || !geojson.coordinates) return false;
 
@@ -1974,8 +1892,6 @@ function handleMapDrop(e) {
     processPuzzleDropPlacement(targetDistrict, latlng);
 }
 
-/* ==================== SVG СИЛУЭТЫ ДЕТАЛЕЙ ПАЗЛА ==================== */
-
 function getDistrictTypeHint(name) {
     if (!name) return 'район';
     const n = name.toLowerCase();
@@ -2093,7 +2009,7 @@ function generateDistrictSvg(piece, width = 86, height = 56, options = {}) {
     `;
 }
 
-function generateTrueScaleDragSilhouette(piece, map) {
+function generateDragSilhouette(piece, map) {
     if (!piece || !piece.geojson || !map) return null;
 
     try {
@@ -2173,16 +2089,13 @@ function generateTrueScaleDragSilhouette(piece, map) {
     }
 }
 
-/* ==================== ПЛАВАЮЩИЙ SVG-ПРИЗРАК ДЕТАЛИ (DRAG GHOST) ==================== */
-
 function createPuzzleGhost(piece, clientX, clientY) {
     if (!piece) return;
 
-    // Сначала удаляем предыдущий временный элемент, если он существует
     removePuzzleGhost();
 
     const map = getMapObject();
-    const trueScale = generateTrueScaleDragSilhouette(piece, map);
+    const trueScale = generateDragSilhouette(piece, map);
 
     let totalW, totalH, offsetX, offsetY, svgMarkup;
     if (trueScale) {
@@ -2245,8 +2158,6 @@ function removePuzzleGhost() {
     window.removeEventListener('dragend', handlePuzzleDragEnd);
 }
 
-/* ==================== ОБРАБОТЧИКИ ПЕРЕТАСКИВАНИЯ (HTML5 + POINTER) ==================== */
-
 let isPointerDragging = false;
 let pointerDragPiece = null;
 let pointerDragStartPt = null;
@@ -2270,8 +2181,7 @@ function handlePuzzleDragStart(e, districtId) {
         e.dataTransfer.setData('text/plain', districtId);
         e.dataTransfer.effectAllowed = 'copyMove';
 
-        // Прозрачный 1x1 пиксель скрывает браузерный серый прямоугольник по умолчанию
-        const emptyImg = new Image();
+            const emptyImg = new Image();
         emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
         try {
             e.dataTransfer.setDragImage(emptyImg, 0, 0);
@@ -2348,8 +2258,7 @@ function handlePuzzlePointerDown(e, districtId) {
 function onWindowPointerMove(e) {
     if (!pointerDragPiece || !pointerDragStartPt) return;
 
-    // Если нативный HTML5 drag уже запустился, не дублируем
-    if (window._isHtml5Dragging) return;
+        if (window._isHtml5Dragging) return;
 
     const dx = e.clientX - pointerDragStartPt.x;
     const dy = e.clientY - pointerDragStartPt.y;
@@ -2429,8 +2338,7 @@ function processPuzzleDropPlacement(targetDistrict, latlng) {
         return;
     }
 
-    // 1. Проверка геометрического совпадения с целевым районом (a)
-    const directHit = isPointInGeoJsonPolygon(latlng.lat, latlng.lng, targetDistrict.geojson);
+        const directHit = isPointInGeoJsonPolygon(latlng.lat, latlng.lng, targetDistrict.geojson);
     const nearTarget = isPointNearDistrict(latlng.lat, latlng.lng, targetDistrict, 14);
 
     let landedInsideOther = null;
@@ -2450,20 +2358,17 @@ function processPuzzleDropPlacement(targetDistrict, latlng) {
         return;
     }
 
-    // 2. Проверка топологического правила сборки («Конструктор по соседям») (б)
-    const isNeighbor = isDistrictNeighborOfPlaced(targetDistrict);
+        const isNeighbor = isDistrictNeighborOfPlaced(targetDistrict);
     if (!isNeighbor) {
         triggerPuzzleMismatch(targetDistrict, `⚠️ Топологический запрет! Район «${targetDistrict.name}» не граничит ни с одним из уже собранных районов ядра. Сначала присоедините его соседей!`);
         return;
     }
 
-    // Оба условия выполнены -> фиксация детали в растущее ядро региона
-    completePuzzleDistrictPlacement(targetDistrict);
+        placePuzzleDistrict(targetDistrict);
 }
 
-function completePuzzleDistrictPlacement(district) {
-    // Впаиваем район на карту с заливкой
-    placeDistrictOnMap(district, false);
+function placePuzzleDistrict(district) {
+        placeDistrictOnMap(district, false);
 
     showPuzzleFloatingMessage(`🧲 Отлично! «${district.name}» пристыкован к ядру региона!`, '#10B981');
 
@@ -2475,8 +2380,7 @@ function completePuzzleDistrictPlacement(district) {
         return;
     }
 
-    // Выбираем следующий активный район — предпочтительно тот, который УЖЕ доступен для стыковки!
-    const nextAvailableNeighbor = puzzleUnplacedQueue.find(d => isDistrictNeighborOfPlaced(d)) || puzzleUnplacedQueue[0];
+        const nextAvailableNeighbor = puzzleUnplacedQueue.find(d => isDistrictNeighborOfPlaced(d)) || puzzleUnplacedQueue[0];
     if (nextAvailableNeighbor) {
         setActivePuzzlePiece(nextAvailableNeighbor);
     }
@@ -2873,8 +2777,7 @@ function exitPuzzleMode() {
     removePuzzleDropZone();
     closePuzzleVictoryModal();
 
-    // Удаляем контуры и слоты пазла с карты
-    const map = getMapObject();
+        const map = getMapObject();
     if (map) {
         if (puzzleOutlineLayer) {
             try { map.removeLayer(puzzleOutlineLayer); } catch(e) {}
@@ -2891,16 +2794,14 @@ function exitPuzzleMode() {
         puzzlePlacedMarkers = [];
     }
 
-    // Восстанавливаем видимость базовой подложки и слоев
-    setBasemapVisible(true);
+        setBasemapVisible(true);
     restoreMapLayersAfterPuzzle();
     enablePopups();
     resetActiveHighlight(false);
     restoreAllLayers();
     resetMapView();
 
-    // Возвращаем главное меню
-    const pm = document.getElementById('puzzle-mode');
+        const pm = document.getElementById('puzzle-mode');
     if (pm) pm.style.display = 'none';
     const nm = document.getElementById('normal-mode');
     if (nm) nm.style.display = 'block';
@@ -2913,14 +2814,6 @@ function getDistrictNameById(id) {
     return d ? d.name : 'Район';
 }
 
-/* ==================== ВИКТОРИНЫ (DRY REFACTORED) ==================== */
-/**
- * Унифицированная подготовка UI и слоев карты для запуска любого режима викторины (DRY).
- * @param {string} quizType - Идентификатор викторины ('district', 'neighbor', 'center', 'river').
- * @param {string} title - Отображаемый заголовок в боковой панели.
- * @param {boolean} [showHint=true] - Показывать ли кнопку подсказки.
- * @param {boolean} [showBasemap=true] - Отображать ли подложку карты.
- */
 function prepareQuizUI(quizType, title, showHint = true, showBasemap = true) {
     currentQuiz = quizType;
     quizStartTime = Date.now();
@@ -2946,9 +2839,6 @@ function prepareQuizUI(quizType, title, showHint = true, showBasemap = true) {
     if (hintBtn) hintBtn.style.display = showHint ? 'block' : 'none';
 }
 
-/**
- * Запуск викторины «Угадать силуэт территории».
- */
 function startDistrictQuiz() {
     const districts = getDistrictsData();
     if (!districts || districts.length < 2) {
@@ -2959,9 +2849,6 @@ function startDistrictQuiz() {
     loadDistrictQuiz();
 }
 
-/**
- * Запуск викторины «Топология и смежность территорий».
- */
 function startNeighborQuiz() {
     const neighbors = getNeighborsData();
     if (!neighbors || neighbors.filter(d => d.neighbors && d.neighbors.length >= 1).length === 0) {
@@ -2972,9 +2859,6 @@ function startNeighborQuiz() {
     loadNeighborQuiz();
 }
 
-/**
- * Запуск викторины «Поиск административного центра».
- */
 function startCenterQuiz() {
     const centers = getCentersData();
     if (!centers || centers.length === 0) {
@@ -2985,9 +2869,6 @@ function startCenterQuiz() {
     loadCenterQuiz();
 }
 
-/**
- * Запуск викторины «Определение реки по руслу».
- */
 function startRiverQuiz() {
     const rivers = getRiversData();
     if (!rivers || rivers.length < 1) {
@@ -3162,8 +3043,7 @@ function showQuestion() {
 
     if (optionsContainer) optionsContainer.innerHTML = '';
 
-    // В режиме экзамена динамически переключаем видимость подложки в зависимости от типа текущего вопроса
-    if (isExamMode) {
+        if (isExamMode) {
         const hintBtn = document.getElementById('hint-button');
         if (hintBtn) hintBtn.style.display = 'none';
 
@@ -3467,8 +3347,7 @@ function highlightDistrictOnMapByName(districtName) {
         if (layer.feature && layer.feature.properties && !targetLayer) {
             const props = layer.feature.properties;
             
-            // СТРОГИЙ ФИЛЬТР: Если это не территория (нет нашей метки), пропускаем!
-            if (props.is_district_layer !== 1) return;
+                        if (props.is_district_layer !== 1) return;
 
             const pName = props.display_name || props.NAME_1 || props.NAME_RU || props.NAME || '';
             if (normalizeDistrictName(pName) === targetNorm) {
@@ -3477,8 +3356,7 @@ function highlightDistrictOnMapByName(districtName) {
         }
     });
 
-    // Запасной поиск по частичному совпадению
-    if (!targetLayer) {
+        if (!targetLayer) {
         map.eachLayer(function(layer) {
             if (layer.feature && layer.feature.properties && !targetLayer) {
                 const props = layer.feature.properties;
@@ -3607,8 +3485,7 @@ function renderDistrictMetricChart(metric) {
         }
     }
 
-    // 1. Расчет среднего значения по карте
-    let totalPop = 0, countPop = 0, totalArea = 0, countArea = 0, totalGrp = 0, countGrp = 0;
+        let totalPop = 0, countPop = 0, totalArea = 0, countArea = 0, totalGrp = 0, countGrp = 0;
     EMBEDDED_NEIGHBORS.forEach(d => {
         if (d.population && d.population > 0) { totalPop += d.population; countPop++; }
         if (d.area && d.area > 0) { totalArea += d.area; countArea++; }
@@ -3618,8 +3495,7 @@ function renderDistrictMetricChart(metric) {
     const avgArea = countArea > 0 ? Math.round(totalArea / countArea) : 0;
     const avgGrp = countGrp > 0 ? parseFloat((totalGrp / countGrp).toFixed(1)) : 0;
 
-    // 2. Поиск крупнейшего соседа для текущего выбранного региона
-    let topNeighbor = null;
+        let topNeighbor = null;
     let maxNeighborVal = -1;
     if (district.neighbors && Array.isArray(district.neighbors)) {
         district.neighbors.forEach(nName => {
@@ -3641,8 +3517,7 @@ function renderDistrictMetricChart(metric) {
         });
     }
 
-    // 3. Поиск абсолютного лидера среди всех объектов на карте
-    let leader = null;
+        let leader = null;
     let maxLeaderVal = -1;
     EMBEDDED_NEIGHBORS.forEach(d => {
         let rawVal = 0;
@@ -3667,8 +3542,7 @@ function renderDistrictMetricChart(metric) {
         window._districtChartInstance = null;
     }
 
-    // Значения и единицы измерения для 4 колонок
-    let currentVal = 0, avgVal = 0, neighborVal = 0, leaderVal = 0;
+        let currentVal = 0, avgVal = 0, neighborVal = 0, leaderVal = 0;
     let unit = '', label = '';
 
     if (window._currentChartMetric === 'pop') {
@@ -3694,18 +3568,12 @@ function renderDistrictMetricChart(metric) {
         label = 'Площадь (км²)';
     }
 
-    // Динамические подписи для 4 колонок (сокращенные до 12-14 символов с троеточием)
-    const labelSelected = formatShortChartName(district.name, 'Выбран');
+        const labelSelected = formatShortChartName(district.name, 'Выбран');
     const labelAvg = 'В среднем';
     const labelNeighbor = topNeighbor ? formatShortChartName(topNeighbor.name, 'Сосед') : 'Нет соседа';
     const labelLeader = leader ? formatShortChartName(leader.name, 'Лидер') : 'Лидер';
 
-    // Цветовая дифференциация 4 колонок:
-    // 1. Выбранный: #3B82F6 (синий)
-    // 2. Среднее:   #CBD5E1 (серый)
-    // 3. Сосед:     #F59E0B (оранжевый)
-    // 4. Лидер:     #8B5CF6 (фиолетовый)
-    const bgColors = ['#3B82F6', '#CBD5E1', '#F59E0B', '#8B5CF6'];
+        const bgColors = ['#3B82F6', '#CBD5E1', '#F59E0B', '#8B5CF6'];
     const borderColors = ['#2563EB', '#94A3B8', '#D97706', '#7C3AED'];
 
     const statBox = document.getElementById('district-chart-stat');
@@ -4161,7 +4029,6 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         } catch(e) {}
     }
 
-    // Всегда отправляем результаты на сервер (даже если студент не авторизовался заранее)
     const submitPayload = {
         email: student ? student.email : 'student@sfedu.ru',
         name: student ? student.name : (currentSyncGroupName ? `Студент (${currentSyncGroupName})` : 'Анонимный студент'),
@@ -4521,7 +4388,6 @@ function injectExamProctorStyles() {
             box-shadow: 0 6px 16px rgba(0,0,0,0.08) !important;
         }
 
-        /* 1. Кнопка «Подтвердить ответ» (единый стиль с «Подсказка» и «Завершить викторину») */
         .btn-confirm, #confirm-button {
             display: flex !important;
             align-items: center !important;
@@ -4570,7 +4436,6 @@ function injectExamProctorStyles() {
             box-sizing: border-box !important;
         }
 
-        /* 2. Скрытие стандартной навигации в режиме экзамена (Kiosk Mode) */
         body.exam-mode #top-nav-panel,
         body.exam-mode .top-nav-buttons,
         body.exam-mode #auth-top-btn,
@@ -4594,7 +4459,6 @@ function injectExamProctorStyles() {
             top: 20px !important;
         }
 
-        /* 3. Компактный информационный блок экзамена вверху боковой панели */
         .exam-sidebar-bar {
             background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%) !important;
             border: 1px solid #6366F1 !important;
@@ -4672,7 +4536,6 @@ function injectExamProctorStyles() {
     document.head.appendChild(style);
 }
 
-/* ИНИЦИАЛИЗАЦИЯ И ПРОВЕРКА ТЕМЫ */
 window.addEventListener('load', function() {
     initServerRegionContext();
     injectExamProctorStyles();
@@ -4699,8 +4562,6 @@ window.addEventListener('load', function() {
         setTimeout(checkAndApplySyncExamSession, 600);
     }
 });
-
-// ==================== СИНХРОННЫЙ ЭКЗАМЕНАЦИОННЫЙ ДИСПЕТЧЕР ЮФУ (LMS) ====================
 
 function renderSyncExamBanner(session, remainingSeconds) {
     let existing = document.getElementById('sync-exam-top-banner');
@@ -4773,7 +4634,7 @@ function renderExamExpiredModal(session) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
-function renderExamAlreadySubmittedBanner(session) {
+function renderSubmittedBanner(session) {
     const bannerHtml = `
     <div style="position: fixed; top: 0; left: 0; right: 0; z-index: 99999; background: #064E3B; color: #FFFFFF; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #10B981; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
         <div style="display: flex; align-items: center; gap: 10px;">
@@ -4891,18 +4752,15 @@ async function checkAndApplySyncExamSession() {
         return;
     }
 
-    // Проверяем, сдавал ли студент уже этот экзамен
     const alreadySubmittedLocal = localStorage.getItem('sfedu_exam_submitted_' + session.session_id);
     const storageKey = getResultsStorageKey();
     const results = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('rostovQuizResults') || '[]');
     const alreadyInResults = results.some(r => r.session_id === session.session_id);
     if (alreadySubmittedLocal || alreadyInResults) {
-        renderExamAlreadySubmittedBanner(session);
+        renderSubmittedBanner(session);
         return;
     }
 
-    // Абсолютный расчет времени:
-    // Оставшееся_время = (sessionStartedAt + timeLimitMinutes * 60 * 1000) - currentServerTime
     const sessionEndTime = session.started_at + (session.time_limit_minutes * 60 * 1000);
     const remainingSeconds = Math.max(0, Math.floor((sessionEndTime - serverNow) / 1000));
 
@@ -4921,7 +4779,6 @@ async function checkAndApplySyncExamSession() {
     renderSyncExamBanner(session, remainingSeconds);
     startSyncHeartbeat(session.session_id);
 
-    // Если студент перешел по прямой ссылке на экзамен, сразу активируем контрольную
     if (isUrlDriven) {
         setTimeout(() => {
             startSynchronousExamFromBanner();
