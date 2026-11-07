@@ -370,21 +370,27 @@ function applyRegionDataset(data) {
  * @param {Object} [opts={}] - Настройки: регион, имя группы, лимит времени.
  */
 function ensureExamKioskTopBar(opts = {}) {
-    let bar = document.getElementById('exam-kiosk-top-bar');
     const student = getCurrentStudentInfo();
     const groupName = opts.groupName || currentSyncGroupName || (student ? student.group : '') || 'ВКР ЮФУ';
     const studentName = (student && student.name) ? student.name : 'Студент';
-    const regionName = getRegionName(window.currentRegionKey || opts.region || '');
 
-    // Скрываем старый баннер ожидания сессии если есть
+    // Удаляем старую фиксированную полосу если была в DOM
+    const oldBar = document.getElementById('exam-kiosk-top-bar');
+    if (oldBar) oldBar.remove();
+
     const oldBanner = document.getElementById('sync-exam-top-banner');
     if (oldBanner) oldBanner.style.display = 'none';
 
-    if (!bar) {
-        bar = document.createElement('div');
-        bar.id = 'exam-kiosk-top-bar';
-        bar.className = 'exam-kiosk-bar';
-        document.body.prepend(bar);
+    // Находим или создаем блок вверху боковой панели #quiz-controls
+    let sidebarHeader = document.getElementById('exam-sidebar-header');
+    if (!sidebarHeader) {
+        const quizControls = document.getElementById('quiz-controls');
+        if (quizControls) {
+            sidebarHeader = document.createElement('div');
+            sidebarHeader.id = 'exam-sidebar-header';
+            sidebarHeader.className = 'exam-sidebar-bar';
+            quizControls.prepend(sidebarHeader);
+        }
     }
 
     const safeSec = Math.max(0, examTimeRemaining);
@@ -392,29 +398,40 @@ function ensureExamKioskTopBar(opts = {}) {
     const secs = safeSec % 60;
     const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
-    bar.innerHTML = `
-        <div class="kiosk-left">
-            <span class="kiosk-dot"></span>
-            <div>
-                <div class="kiosk-title">🛡️ ЭКЗАМЕНАЦИОННЫЙ РЕЖИМ (KIOSK) • ${escapeHtml(regionName)} • ГРУППА: <span id="kiosk-group-badge">${escapeHtml(groupName)}</span></div>
-                <div class="kiosk-meta">Студент: <b style="color:#FFF;">${escapeHtml(studentName)}</b> • Режим контроля Anti-Cheat ЮФУ</div>
+    if (sidebarHeader) {
+        sidebarHeader.innerHTML = `
+            <div class="exam-sidebar-top">
+                <div class="exam-sidebar-status">
+                    <span class="exam-sidebar-dot"></span>
+                    <span class="exam-sidebar-title">🛡️ ЭКЗАМЕН • ANTI-CHEAT</span>
+                </div>
+                <div class="exam-sidebar-timer-box">
+                    <span style="font-size: 13px;">⏳</span>
+                    <span id="exam-sidebar-timer" class="exam-sidebar-timer-text">${timeStr}</span>
+                </div>
             </div>
-        </div>
-        <div class="kiosk-right">
-            <div class="kiosk-timer-box">
-                <span style="font-size: 14px;">⏳</span>
-                <span id="kiosk-timer-display" class="kiosk-timer-text">${timeStr}</span>
+            <div class="exam-sidebar-meta">
+                <div class="exam-sidebar-student">Студент: <b id="exam-sidebar-student-name">${escapeHtml(studentName)}</b></div>
+                <div class="exam-sidebar-group">Группа: <b id="exam-sidebar-group-name">${escapeHtml(groupName)}</b></div>
             </div>
-        </div>
-    `;
-    bar.style.display = 'flex';
+        `;
+        sidebarHeader.style.display = 'block';
+    }
+
+    _cachedTimerElements = null;
 }
 
 function removeExamKioskTopBar() {
-    const bar = document.getElementById('exam-kiosk-top-bar');
-    if (bar) bar.remove();
+    const oldBar = document.getElementById('exam-kiosk-top-bar');
+    if (oldBar) oldBar.remove();
+
+    const sidebarHeader = document.getElementById('exam-sidebar-header');
+    if (sidebarHeader) sidebarHeader.style.display = 'none';
+
     const oldBanner = document.getElementById('sync-exam-top-banner');
     if (oldBanner) oldBanner.style.display = 'none';
+
+    _cachedTimerElements = null;
 }
 
 // ==================== ИНИЦИАЛИЗАЦИЯ ЭКЗАМЕНА (БЕЗ ХАРДКОДА РЕГИОНА) ====================
@@ -752,6 +769,7 @@ function updateGlobalExamTimerDisplay() {
             timerText: document.getElementById('timer-text'),
             timerBar: document.getElementById('timer-bar'),
             statusText: document.getElementById('exam-proctor-status-text'),
+            sidebarTimer: document.getElementById('exam-sidebar-timer'),
             kioskTimer: document.getElementById('kiosk-timer-display')
         };
     }
@@ -764,15 +782,19 @@ function updateGlobalExamTimerDisplay() {
 
     if (timeStr !== _prevTimerStr) {
         _prevTimerStr = timeStr;
+        const color = safeSec < 60 ? '#EF4444' : (safeSec < 180 ? '#F59E0B' : '#38BDF8');
+        const kColor = safeSec < 60 ? '#EF4444' : (safeSec < 180 ? '#F59E0B' : '#FBBF24');
+
         if (els.timerText) {
             els.timerText.textContent = timeStr;
-            const color = safeSec < 60 ? '#EF4444' : (safeSec < 180 ? '#F59E0B' : '#38BDF8');
             if (els.timerText.style.color !== color) els.timerText.style.color = color;
         }
-        if (els.kioskTimer) {
-            els.kioskTimer.textContent = timeStr;
-            const kColor = safeSec < 60 ? '#EF4444' : (safeSec < 180 ? '#F59E0B' : '#FBBF24');
-            if (els.kioskTimer.style.color !== kColor) els.kioskTimer.style.color = kColor;
+
+        // Обновляем таймер в новом блоке боковой панели (#exam-sidebar-timer)
+        const activeTimer = els.sidebarTimer || document.getElementById('exam-sidebar-timer') || els.kioskTimer;
+        if (activeTimer) {
+            activeTimer.textContent = timeStr;
+            if (activeTimer.style.color !== kColor) activeTimer.style.color = kColor;
         }
     }
 
@@ -4564,82 +4586,87 @@ function injectExamProctorStyles() {
 
         body.exam-mode #quiz-controls,
         body.exam-mode .app-card {
-            top: 66px !important;
-            max-height: calc(100vh - 80px) !important;
+            top: 20px !important;
+            max-height: calc(100vh - 40px) !important;
         }
 
         body.exam-mode .leaflet-top {
-            top: 62px !important;
+            top: 20px !important;
         }
 
-        /* 3. Фиолетовая статус-панель экзамена (Kiosk Bar) */
-        .exam-kiosk-bar {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            height: 52px !important;
-            z-index: 99999 !important;
+        /* 3. Компактный информационный блок экзамена вверху боковой панели */
+        .exam-sidebar-bar {
             background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%) !important;
+            border: 1px solid #6366F1 !important;
+            border-radius: 10px !important;
+            padding: 10px 12px !important;
+            margin-bottom: 12px !important;
             color: #FFFFFF !important;
-            border-bottom: 2px solid #8B5CF6 !important;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+            box-shadow: 0 4px 14px rgba(30, 27, 75, 0.25) !important;
+        }
+
+        .exam-sidebar-top {
             display: flex !important;
             align-items: center !important;
             justify-content: space-between !important;
-            padding: 0 20px !important;
-            box-sizing: border-box !important;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+            gap: 8px !important;
+            margin-bottom: 6px !important;
         }
 
-        .exam-kiosk-bar .kiosk-left {
-            display: flex !important;
-            align-items: center !important;
-            gap: 12px !important;
-        }
-
-        .exam-kiosk-bar .kiosk-dot {
-            width: 10px !important;
-            height: 10px !important;
-            border-radius: 50% !important;
-            background: #EF4444 !important;
-            box-shadow: 0 0 10px #EF4444 !important;
-            animation: syncPulse 1.5s infinite !important;
-        }
-
-        .exam-kiosk-bar .kiosk-title {
-            font-size: 13.5px !important;
-            font-weight: 700 !important;
-            letter-spacing: 0.02em !important;
-        }
-
-        .exam-kiosk-bar .kiosk-meta {
-            font-size: 11.5px !important;
-            color: #CBD5E1 !important;
-        }
-
-        .exam-kiosk-bar .kiosk-right {
-            display: flex !important;
-            align-items: center !important;
-            gap: 12px !important;
-        }
-
-        .exam-kiosk-bar .kiosk-timer-box {
-            background: rgba(15, 23, 42, 0.75) !important;
-            padding: 6px 14px !important;
-            border-radius: 8px !important;
-            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+        .exam-sidebar-status {
             display: flex !important;
             align-items: center !important;
             gap: 6px !important;
         }
 
-        .exam-kiosk-bar .kiosk-timer-text {
-            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace !important;
-            font-size: 16px !important;
+        .exam-sidebar-dot {
+            width: 8px !important;
+            height: 8px !important;
+            border-radius: 50% !important;
+            background: #EF4444 !important;
+            box-shadow: 0 0 8px #EF4444 !important;
+            animation: syncPulse 1.5s infinite !important;
+        }
+
+        .exam-sidebar-title {
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.5px !important;
+            color: #E0E7FF !important;
+            text-transform: uppercase !important;
+        }
+
+        .exam-sidebar-timer-box {
+            background: rgba(15, 23, 42, 0.85) !important;
+            padding: 4px 10px !important;
+            border-radius: 6px !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 5px !important;
+        }
+
+        .exam-sidebar-timer-text {
+            font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace !important;
+            font-size: 14.5px !important;
             font-weight: 800 !important;
             color: #FBBF24 !important;
             letter-spacing: 0.5px !important;
+        }
+
+        .exam-sidebar-meta {
+            font-size: 11px !important;
+            color: #CBD5E1 !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+            padding-top: 6px !important;
+            gap: 8px !important;
+        }
+
+        .exam-sidebar-meta b {
+            color: #FFFFFF !important;
         }
     `;
     document.head.appendChild(style);

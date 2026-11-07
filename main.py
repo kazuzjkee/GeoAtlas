@@ -1445,6 +1445,24 @@ window.serverMapZoom = {self.zoom};
         </div>
 
         <div id="quiz-controls" class="app-card">
+            <!-- ЭКЗАМЕНАЦИОННЫЙ ИНФОРМАЦИОННЫЙ БЛОК ВВЕРХУ БОКОВОЙ ПАНЕЛИ -->
+            <div id="exam-sidebar-header" class="exam-sidebar-bar" style="display: none;">
+                <div class="exam-sidebar-top">
+                    <div class="exam-sidebar-status">
+                        <span class="exam-sidebar-dot"></span>
+                        <span class="exam-sidebar-title">🛡️ ЭКЗАМЕН • ANTI-CHEAT</span>
+                    </div>
+                    <div class="exam-sidebar-timer-box">
+                        <span style="font-size: 13px;">⏳</span>
+                        <span id="exam-sidebar-timer" class="exam-sidebar-timer-text">10:00</span>
+                    </div>
+                </div>
+                <div class="exam-sidebar-meta">
+                    <div class="exam-sidebar-student">Студент: <b id="exam-sidebar-student-name">Студент</b></div>
+                    <div class="exam-sidebar-group">Группа: <b id="exam-sidebar-group-name">ЮФУ</b></div>
+                </div>
+            </div>
+
             <div class="panel-header">
                 <div class="panel-header-bar">
                     <div class="panel-institution-badge">ЮФУ • Институт наук о Земле</div>
@@ -2074,82 +2092,87 @@ window.serverMapZoom = {self.zoom};
 
         body.exam-mode #quiz-controls,
         body.exam-mode .app-card {{
-            top: 66px !important;
-            max-height: calc(100vh - 80px) !important;
+            top: 20px !important;
+            max-height: calc(100vh - 40px) !important;
         }}
 
         body.exam-mode .leaflet-top {{
-            top: 62px !important;
+            top: 20px !important;
         }}
 
-        /* Фиолетовая статус-панель экзамена (Kiosk Bar) */
-        .exam-kiosk-bar {{
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            height: 52px !important;
-            z-index: 99999 !important;
+        /* Компактный информационный блок экзамена вверху боковой панели */
+        .exam-sidebar-bar {{
             background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%) !important;
+            border: 1px solid #6366F1 !important;
+            border-radius: 10px !important;
+            padding: 10px 12px !important;
+            margin-bottom: 12px !important;
             color: #FFFFFF !important;
-            border-bottom: 2px solid #8B5CF6 !important;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+            box-shadow: 0 4px 14px rgba(30, 27, 75, 0.25) !important;
+        }}
+
+        .exam-sidebar-top {{
             display: flex !important;
             align-items: center !important;
             justify-content: space-between !important;
-            padding: 0 20px !important;
-            box-sizing: border-box !important;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+            gap: 8px !important;
+            margin-bottom: 6px !important;
         }}
 
-        .exam-kiosk-bar .kiosk-left {{
-            display: flex !important;
-            align-items: center !important;
-            gap: 12px !important;
-        }}
-
-        .exam-kiosk-bar .kiosk-dot {{
-            width: 10px !important;
-            height: 10px !important;
-            border-radius: 50% !important;
-            background: #EF4444 !important;
-            box-shadow: 0 0 10px #EF4444 !important;
-            animation: syncPulse 1.5s infinite !important;
-        }}
-
-        .exam-kiosk-bar .kiosk-title {{
-            font-size: 13.5px !important;
-            font-weight: 700 !important;
-            letter-spacing: 0.02em !important;
-        }}
-
-        .exam-kiosk-bar .kiosk-meta {{
-            font-size: 11.5px !important;
-            color: #CBD5E1 !important;
-        }}
-
-        .exam-kiosk-bar .kiosk-right {{
-            display: flex !important;
-            align-items: center !important;
-            gap: 12px !important;
-        }}
-
-        .exam-kiosk-bar .kiosk-timer-box {{
-            background: rgba(15, 23, 42, 0.75) !important;
-            padding: 6px 14px !important;
-            border-radius: 8px !important;
-            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+        .exam-sidebar-status {{
             display: flex !important;
             align-items: center !important;
             gap: 6px !important;
         }}
 
-        .exam-kiosk-bar .kiosk-timer-text {{
-            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace !important;
-            font-size: 16px !important;
+        .exam-sidebar-dot {{
+            width: 8px !important;
+            height: 8px !important;
+            border-radius: 50% !important;
+            background: #EF4444 !important;
+            box-shadow: 0 0 8px #EF4444 !important;
+            animation: syncPulse 1.5s infinite !important;
+        }}
+
+        .exam-sidebar-title {{
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.5px !important;
+            color: #E0E7FF !important;
+            text-transform: uppercase !important;
+        }}
+
+        .exam-sidebar-timer-box {{
+            background: rgba(15, 23, 42, 0.85) !important;
+            padding: 4px 10px !important;
+            border-radius: 6px !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 5px !important;
+        }}
+
+        .exam-sidebar-timer-text {{
+            font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace !important;
+            font-size: 14.5px !important;
             font-weight: 800 !important;
             color: #FBBF24 !important;
             letter-spacing: 0.5px !important;
+        }}
+
+        .exam-sidebar-meta {{
+            font-size: 11px !important;
+            color: #CBD5E1 !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+            padding-top: 6px !important;
+            gap: 8px !important;
+        }}
+
+        .exam-sidebar-meta b {{
+            color: #FFFFFF !important;
         }}
 
         /* Кнопка-иконка / закрытие */

@@ -1013,16 +1013,55 @@
             .kpi-grid { grid-template-columns: 1fr; }
         }
     
-        /* MAP UPLOAD SECTION STYLES */
+        /* MAP UPLOAD SECTION STYLES (COMPACT & SLEEK) */
+        .upload-section-body {
+            padding: 14px 20px;
+        }
+        .upload-grid {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 16px;
+            align-items: stretch;
+        }
+        @media (max-width: 860px) {
+            .upload-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .upload-info-note {
+            background: #F8FAFC;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            line-height: 1.45;
+        }
+        .upload-action-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 10px;
+        }
         .map-dropzone {
             border: 2px dashed #94A3B8;
-            border-radius: 12px;
-            padding: 28px 20px;
+            border-radius: 10px;
+            padding: 14px 12px;
             text-align: center;
             background: #F8FAFC;
             cursor: pointer;
             transition: all 0.2s ease;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            min-height: 105px;
+            box-sizing: border-box;
         }
         .map-dropzone:hover, .map-dropzone.dragover {
             border-color: #2563EB;
@@ -1030,30 +1069,31 @@
             transform: scale(1.005);
         }
         .dropzone-icon {
-            font-size: 38px;
-            margin-bottom: 8px;
+            font-size: 26px;
+            margin-bottom: 4px;
+            line-height: 1;
         }
         .dropzone-title {
-            font-size: 14.5px;
+            font-size: 13px;
             font-weight: 700;
             color: #1E293B;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
         .dropzone-subtitle {
-            font-size: 12px;
+            font-size: 11px;
             color: #64748B;
         }
         .dropzone-selected-file {
-            margin-top: 10px;
+            margin-top: 6px;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             background: #EFF6FF;
             border: 1px solid #BFDBFE;
             color: #1D4ED8;
             font-weight: 700;
-            font-size: 12.5px;
-            padding: 5px 12px;
+            font-size: 11.5px;
+            padding: 4px 10px;
             border-radius: 6px;
         }
 
@@ -1282,75 +1322,82 @@
             <div class="section-title">
                 <span>📤</span> <span>Загрузка новых карт и полигонов (Shapefile ZIP)</span>
             </div>
-            <span style="font-size: 11.5px; color: #10B981; font-weight: 700; background: #ECFDF5; border: 1px solid #A7F3D0; padding: 2px 8px; border-radius: 6px;">
+            <span style="font-size: 11px; color: #10B981; font-weight: 700; background: #ECFDF5; border: 1px solid #A7F3D0; padding: 2px 8px; border-radius: 6px;">
                 🗺️ Автогенерация в public/maps/
             </span>
         </div>
 
-        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
-            Загрузите ZIP-архив с векторными слоями региона (.shp, .dbf, .shx, .prj). Система распакует геометрию, построит топологические связи и сгенерирует интерактивную карту в <code>public/maps/</code>.
-        </p>
+        <div class="upload-section-body">
+            <form id="map-upload-form" onsubmit="handleMapUploadSubmit(event)">
+                <div class="upload-grid">
+                    <div class="upload-col-info">
+                        <div class="upload-info-note">
+                            <span>💡</span>
+                            <span>Загрузите ZIP-архив с векторными слоями региона (.shp, .dbf, .shx, .prj). Система автоматически построит топологию и сгенерирует карту в <code>public/maps/</code>.</span>
+                        </div>
+                        <div class="form-field" style="margin-top: 10px;">
+                            <label class="form-label" for="upload-region-name">Название региона / карты</label>
+                            <input type="text" id="upload-region-name" class="form-input" placeholder="Например: Самарская область (опционально)">
+                        </div>
+                        <div class="upload-action-buttons">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="resetMapUploadForm()">Сброс</button>
+                            <button type="submit" class="btn btn-primary" id="btn-upload-map" disabled>
+                                <span>🚀</span> <span>Сгенерировать карту</span>
+                            </button>
+                        </div>
+                    </div>
 
-        <form id="map-upload-form" onsubmit="handleMapUploadSubmit(event)">
-            <div class="form-field" style="margin-bottom: 14px;">
-                <label class="form-label" for="upload-region-name">Пользовательское название региона / карты (необязательно)</label>
-                <input type="text" id="upload-region-name" class="form-input" placeholder="Например: Самарская область (если не указано — определится автоматически)">
+                    <div class="upload-col-drop">
+                        <!-- Компактная Drag & Drop Зона -->
+                        <div id="map-dropzone" class="map-dropzone" onclick="document.getElementById('map-file-input').click()">
+                            <div class="dropzone-icon">📦</div>
+                            <div class="dropzone-title" id="dropzone-title">Перетащите ZIP сюда или кликните</div>
+                            <div class="dropzone-subtitle" id="dropzone-subtitle">.shp, .dbf, .shx, .prj в архиве</div>
+                            <div id="dropzone-file-display" style="display: none;"></div>
+                            <input type="file" id="map-file-input" accept=".zip,application/zip,application/x-zip-compressed" style="display: none;" onchange="handleMapFileSelected(this.files)">
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Индикатор прогресса -->
+            <div id="upload-progress-box" style="display: none; margin-top: 14px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span id="upload-status-text" style="font-size: 12.5px; font-weight: 700; color: #1E293B;">⏳ Обработка архива и генерация карты...</span>
+                    <span id="upload-percent-text" style="font-size: 11.5px; font-weight: 800; color: #2563EB;">60%</span>
+                </div>
+                <div style="width: 100%; height: 6px; background: #E2E8F0; border-radius: 3px; overflow: hidden;">
+                    <div id="upload-progress-bar" style="width: 60%; height: 100%; background: linear-gradient(90deg, #2563EB, #7C3AED); transition: width 0.3s ease;"></div>
+                </div>
             </div>
 
-            <!-- Drag & Drop Зона -->
-            <div id="map-dropzone" class="map-dropzone" onclick="document.getElementById('map-file-input').click()">
-                <div class="dropzone-icon">📦</div>
-                <div class="dropzone-title" id="dropzone-title">Перетащите ZIP-архив с шейп-файлами сюда или кликните для выбора</div>
-                <div class="dropzone-subtitle" id="dropzone-subtitle">Поддерживаются архивы (.zip), содержащие .shp, .shx, .dbf, .prj</div>
-                <div id="dropzone-file-display" style="display: none;"></div>
-                <input type="file" id="map-file-input" accept=".zip,application/zip,application/x-zip-compressed" style="display: none;" onchange="handleMapFileSelected(this.files)">
-            </div>
-
-            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px;">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="resetMapUploadForm()">Сброс</button>
-                <button type="submit" class="btn btn-primary" id="btn-upload-map" disabled>
-                    <span>🚀</span> <span>Загрузить и сгенерировать карту</span>
-                </button>
-            </div>
-        </form>
-
-        <!-- Индикатор прогресса -->
-        <div id="upload-progress-box" style="display: none; margin-top: 18px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span id="upload-status-text" style="font-size: 13px; font-weight: 700; color: #1E293B;">⏳ Обработка архива и генерация карты...</span>
-                <span id="upload-percent-text" style="font-size: 12px; font-weight: 800; color: #2563EB;">60%</span>
-            </div>
-            <div style="width: 100%; height: 8px; background: #E2E8F0; border-radius: 4px; overflow: hidden;">
-                <div id="upload-progress-bar" style="width: 60%; height: 100%; background: linear-gradient(90deg, #2563EB, #7C3AED); transition: width 0.3s ease;"></div>
-            </div>
-        </div>
-
-        <!-- Уведомление об успешной генерации -->
-        <div id="upload-success-box" style="display: none; margin-top: 18px; background: #F0FDF4; border: 1px solid #86EFAC; border-radius: 12px; padding: 20px;">
-            <div style="display: flex; align-items: flex-start; gap: 14px;">
-                <div style="font-size: 32px; line-height: 1;">🎉</div>
-                <div style="flex: 1;">
-                    <div style="font-size: 16px; font-weight: 800; color: #166534; margin-bottom: 4px;" id="upload-success-title">Карта успешно создана!</div>
-                    <div style="font-size: 13px; color: #15803D; margin-bottom: 12px;" id="upload-success-desc">Файл сохранен в public/maps/ и готов к использованию в учебном процессе.</div>
-                    
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                        <a id="upload-result-link" href="#" target="_blank" class="btn btn-success btn-sm">
-                            <span>🗺️</span> <span>Открыть созданную карту</span>
-                        </a>
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="copyUploadedMapLink()">
-                            <span>📋</span> <span>Скопировать ссылку</span>
-                        </button>
+            <!-- Уведомление об успешной генерации -->
+            <div id="upload-success-box" style="display: none; margin-top: 14px; background: #F0FDF4; border: 1px solid #86EFAC; border-radius: 10px; padding: 14px 18px;">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                    <div style="font-size: 26px; line-height: 1;">🎉</div>
+                    <div style="flex: 1;">
+                        <div style="font-size: 14.5px; font-weight: 800; color: #166534; margin-bottom: 2px;" id="upload-success-title">Карта успешно создана!</div>
+                        <div style="font-size: 12px; color: #15803D; margin-bottom: 10px;" id="upload-success-desc">Файл сохранен в public/maps/ и готов к использованию в учебном процессе.</div>
+                        
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                            <a id="upload-result-link" href="#" target="_blank" class="btn btn-success btn-sm">
+                                <span>🗺️</span> <span>Открыть созданную карту</span>
+                            </a>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="copyUploadedMapLink()">
+                                <span>📋</span> <span>Скопировать ссылку</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Сообщение об ошибке -->
-        <div id="upload-error-box" style="display: none; margin-top: 18px; background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 12px; padding: 16px; color: #991B1B; font-size: 13px;">
-            <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; margin-bottom: 4px;">
-                <span>⚠️</span> <span>Ошибка генерации карты</span>
+            <!-- Сообщение об ошибке -->
+            <div id="upload-error-box" style="display: none; margin-top: 14px; background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 10px; padding: 12px 16px; color: #991B1B; font-size: 12.5px;">
+                <div style="display: flex; align-items: center; gap: 6px; font-weight: 800; margin-bottom: 2px;">
+                    <span>⚠️</span> <span>Ошибка генерации карты</span>
+                </div>
+                <div id="upload-error-message">Описание ошибки...</div>
             </div>
-            <div id="upload-error-message">Описание ошибки...</div>
         </div>
     </section>
 
@@ -2252,43 +2299,6 @@ __SERVER_SESSION_JSON__
 
         tbody.innerHTML = html;
     }
-
-    function copyToken(token) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(token).then(() => {
-                showToast(`Токен ${token} скопирован!`);
-            }).catch(() => {
-                prompt('Скопируйте токен:', token);
-            });
-        } else {
-            prompt('Скопируйте токен:', token);
-        }
-    }
-
-    function showToast(text) {
-        const toast = document.getElementById('toast');
-        const toastText = document.getElementById('toast-text');
-        if (toast && toastText) {
-            toastText.textContent = text;
-            toast.style.display = 'flex';
-            setTimeout(() => {
-                toast.style.display = 'none';
-            }, 2500);
-        }
-    }
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-
-    window.addEventListener('DOMContentLoaded', initData);
-</script>
 
     function copyToken(token) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
