@@ -1012,6 +1012,51 @@
             .portal-header { padding: 14px; }
             .kpi-grid { grid-template-columns: 1fr; }
         }
+    
+        /* MAP UPLOAD SECTION STYLES */
+        .map-dropzone {
+            border: 2px dashed #94A3B8;
+            border-radius: 12px;
+            padding: 28px 20px;
+            text-align: center;
+            background: #F8FAFC;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .map-dropzone:hover, .map-dropzone.dragover {
+            border-color: #2563EB;
+            background: #EFF6FF;
+            transform: scale(1.005);
+        }
+        .dropzone-icon {
+            font-size: 38px;
+            margin-bottom: 8px;
+        }
+        .dropzone-title {
+            font-size: 14.5px;
+            font-weight: 700;
+            color: #1E293B;
+            margin-bottom: 4px;
+        }
+        .dropzone-subtitle {
+            font-size: 12px;
+            color: #64748B;
+        }
+        .dropzone-selected-file {
+            margin-top: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #EFF6FF;
+            border: 1px solid #BFDBFE;
+            color: #1D4ED8;
+            font-weight: 700;
+            font-size: 12.5px;
+            padding: 5px 12px;
+            border-radius: 6px;
+        }
+
     </style>
 </head>
 <body>
@@ -1228,6 +1273,84 @@
                 <span class="btn-sparkle">🚀</span>
                 <span>Запустить тест для группы</span>
             </button>
+        </div>
+    </section>
+
+    <!-- 4. ЗАГРУЗКА И ГЕНЕРАЦИЯ НОВЫХ КАРТ (SHAPEFILE ZIP) -->
+    <section class="section-card" id="map-upload-section">
+        <div class="section-header">
+            <div class="section-title">
+                <span>📤</span> <span>Загрузка новых карт и полигонов (Shapefile ZIP)</span>
+            </div>
+            <span style="font-size: 11.5px; color: #10B981; font-weight: 700; background: #ECFDF5; border: 1px solid #A7F3D0; padding: 2px 8px; border-radius: 6px;">
+                🗺️ Автогенерация в public/maps/
+            </span>
+        </div>
+
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
+            Загрузите ZIP-архив с векторными слоями региона (.shp, .dbf, .shx, .prj). Система распакует геометрию, построит топологические связи и сгенерирует интерактивную карту в <code>public/maps/</code>.
+        </p>
+
+        <form id="map-upload-form" onsubmit="handleMapUploadSubmit(event)">
+            <div class="form-field" style="margin-bottom: 14px;">
+                <label class="form-label" for="upload-region-name">Пользовательское название региона / карты (необязательно)</label>
+                <input type="text" id="upload-region-name" class="form-input" placeholder="Например: Самарская область (если не указано — определится автоматически)">
+            </div>
+
+            <!-- Drag & Drop Зона -->
+            <div id="map-dropzone" class="map-dropzone" onclick="document.getElementById('map-file-input').click()">
+                <div class="dropzone-icon">📦</div>
+                <div class="dropzone-title" id="dropzone-title">Перетащите ZIP-архив с шейп-файлами сюда или кликните для выбора</div>
+                <div class="dropzone-subtitle" id="dropzone-subtitle">Поддерживаются архивы (.zip), содержащие .shp, .shx, .dbf, .prj</div>
+                <div id="dropzone-file-display" style="display: none;"></div>
+                <input type="file" id="map-file-input" accept=".zip,application/zip,application/x-zip-compressed" style="display: none;" onchange="handleMapFileSelected(this.files)">
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="resetMapUploadForm()">Сброс</button>
+                <button type="submit" class="btn btn-primary" id="btn-upload-map" disabled>
+                    <span>🚀</span> <span>Загрузить и сгенерировать карту</span>
+                </button>
+            </div>
+        </form>
+
+        <!-- Индикатор прогресса -->
+        <div id="upload-progress-box" style="display: none; margin-top: 18px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span id="upload-status-text" style="font-size: 13px; font-weight: 700; color: #1E293B;">⏳ Обработка архива и генерация карты...</span>
+                <span id="upload-percent-text" style="font-size: 12px; font-weight: 800; color: #2563EB;">60%</span>
+            </div>
+            <div style="width: 100%; height: 8px; background: #E2E8F0; border-radius: 4px; overflow: hidden;">
+                <div id="upload-progress-bar" style="width: 60%; height: 100%; background: linear-gradient(90deg, #2563EB, #7C3AED); transition: width 0.3s ease;"></div>
+            </div>
+        </div>
+
+        <!-- Уведомление об успешной генерации -->
+        <div id="upload-success-box" style="display: none; margin-top: 18px; background: #F0FDF4; border: 1px solid #86EFAC; border-radius: 12px; padding: 20px;">
+            <div style="display: flex; align-items: flex-start; gap: 14px;">
+                <div style="font-size: 32px; line-height: 1;">🎉</div>
+                <div style="flex: 1;">
+                    <div style="font-size: 16px; font-weight: 800; color: #166534; margin-bottom: 4px;" id="upload-success-title">Карта успешно создана!</div>
+                    <div style="font-size: 13px; color: #15803D; margin-bottom: 12px;" id="upload-success-desc">Файл сохранен в public/maps/ и готов к использованию в учебном процессе.</div>
+                    
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                        <a id="upload-result-link" href="#" target="_blank" class="btn btn-success btn-sm">
+                            <span>🗺️</span> <span>Открыть созданную карту</span>
+                        </a>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="copyUploadedMapLink()">
+                            <span>📋</span> <span>Скопировать ссылку</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Сообщение об ошибке -->
+        <div id="upload-error-box" style="display: none; margin-top: 18px; background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 12px; padding: 16px; color: #991B1B; font-size: 13px;">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; margin-bottom: 4px;">
+                <span>⚠️</span> <span>Ошибка генерации карты</span>
+            </div>
+            <div id="upload-error-message">Описание ошибки...</div>
         </div>
     </section>
 
@@ -2202,6 +2325,224 @@ __SERVER_SESSION_JSON__
     }
 
     window.addEventListener('DOMContentLoaded', initData);
+
+    // ==========================================
+    // ЛОГИКА DRAG-AND-DROP И ЗАГРУЗКИ КАРТ (ZIP)
+    // ==========================================
+    let selectedMapFile = null;
+    let lastUploadedMapUrl = '';
+
+    function initDropzoneEvents() {
+        const dropzone = document.getElementById('map-dropzone');
+        if (!dropzone) return;
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.add('dragover');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.remove('dragover');
+            });
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            if (dt && dt.files && dt.files.length > 0) {
+                handleMapFileSelected(dt.files);
+            }
+        });
+    }
+
+    function handleMapFileSelected(files) {
+        if (!files || files.length === 0) return;
+        const file = files[0];
+        if (!file.name.toLowerCase().endsWith('.zip')) {
+            showToast('Пожалуйста, выберите архив в формате .zip', true);
+            return;
+        }
+
+        selectedMapFile = file;
+        const dropzoneTitle = document.getElementById('dropzone-title');
+        const dropzoneSubtitle = document.getElementById('dropzone-subtitle');
+        const dropzoneDisplay = document.getElementById('dropzone-file-display');
+        const btnUpload = document.getElementById('btn-upload-map');
+
+        if (dropzoneTitle) dropzoneTitle.style.display = 'none';
+        if (dropzoneSubtitle) dropzoneSubtitle.style.display = 'none';
+
+        if (dropzoneDisplay) {
+            dropzoneDisplay.style.display = 'block';
+            dropzoneDisplay.innerHTML = `
+                <div class="dropzone-selected-file">
+                    <span>📦 ${escapeHtml(file.name)}</span>
+                    <span style="font-weight: 400; opacity: 0.8;">(${(file.size / (1024 * 1024)).toFixed(2)} МБ)</span>
+                </div>
+            `;
+        }
+
+        if (btnUpload) btnUpload.disabled = false;
+        hideUploadFeedback();
+    }
+
+    function resetMapUploadForm() {
+        selectedMapFile = null;
+        lastUploadedMapUrl = '';
+        const fileInput = document.getElementById('map-file-input');
+        if (fileInput) fileInput.value = '';
+        const nameInput = document.getElementById('upload-region-name');
+        if (nameInput) nameInput.value = '';
+
+        const dropzoneTitle = document.getElementById('dropzone-title');
+        const dropzoneSubtitle = document.getElementById('dropzone-subtitle');
+        const dropzoneDisplay = document.getElementById('dropzone-file-display');
+        const btnUpload = document.getElementById('btn-upload-map');
+
+        if (dropzoneTitle) dropzoneTitle.style.display = 'block';
+        if (dropzoneSubtitle) dropzoneSubtitle.style.display = 'block';
+        if (dropzoneDisplay) {
+            dropzoneDisplay.style.display = 'none';
+            dropzoneDisplay.innerHTML = '';
+        }
+        if (btnUpload) btnUpload.disabled = true;
+
+        hideUploadFeedback();
+    }
+
+    function hideUploadFeedback() {
+        const progressBox = document.getElementById('upload-progress-box');
+        const successBox = document.getElementById('upload-success-box');
+        const errorBox = document.getElementById('upload-error-box');
+        if (progressBox) progressBox.style.display = 'none';
+        if (successBox) successBox.style.display = 'none';
+        if (errorBox) errorBox.style.display = 'none';
+    }
+
+    async function handleMapUploadSubmit(event) {
+        event.preventDefault();
+        if (!selectedMapFile) {
+            showToast('Выберите ZIP-файл перед загрузкой', true);
+            return;
+        }
+
+        const regionName = (document.getElementById('upload-region-name').value || '').trim();
+        const progressBox = document.getElementById('upload-progress-box');
+        const progressBar = document.getElementById('upload-progress-bar');
+        const progressStatus = document.getElementById('upload-status-text');
+        const progressPercent = document.getElementById('upload-percent-text');
+        const successBox = document.getElementById('upload-success-box');
+        const errorBox = document.getElementById('upload-error-box');
+        const btnUpload = document.getElementById('btn-upload-map');
+
+        hideUploadFeedback();
+        if (btnUpload) btnUpload.disabled = true;
+        if (progressBox) progressBox.style.display = 'block';
+
+        let progress = 10;
+        if (progressBar) progressBar.style.width = '10%';
+        if (progressPercent) progressPercent.textContent = '10%';
+        if (progressStatus) progressStatus.textContent = '⏳ Передача ZIP-архива на сервер...';
+
+        const timer = setInterval(() => {
+            if (progress < 85) {
+                progress += Math.floor(Math.random() * 15) + 5;
+                if (progress > 85) progress = 85;
+                if (progressBar) progressBar.style.width = `${progress}%`;
+                if (progressPercent) progressPercent.textContent = `${progress}%`;
+                if (progress > 40 && progress < 70) {
+                    if (progressStatus) progressStatus.textContent = '🔍 Распаковка и анализ Shapefile геометрии...';
+                } else if (progress >= 70) {
+                    if (progressStatus) progressStatus.textContent = '🗺️ Генерация Leaflet слоев и топологии районов...';
+                }
+            }
+        }, 400);
+
+        const formData = new FormData();
+        formData.append('file', selectedMapFile);
+        if (regionName) {
+            formData.append('region_name', regionName);
+        }
+
+        try {
+            const res = await fetch('/api/upload-map', {
+                method: 'POST',
+                body: formData
+            });
+
+            clearInterval(timer);
+
+            if (!res.ok) {
+                let errText = 'Ошибка при обработке архива';
+                try {
+                    const errJson = await res.json();
+                    errText = errJson.detail || errJson.message || errText;
+                } catch(e) {}
+                throw new Error(errText);
+            }
+
+            const data = await res.json();
+            if (progressBar) progressBar.style.width = '100%';
+            if (progressPercent) progressPercent.textContent = '100%';
+            if (progressStatus) progressStatus.textContent = '✅ Карта успешно создана!';
+
+            setTimeout(() => {
+                if (progressBox) progressBox.style.display = 'none';
+                if (successBox) successBox.style.display = 'block';
+
+                const titleEl = document.getElementById('upload-success-title');
+                const descEl = document.getElementById('upload-success-desc');
+                const linkEl = document.getElementById('upload-result-link');
+
+                if (titleEl) titleEl.textContent = `Карта «${data.region_name}» готова!`;
+                if (descEl) descEl.textContent = `Сформировано ${data.districts_count || 0} полигонов территорий. Карта сохранена в public/maps/${data.filename}`;
+                if (linkEl) {
+                    linkEl.href = data.map_url || data.direct_url;
+                    lastUploadedMapUrl = data.map_url || data.direct_url;
+                }
+
+                // Добавляем созданную карту в выпадающий список тестирования
+                const dispatchSelect = document.getElementById('dispatch-region-select');
+                if (dispatchSelect && data.filename) {
+                    const opt = document.createElement('option');
+                    opt.value = data.filename;
+                    opt.textContent = `🗺️ ${data.region_name} (Загруженная карта)`;
+                    opt.selected = true;
+                    dispatchSelect.insertBefore(opt, dispatchSelect.firstChild);
+                }
+
+                showToast(`Карта «${data.region_name}» сгенерирована!`);
+            }, 600);
+
+        } catch (err) {
+            clearInterval(timer);
+            if (progressBox) progressBox.style.display = 'none';
+            if (errorBox) errorBox.style.display = 'block';
+            const msgEl = document.getElementById('upload-error-message');
+            if (msgEl) msgEl.textContent = err.message || 'Произошла непредвиденная ошибка';
+            showToast('Ошибка при загрузке карты', true);
+        } finally {
+            if (btnUpload) btnUpload.disabled = false;
+        }
+    }
+
+    function copyUploadedMapLink() {
+        if (!lastUploadedMapUrl) return;
+        const fullUrl = `${window.location.origin}${lastUploadedMapUrl.startsWith('/') ? '' : '/'}${lastUploadedMapUrl}`;
+        navigator.clipboard.writeText(fullUrl).then(() => {
+            showToast('Ссылка на карту скопирована в буфер обмена!');
+        }).catch(() => {
+            showToast('Не удалось скопировать ссылку', true);
+        });
+    }
+
+    window.addEventListener('DOMContentLoaded', initDropzoneEvents);
+
 </script>
 
 </body>

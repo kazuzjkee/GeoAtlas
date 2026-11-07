@@ -122,33 +122,92 @@ def slugify_name(text):
     return custom_slugs.get(slug, slug or 'region')
 
 def clean_geom(geom):
-    """Очищает и восстанавливает валидность геометрии, преобразуя GeometryCollection в Polygon/MultiPolygon."""
-    if geom is None or geom.is_empty:
-        return geom
-    if not geom.is_valid:
-        try:
-            from shapely.validation import make_valid
-            geom = make_valid(geom)
-        except Exception:
+    """Очищает и восстанавливает валидность геометрии, преобразуя GeometryCollection в Polygon/MultiPolygon.
+    
+    Безопасно обрабатывает None, пустые геометрии, некорректные кольца и вложенные GeometryCollection.
+    """
+    if geom is None:
+        return None
+    try:
+        if geom.is_empty:
+            return geom
+    except Exception:
+        return None
+
+    # 1. Восстановление валидности геометрии
+    try:
+        if not geom.is_valid:
             try:
-                geom = geom.buffer(0)
+                from shapely.validation import make_valid
+                geom = make_valid(geom)
             except Exception:
-                pass
-    if geom.geom_type == 'GeometryCollection':
-        from shapely.ops import unary_union
-        polys = [g for g in geom.geoms if g.geom_type in ['Polygon', 'MultiPolygon']]
-        if polys:
-            geom = unary_union(polys)
-        else:
-            lines = [g for g in geom.geoms if g.geom_type in ['LineString', 'MultiLineString']]
-            if lines:
-                geom = unary_union(lines)
+                try:
+                    geom = geom.buffer(0)
+                except Exception:
+                    pass
+    except Exception:
+        try:
+            geom = geom.buffer(0)
+        except Exception:
+            pass
+
+    if geom is None:
+        return None
+
+    try:
+        if geom.is_empty:
+            return geom
+    except Exception:
+        return None
+
+    # 2. Безопасное распаковывание GeometryCollection в однородную геометрию
+    if getattr(geom, 'geom_type', '') == 'GeometryCollection':
+        try:
+            from shapely.ops import unary_union
+            sub_geoms = []
+            for g in getattr(geom, 'geoms', []):
+                if g is not None:
+                    try:
+                        if not g.is_empty:
+                            cg = clean_geom(g)
+                            if cg is not None and not cg.is_empty:
+                                sub_geoms.append(cg)
+                    except Exception:
+                        pass
+
+            polys = [g for g in sub_geoms if g.geom_type in ['Polygon', 'MultiPolygon']]
+            if polys:
+                geom = unary_union(polys)
+            else:
+                lines = [g for g in sub_geoms if g.geom_type in ['LineString', 'MultiLineString']]
+                if lines:
+                    geom = unary_union(lines)
+                else:
+                    points = [g for g in sub_geoms if g.geom_type in ['Point', 'MultiPoint']]
+                    if points:
+                        geom = unary_union(points)
+        except Exception:
+            pass
+
+    # 3. Финальная проверка валидности
+    try:
+        if geom is not None and not geom.is_empty and not geom.is_valid:
+            try:
+                from shapely.validation import make_valid
+                geom = make_valid(geom)
+            except Exception:
+                geom = geom.buffer(0)
+    except Exception:
+        pass
+
     return geom
 
 # ==========================================
 # ГИБРИДНАЯ КОНФИГУРАЦИЯ РЕГИОНОВ (ДЕТАЛЬНЫЕ КАРТЫ)
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MAPS_DIR = os.path.join(BASE_DIR, 'public', 'maps')
+os.makedirs(MAPS_DIR, exist_ok=True)
 
 REGIONS_CONFIG = {
     'rostov': {
@@ -156,7 +215,7 @@ REGIONS_CONFIG = {
         'title': 'Ростовская область',
         'center': [47.5, 40.5],
         'zoom': 8,
-        'output': 'rostov_quiz_map.html',
+        'output': os.path.join(MAPS_DIR, 'rostov_quiz_map.html'),
         'is_rf': False,
         'files': {
             'districts': 'raion.shp',
@@ -170,7 +229,7 @@ REGIONS_CONFIG = {
         'title': 'Краснодарский край',
         'center': [45.2, 39.0],
         'zoom': 8,
-        'output': 'krasnodar_quiz_map.html',
+        'output': os.path.join(MAPS_DIR, 'krasnodar_quiz_map.html'),
         'is_rf': False,
         'files': {
             'districts': 'boundary-3857.shp',
@@ -184,7 +243,7 @@ REGIONS_CONFIG = {
         'title': 'Российская Федерация',
         'center': [63.0, 95.0],
         'zoom': 3,
-        'output': 'russia_quiz_map.html',
+        'output': os.path.join(MAPS_DIR, 'russia_quiz_map.html'),
         'is_rf': True,
         'files': {
             'districts': 'gadm41_RUS_1.shp',
@@ -550,7 +609,8 @@ class InteractiveAtlas:
             self.region_name = cfg['title']
             self.is_rf = cfg.get('is_rf', False)
             self.slug = self.region_key
-            self.output_filename = cfg.get('output', f"{self.slug}_quiz_map.html")
+            default_out = os.path.join(MAPS_DIR, f"{self.slug}_quiz_map.html")
+            self.output_filename = cfg.get('output', default_out)
             self.center = cfg['center']
             self.zoom = cfg['zoom']
         else:
@@ -558,7 +618,7 @@ class InteractiveAtlas:
             self.is_rf = is_rf
             self.ru_title = REGION_TRANSLATIONS.get(self.region_name, self.region_name)
             self.slug = slugify_name(self.region_name)
-            self.output_filename = f"{self.slug}_quiz_map.html"
+            self.output_filename = os.path.join(MAPS_DIR, f"{self.slug}_quiz_map.html")
             self.center = [55.75, 37.61]
             self.zoom = 7
 
@@ -632,78 +692,150 @@ class InteractiveAtlas:
         self.rivers_gdf = None
 
     def _fix_antimeridian(self, geom):
-        if geom is None or geom.is_empty or not geom.is_valid:
-            return geom
-            
+        """Корректирует координаты восточнее 180-го меридиана (Чукотка, о. Врангеля и др.) для корректного отображения в Leaflet.
+        
+        Точки намеренно НЕ сдвигаются (чтобы маркеры не улетали за край карты).
+        """
+        if geom is None:
+            return None
         try:
-            if geom.geom_type == 'Polygon':
+            if geom.is_empty:
+                return geom
+        except Exception:
+            return geom
+
+        # Если геометрия невалидна, предварительно восстанавливаем ее
+        try:
+            if not geom.is_valid:
+                geom = clean_geom(geom)
+                if geom is None or geom.is_empty:
+                    return geom
+        except Exception:
+            pass
+
+        try:
+            g_type = getattr(geom, 'geom_type', '')
+            if g_type == 'Polygon':
                 exterior = [(x + 360 if x < 0 else x, y) for x, y in geom.exterior.coords]
                 interiors = [[(x + 360 if x < 0 else x, y) for x, y in interior.coords] for interior in geom.interiors]
-                return Polygon(exterior, interiors)
-            elif geom.geom_type == 'MultiPolygon':
-                return MultiPolygon([self._fix_antimeridian(p) for p in geom.geoms])
-            elif geom.geom_type == 'LineString':
+                new_poly = Polygon(exterior, interiors)
+                return clean_geom(new_poly) if not new_poly.is_valid else new_poly
+            elif g_type == 'MultiPolygon':
+                fixed_parts = []
+                for p in geom.geoms:
+                    if p is not None and not p.is_empty:
+                        fixed_p = self._fix_antimeridian(p)
+                        if fixed_p is not None and not fixed_p.is_empty:
+                            if fixed_p.geom_type == 'Polygon':
+                                fixed_parts.append(fixed_p)
+                            elif fixed_p.geom_type == 'MultiPolygon':
+                                fixed_parts.extend([sub for sub in fixed_p.geoms if not sub.is_empty])
+                return MultiPolygon(fixed_parts) if fixed_parts else geom
+            elif g_type == 'LineString':
                 return LineString([(x + 360 if x < 0 else x, y) for x, y in geom.coords])
-            elif geom.geom_type == 'MultiLineString':
-                return MultiLineString([self._fix_antimeridian(ls) for ls in geom.geoms])
-            elif geom.geom_type == 'Point':
+            elif g_type == 'MultiLineString':
+                fixed_lines = []
+                for ls in geom.geoms:
+                    if ls is not None and not ls.is_empty:
+                        fixed_ls = self._fix_antimeridian(ls)
+                        if fixed_ls is not None and not fixed_ls.is_empty:
+                            if fixed_ls.geom_type == 'LineString':
+                                fixed_lines.append(fixed_ls)
+                            elif fixed_ls.geom_type == 'MultiLineString':
+                                fixed_lines.extend([sub for sub in fixed_ls.geoms if not sub.is_empty])
+                return MultiLineString(fixed_lines) if fixed_lines else geom
+            elif g_type == 'GeometryCollection':
+                from shapely.geometry import GeometryCollection
+                fixed_coll = [self._fix_antimeridian(g) for g in geom.geoms if g is not None and not g.is_empty]
+                return clean_geom(GeometryCollection(fixed_coll)) if fixed_coll else geom
+            elif g_type in ['Point', 'MultiPoint']:
                 # Точки НЕ сдвигаем за 180 меридиан, иначе в Leaflet маркеры улетают за пределы карты
                 return geom
         except Exception:
             pass
-            
+
         return geom
 
     # БРОНЕБОЙНЫЙ ПРЕДОХРАНИТЕЛЬ CRS
     def _safe_to_crs(self, gdf):
         if gdf is None or gdf.empty:
             return gdf
-            
+
+        if 'geometry' not in gdf.columns:
+            return gdf
+
+        # 1. Первичная фильтрация отсутствующих и пустых геометрий
+        gdf = gdf.dropna(subset=['geometry']).copy()
+        gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty].copy()
+        if gdf.empty:
+            return gdf
+
+        def _is_degree_bounds(bounds):
+            if bounds is None or len(bounds) < 4:
+                return False
+            import numpy as np
+            if any(np.isnan(val) or np.isinf(val) for val in bounds):
+                return False
+            minx, miny, maxx, maxy = bounds
+            return (-360.0 <= minx <= 360.0) and (-90.0 <= miny <= 90.0) and (-360.0 <= maxx <= 360.0) and (-90.0 <= maxy <= 90.0)
+
+        # 2. Безопасное определение проекции и переход в EPSG:4326
         try:
-            if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
-                gdf = gdf.to_crs('EPSG:4326')
-            elif not gdf.crs:
-                b = gdf.total_bounds
-                if (-360 <= b[0] <= 360) and (-90 <= b[1] <= 90) and (-360 <= b[2] <= 360) and (-90 <= b[3] <= 90):
-                    gdf = gdf.set_crs('EPSG:4326')
-                else:
-                    gdf = gdf.set_crs('EPSG:3857').to_crs('EPSG:4326')
-        except Exception as e:
-            b = gdf.total_bounds
-            is_degrees = (-360 <= b[0] <= 360) and (-90 <= b[1] <= 90) and (-360 <= b[2] <= 360) and (-90 <= b[3] <= 90)
-            
-            if is_degrees:
-                gdf = gdf.set_crs('EPSG:4326', allow_override=True)
+            if gdf.crs:
+                crs_str = str(gdf.crs).upper()
+                if 'EPSG:4326' not in crs_str and '4326' not in crs_str:
+                    gdf = gdf.to_crs('EPSG:4326')
             else:
-                try:
-                    gdf = gdf.set_crs('EPSG:3857', allow_override=True).to_crs('EPSG:4326')
-                except Exception:
+                b = gdf.total_bounds
+                if _is_degree_bounds(b):
                     gdf = gdf.set_crs('EPSG:4326', allow_override=True)
-                    
-        # Очистка и восстановление геометрии
+                else:
+                    try:
+                        gdf = gdf.set_crs('EPSG:3857', allow_override=True).to_crs('EPSG:4326')
+                    except Exception:
+                        gdf = gdf.set_crs('EPSG:4326', allow_override=True)
+        except Exception:
+            try:
+                b = gdf.total_bounds
+                if _is_degree_bounds(b):
+                    gdf = gdf.set_crs('EPSG:4326', allow_override=True)
+                else:
+                    try:
+                        gdf = gdf.set_crs('EPSG:3857', allow_override=True).to_crs('EPSG:4326')
+                    except Exception:
+                        gdf = gdf.set_crs('EPSG:4326', allow_override=True)
+            except Exception:
+                pass
+
+        # 3. Очистка и восстановление геометрии (GeometryCollection, bowtie, invalid rings)
         gdf = gdf.dropna(subset=['geometry'])
-        bounds = gdf.bounds
-        gdf = gdf[~bounds.isna().any(axis=1)]
-        gdf = gdf[~gdf.geometry.is_empty]
+        try:
+            bounds = gdf.bounds
+            gdf = gdf[~bounds.isna().any(axis=1)]
+        except Exception:
+            pass
+
+        gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty]
         try:
             gdf['geometry'] = gdf['geometry'].apply(clean_geom)
         except Exception:
             pass
+
         gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty]
-        
-        # Фикс Чукотки и территорий за 180 меридианом
+
+        # 4. Фикс Чукотки и территорий за 180 меридианом
         try:
             gdf.geometry = gdf.geometry.apply(self._fix_antimeridian)
         except Exception:
             pass
-        
-        # Упрощение полигонов: ТОЛЬКО для карты всей России (для сохранения компактного размера)
+
+        # 5. Упрощение полигонов: ТОЛЬКО для карты всей России (для сохранения компактного размера)
         if getattr(self, 'is_rf', False) or getattr(self, 'region_key', '') == 'russia':
             try:
                 gdf.geometry = gdf.geometry.simplify(0.015, preserve_topology=True)
             except Exception:
                 pass
-                
+
         return gdf
 
     def _load_gdf(self, source, layer_key):
@@ -958,6 +1090,49 @@ class InteractiveAtlas:
         self.centers_gdf = point_gdf.loc[valid_indices].copy() if valid_indices else point_gdf
         return self.centers_gdf
 
+    def _estimate_metrics(self, name, area_sq_km=0):
+        """Оценивает численность населения и объем ВРП района/субъекта по справочникам или площади (DRY)."""
+        search_name = str(name or '').lower().replace('\u0301', '').replace('e', 'е').replace('ё', 'е').strip()
+        area_sq_km = float(area_sq_km or 0)
+
+        # 1. Поиск населения
+        population = None
+        for key, val in KNOWN_POPULATION.items():
+            if key in search_name:
+                population = val
+                break
+
+        if population is None:
+            if 'область' in search_name:
+                population = int(area_sq_km * 20)
+            elif 'республика' in search_name:
+                population = int(area_sq_km * 10)
+            elif 'край' in search_name:
+                population = int(area_sq_km * 5)
+            elif 'округ' in search_name or 'аок' in search_name:
+                population = int(area_sq_km * 1)
+            else:
+                population = int(area_sq_km * 25)
+
+        # 2. Поиск и расчет ВРП (Экономика)
+        grp = None
+        for key, val in KNOWN_ECONOMY.items():
+            if key in search_name:
+                grp = float(val)
+                break
+
+        if grp is None:
+            if population == 0:
+                grp = 0.0
+            elif population > 500_000:
+                grp = round(population * 1.2 / 1000, 1)
+            else:
+                grp = round(population * 0.85 / 1000, 1)
+        else:
+            grp = round(grp, 1)
+
+        return population, grp
+
     def _calculate_neighbors_data(self):
         if self.districts_gdf is None or len(self.districts_gdf) == 0:
             return []
@@ -980,13 +1155,32 @@ class InteractiveAtlas:
             except Exception:
                 centers_wgs = self.centers_gdf
 
-        for idx, row in valid_gdf.iterrows():
-            current_geom = row.geometry
-            current_name = str(row['display_name'])
+        # Пространственный индекс для ускорения поиска соседей
+        valid_rows = [(idx, row.geometry, str(row['display_name'])) for idx, row in valid_gdf.iterrows()]
+        gdf_search = gpd.GeoDataFrame(geometry=[geom for _, geom, _ in valid_rows])
+        sindex = gdf_search.sindex if (hasattr(gdf_search, 'sindex') and gdf_search.sindex is not None) else None
+
+        for pos, (idx, current_geom, current_name) in enumerate(valid_rows):
             buffered_geom = current_geom.buffer(0.005)
-            intersecting_rows = valid_gdf[valid_gdf.geometry.intersects(buffered_geom)]
-            neighbor_names = [str(n) for n in intersecting_rows['display_name'].tolist() if str(n) != current_name and str(n).strip()]
-            
+            neighbor_names = []
+
+            c_positions = None
+            if sindex is not None:
+                try:
+                    c_positions = sorted(sindex.query(buffered_geom, predicate='intersects'))
+                except Exception:
+                    c_positions = None
+
+            if c_positions is not None:
+                for c_pos in c_positions:
+                    if c_pos < len(valid_rows):
+                        _, other_geom, other_name = valid_rows[c_pos]
+                        if other_name != current_name and other_name.strip() and other_geom.intersects(buffered_geom):
+                            neighbor_names.append(other_name)
+            else:
+                intersecting_rows = valid_gdf[valid_gdf.geometry.intersects(buffered_geom)]
+                neighbor_names = [str(n) for n in intersecting_rows['display_name'].tolist() if str(n) != current_name and str(n).strip()]
+
             center_name = "Административный центр"
             if centers_wgs is not None and not centers_wgs.empty:
                 matched_c = centers_wgs[centers_wgs.geometry.within(current_geom)]
@@ -996,45 +1190,10 @@ class InteractiveAtlas:
                     status_clean = str(status).replace('ru:', '') if status else ''
                     center_name = f"{c_val} ({status_clean})" if status_clean else str(c_val)
 
-            area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if idx in metric_gdf.index else 0
+            area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if (idx in metric_gdf.index and metric_gdf.loc[idx].geometry is not None and not metric_gdf.loc[idx].geometry.is_empty) else 0
 
-            # === УМНЫЙ ПОИСК НАСЕЛЕНИЯ ===
-            population = None
-            search_name = current_name.lower().replace('\u0301', '').replace('e', 'е').replace('ё', 'е')
-            
-            for key, val in KNOWN_POPULATION.items():
-                if key in search_name:
-                    population = val
-                    break
-                    
-            if population is None:
-                if 'область' in search_name:
-                    population = int(area_sq_km * 20)
-                elif 'республика' in search_name:
-                    population = int(area_sq_km * 10)
-                elif 'край' in search_name:
-                    population = int(area_sq_km * 5)
-                elif 'округ' in search_name or 'аок' in search_name:
-                    population = int(area_sq_km * 1)
-                else:
-                    population = int(area_sq_km * 25)
-
-            # === УМНЫЙ ПОИСК / РАСЧЕТ ВРП (ЭКОНОМИКА) ===
-            grp = None
-            for key, val in KNOWN_ECONOMY.items():
-                if key in search_name:
-                    grp = float(val)
-                    break
-
-            if grp is None:
-                if population == 0:
-                    grp = 0.0
-                elif population > 500_000:
-                    grp = round(population * 1.2 / 1000, 1)
-                else:
-                    grp = round(population * 0.85 / 1000, 1)
-            else:
-                grp = round(grp, 1)
+            # Единая оценка населения и ВРП через приватный метод (DRY)
+            population, grp = self._estimate_metrics(current_name, area_sq_km)
 
             neighbors_data.append({
                 'name': current_name,
@@ -1146,7 +1305,7 @@ class InteractiveAtlas:
 
             neighbor_lookup = {d['name']: d for d in neighbors_data}
 
-            # Топологический расчет соседства районов для режима конструктора
+            # Топологический расчет соседства районов для режима конструктора (оптимизирован через sindex)
             district_list = []
             for idx, row in valid_districts.iterrows():
                 if row.geometry is not None and not row.geometry.is_empty:
@@ -1154,14 +1313,34 @@ class InteractiveAtlas:
                     district_list.append((idx, row.geometry, d_name))
 
             district_neighbors_map = {}
-            for idx, geom, d_name in district_list:
+            gdf_district_search = gpd.GeoDataFrame(geometry=[geom for _, geom, _ in district_list])
+            sindex = gdf_district_search.sindex if (hasattr(gdf_district_search, 'sindex') and gdf_district_search.sindex is not None) else None
+
+            for pos, (idx, geom, d_name) in enumerate(district_list):
                 b_geom = geom.buffer(0.006)
                 n_ids = []
                 n_names = []
-                for other_idx, other_geom, other_name in district_list:
-                    if other_idx != idx and other_geom.intersects(b_geom):
-                        n_ids.append(f"dist_{other_idx}")
-                        n_names.append(other_name)
+
+                c_positions = None
+                if sindex is not None:
+                    try:
+                        c_positions = sorted(sindex.query(b_geom, predicate='intersects'))
+                    except Exception:
+                        c_positions = None
+
+                if c_positions is not None:
+                    for c_pos in c_positions:
+                        if c_pos < len(district_list):
+                            other_idx, other_geom, other_name = district_list[c_pos]
+                            if other_idx != idx and other_geom.intersects(b_geom):
+                                n_ids.append(f"dist_{other_idx}")
+                                n_names.append(other_name)
+                else:
+                    for other_idx, other_geom, other_name in district_list:
+                        if other_idx != idx and other_geom.intersects(b_geom):
+                            n_ids.append(f"dist_{other_idx}")
+                            n_names.append(other_name)
+
                 n_info = neighbor_lookup.get(d_name, {})
                 for ext_name in n_info.get('neighbors', []):
                     if ext_name and ext_name not in n_names:
@@ -1209,12 +1388,13 @@ class InteractiveAtlas:
                     "neighbors": n_map["neighbor_names"]
                 })
 
+        map_basename = os.path.basename(self.output_filename)
         server_ctx = {
             "region": self.region_key or self.slug,
             "title": self.ru_title,
             "center": self.center,
             "zoom": self.zoom,
-            "map_url": self.output_filename,
+            "map_url": f"public/maps/{map_basename}",
             "is_rf": getattr(self, 'is_rf', False)
         }
         server_ctx_json = json.dumps(server_ctx, ensure_ascii=False)
@@ -3269,29 +3449,8 @@ window.serverMapZoom = {self.zoom};
 
         populations = []
         for idx, row in gdf.iterrows():
-            name = str(row.get('display_name', '')).lower().replace('\u0301', '').replace('e', 'е').replace('ё', 'е')
-            population = None
-
-            for key, val in KNOWN_POPULATION.items():
-                if key in name:
-                    population = val
-                    break
-
-            if population is None:
-                # Если субъект РФ не найден в словаре по корню, возвращаем 0 (серый полигон)
-                
-                    area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if idx in metric_gdf.index else 0
-                    if 'область' in name:
-                        population = int(area_sq_km * 20)
-                    elif 'республика' in name:
-                        population = int(area_sq_km * 10)
-                    elif 'край' in name:
-                        population = int(area_sq_km * 5)
-                    elif 'округ' in name or 'аок' in name:
-                        population = int(area_sq_km * 1)
-                    else:
-                        population = int(area_sq_km * 25)
-
+            area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if (idx in metric_gdf.index and metric_gdf.loc[idx].geometry is not None and not metric_gdf.loc[idx].geometry.is_empty) else 0
+            population, _ = self._estimate_metrics(row.get('display_name', ''), area_sq_km)
             populations.append(population)
 
         gdf['population'] = populations
@@ -3388,46 +3547,8 @@ window.serverMapZoom = {self.zoom};
 
         grps = []
         for idx, row in gdf.iterrows():
-            name = str(row.get('display_name', '')).lower().replace('\u0301', '').replace('e', 'е').replace('ё', 'е')
-            
-            # Население для резервного расчета
-            population = None
-            for key, val in KNOWN_POPULATION.items():
-                if key in name:
-                    population = val
-                    break
-
-            if population is None:
-                
-                    area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if idx in metric_gdf.index else 0
-                    if 'область' in name:
-                        population = int(area_sq_km * 20)
-                    elif 'республика' in name:
-                        population = int(area_sq_km * 10)
-                    elif 'край' in name:
-                        population = int(area_sq_km * 5)
-                    elif 'округ' in name or 'аок' in name:
-                        population = int(area_sq_km * 1)
-                    else:
-                        population = int(area_sq_km * 25)
-
-            # ВРП
-            grp = None
-            for key, val in KNOWN_ECONOMY.items():
-                if key in name:
-                    grp = float(val)
-                    break
-
-            if grp is None:
-                if population == 0:
-                    grp = 0.0
-                elif population > 500_000:
-                    grp = round(population * 1.2 / 1000, 1)
-                else:
-                    grp = round(population * 0.85 / 1000, 1)
-            else:
-                grp = round(grp, 1)
-
+            area_sq_km = int(metric_gdf.loc[idx].geometry.area / 1_000_000) if (idx in metric_gdf.index and metric_gdf.loc[idx].geometry is not None and not metric_gdf.loc[idx].geometry.is_empty) else 0
+            _, grp = self._estimate_metrics(row.get('display_name', ''), area_sq_km)
             grps.append(grp)
 
         gdf['grp'] = grps
@@ -3622,8 +3743,20 @@ window.serverMapZoom = {self.zoom};
         plugins.Fullscreen().add_to(self.map)
 
     def save(self, filename=None, open_browser=False):
+        os.makedirs(MAPS_DIR, exist_ok=True)
         if filename is None:
             filename = self.output_filename
+        else:
+            if not os.path.isabs(filename):
+                if not ('public' in filename and 'maps' in filename):
+                    filename = os.path.join(MAPS_DIR, os.path.basename(filename))
+                else:
+                    filename = os.path.join(BASE_DIR, filename)
+
+        out_dir = os.path.dirname(os.path.abspath(filename))
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+
         if not getattr(self, '_choropleth_added', False):
             self.add_choropleth_layer()
         if not getattr(self, '_economy_added', False):
@@ -3757,13 +3890,14 @@ window.serverMapZoom = {self.zoom};
             html = custom_css_js + html
 
         reg_id = self.region_key or self.slug
+        rel_map_url = f"public/maps/{os.path.basename(filename)}"
         body_attrs = (
             f'data-region="{reg_id}" '
             f'data-region-title="{self.ru_title}" '
             f'data-center-lat="{self.center[0]}" '
             f'data-center-lng="{self.center[1]}" '
             f'data-zoom="{self.zoom}" '
-            f'data-map-url="{self.output_filename}"'
+            f'data-map-url="{rel_map_url}"'
         )
         if '<body' in html:
             if 'data-region="' in html:
@@ -3772,7 +3906,7 @@ window.serverMapZoom = {self.zoom};
                 html = re.sub(r'data-center-lat="[^"]*"', f'data-center-lat="{self.center[0]}"', html, count=1)
                 html = re.sub(r'data-center-lng="[^"]*"', f'data-center-lng="{self.center[1]}"', html, count=1)
                 html = re.sub(r'data-zoom="[^"]*"', f'data-zoom="{self.zoom}"', html, count=1)
-                html = re.sub(r'data-map-url="[^"]*"', f'data-map-url="{self.output_filename}"', html, count=1)
+                html = re.sub(r'data-map-url="[^"]*"', f'data-map-url="{rel_map_url}"', html, count=1)
             else:
                 html = re.sub(r'<body([^>]*)>', rf'<body\1 {body_attrs}>', html, count=1)
 

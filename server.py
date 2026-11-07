@@ -1,6 +1,10 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+import zipfile
+import tempfile
+import shutil
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
@@ -19,6 +23,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 app = FastAPI(title="GeoAtlas — Учебно-картографический атлас ЮФУ (Ростов, Краснодар, Россия)")
 security = HTTPBasic()
+
+
+# Папка для сгенерированных карт и статических файлов
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MAPS_DIR = os.path.join(BASE_DIR, "public", "maps")
+os.makedirs(MAPS_DIR, exist_ok=True)
+app.mount("/public", StaticFiles(directory=os.path.join(BASE_DIR, "public")), name="public")
 
 app.add_middleware(
     CORSMiddleware,
@@ -400,13 +411,34 @@ def export_csv(username: str = Depends(check_admin)):
 
 REGION_DATA_CACHE = {}
 
+def find_map_file(filename_or_slug: str) -> Optional[str]:
+    """Ищет HTML-файл карты в public/maps/ или в корне проекта."""
+    clean = str(filename_or_slug).strip().replace('/', os.sep).replace('\\', os.sep)
+    basename = os.path.basename(clean)
+    stem = basename.replace('_quiz_map.html', '').replace('.html', '')
+
+    candidates = [
+        clean,
+        os.path.join("public", "maps", basename),
+        os.path.join("public", "maps", f"{stem}_quiz_map.html"),
+        f"{stem}_quiz_map.html",
+        os.path.join("public", "maps", f"{stem}.html"),
+        f"{stem}.html"
+    ]
+    for c in candidates:
+        if c and os.path.exists(c) and os.path.isfile(c):
+            return c
+    return None
+
 def get_region_data(region_key: str) -> Optional[Dict[str, Any]]:
     clean = region_key.lower().strip().replace('_quiz_map.html', '').replace('.html', '')
     if clean in REGION_DATA_CACHE:
         return REGION_DATA_CACHE[clean]
 
     candidates = [
+        os.path.join("public", "maps", f"{clean}_quiz_map.html"),
         f"{clean}_quiz_map.html",
+        os.path.join("public", "maps", f"{clean}.html"),
         f"{clean}.html"
     ]
     matched_file = None
@@ -465,7 +497,7 @@ REGIONS_INFO: Dict[str, Dict[str, Any]] = {
         "title": "Ростовская область",
         "center": [47.5, 40.5],
         "zoom": 8,
-        "map_file": "rostov_quiz_map.html",
+        "map_file": os.path.join("public", "maps", "rostov_quiz_map.html"),
         "geojson_file": "raion.shp",
         "is_rf": False,
         "aliases": ["rostov", "ростов", "ростовская", "ростовская область", "rnd", "ростов-на-дону"]
@@ -475,7 +507,7 @@ REGIONS_INFO: Dict[str, Dict[str, Any]] = {
         "title": "Краснодарский край",
         "center": [45.2, 39.0],
         "zoom": 8,
-        "map_file": "krasnodar_quiz_map.html",
+        "map_file": os.path.join("public", "maps", "krasnodar_quiz_map.html"),
         "geojson_file": "boundary-3857.shp",
         "is_rf": False,
         "aliases": ["krasnodar", "краснодар", "краснодарский", "краснодарский край", "кубань", "kuban"]
@@ -485,7 +517,7 @@ REGIONS_INFO: Dict[str, Dict[str, Any]] = {
         "title": "Российская Федерация",
         "center": [63.0, 95.0],
         "zoom": 3,
-        "map_file": "russia_quiz_map.html",
+        "map_file": os.path.join("public", "maps", "russia_quiz_map.html"),
         "geojson_file": "gadm41_RUS_1.shp",
         "is_rf": True,
         "aliases": ["russia", "россия", "рф", "rf", "российская федерация", "rus"]
@@ -505,9 +537,9 @@ def resolve_region_info(region_query: Optional[str] = None) -> Dict[str, Any]:
         if clean == key or clean in info.get("aliases", []):
             return info
 
-    # 2. Проверка наличия файла карты на диске
-    candidate_file = f"{clean}_quiz_map.html"
-    if os.path.exists(candidate_file):
+    # 2. Проверка наличия файла карты на диске (в public/maps/ или корне)
+    candidate_file = find_map_file(f"{clean}_quiz_map.html") or find_map_file(clean)
+    if candidate_file:
         title = clean.replace("_", " ").title()
         return {
             "id": clean,
@@ -530,14 +562,12 @@ def resolve_region_info(region_query: Optional[str] = None) -> Dict[str, Any]:
 def render_dynamic_map_response(region_query: Optional[str] = None) -> HTMLResponse:
     """Динамически формирует HTML-ответ карты с контекстом, data-атрибутами и серверными переменными."""
     info = resolve_region_info(region_query)
-    map_file = info.get("map_file")
+    map_file = find_map_file(info.get("map_file", "")) or find_map_file("rostov_quiz_map.html")
     if not map_file or not os.path.exists(map_file):
-        map_file = "rostov_quiz_map.html"
-        if not os.path.exists(map_file):
-            return HTMLResponse(
-                "<h2>Карта еще не сгенерирована. Запустите 'python main.py' локально.</h2>",
-                status_code=503
-            )
+        return HTMLResponse(
+            "<h2>Карта еще не сгенерирована. Запустите 'python main.py' локально.</h2>",
+            status_code=503
+        )
 
     try:
         with open(map_file, "r", encoding="utf-8", errors="ignore") as f:
@@ -546,12 +576,18 @@ def render_dynamic_map_response(region_query: Optional[str] = None) -> HTMLRespo
         logger.error("Ошибка чтения карты %s: %s", map_file, e)
         raise HTTPException(status_code=500, detail=f"Ошибка чтения файла карты: {map_file}")
 
+    web_map_url = info.get("map_file", "").replace("\\", "/")
+    if "public/maps/" in web_map_url:
+        web_map_url = "/public/maps/" + web_map_url.split("public/maps/")[-1]
+    elif not web_map_url.startswith("/") and web_map_url:
+        web_map_url = "/" + web_map_url
+
     context_obj = {
         "region": info["id"],
         "title": info["title"],
         "center": info["center"],
         "zoom": info["zoom"],
-        "map_url": info["map_file"],
+        "map_url": web_map_url,
         "geojson_file": info.get("geojson_file", ""),
         "is_rf": info.get("is_rf", False)
     }
@@ -564,18 +600,18 @@ def render_dynamic_map_response(region_query: Optional[str] = None) -> HTMLRespo
         f'data-center-lat="{info["center"][0]}" '
         f'data-center-lng="{info["center"][1]}" '
         f'data-zoom="{info["zoom"]}" '
-        f'data-map-url="{info["map_file"]}"'
+        f'data-map-url="{web_map_url}"'
     )
     if "<body" in html:
         if 'data-region="' in html:
-            html = re.sub(r'data-region="[^"]*"', f'data-region="{info["id"]}"', html, count=1)
-            html = re.sub(r'data-region-title="[^"]*"', f'data-region-title="{info["title"]}"', html, count=1)
-            html = re.sub(r'data-center-lat="[^"]*"', f'data-center-lat="{info["center"][0]}"', html, count=1)
-            html = re.sub(r'data-center-lng="[^"]*"', f'data-center-lng="{info["center"][1]}"', html, count=1)
-            html = re.sub(r'data-zoom="[^"]*"', f'data-zoom="{info["zoom"]}"', html, count=1)
-            html = re.sub(r'data-map-url="[^"]*"', f'data-map-url="{info["map_file"]}"', html, count=1)
+            html = re.sub(r'data-region="[^"]*"', lambda m: f'data-region="{info["id"]}"', html, count=1)
+            html = re.sub(r'data-region-title="[^"]*"', lambda m: f'data-region-title="{info["title"]}"', html, count=1)
+            html = re.sub(r'data-center-lat="[^"]*"', lambda m: f'data-center-lat="{info["center"][0]}"', html, count=1)
+            html = re.sub(r'data-center-lng="[^"]*"', lambda m: f'data-center-lng="{info["center"][1]}"', html, count=1)
+            html = re.sub(r'data-zoom="[^"]*"', lambda m: f'data-zoom="{info["zoom"]}"', html, count=1)
+            html = re.sub(r'data-map-url="[^"]*"', lambda m: f'data-map-url="{web_map_url}"', html, count=1)
         else:
-            html = re.sub(r'<body([^>]*)>', rf'<body\1 {body_attrs}>', html, count=1)
+            html = re.sub(r'<body([^>]*)>', lambda m: f'<body{m.group(1)} {body_attrs}>', html, count=1)
 
     # 2. Инъекция глобального серверного контекста JavaScript
     context_script = f"""<script id="server-region-context" type="application/json">
@@ -593,13 +629,162 @@ window.serverMapZoom = {info['zoom']};
     html = re.sub(r'<script id="server-region-context"[^>]*>[\s\S]*?</script>\s*<script>[\s\S]*?window\.SERVER_REGION_CONTEXT[\s\S]*?</script>', '', html)
 
     if "<body" in html:
-        html = re.sub(r'(<body[^>]*>)', rf'\1\n{context_script}', html, count=1)
+        html = re.sub(r'(<body[^>]*>)', lambda m: f'{m.group(1)}\n{context_script}', html, count=1)
     elif "</head>" in html:
         html = html.replace("</head>", f"{context_script}\n</head>", 1)
     else:
         html = f"{context_script}\n{html}"
 
     return HTMLResponse(content=html, media_type="text/html")
+
+
+# ==========================================
+# ЭНДПОИНТ ЗАГРУЗКИ НОВЫХ КАРТ (SHAPEFILE ZIP)
+# ==========================================
+@app.post("/api/upload-map")
+async def upload_map(
+    file: UploadFile = File(...),
+    region_name: Optional[str] = Form(None)
+) -> Dict[str, Any]:
+    """
+    Принимает ZIP-архив с Shapefile (.shp, .dbf, .shx, .prj), безопасно распаковывает,
+    генерирует интерактивную карту через InteractiveAtlas и сохраняет в public/maps/.
+    """
+    fname = (file.filename or "").lower()
+    if not fname.endswith(".zip"):
+        raise HTTPException(
+            status_code=400,
+            detail="Недопустимый формат файла. Загрузите архив в формате ZIP (.zip), содержащий файлы Shapefile (.shp, .dbf, .shx, .prj)."
+        )
+
+    import geopandas as gpd
+    from main import InteractiveAtlas, slugify_name
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        zip_path = os.path.join(temp_dir, "uploaded_archive.zip")
+        try:
+            content = await file.read()
+            with open(zip_path, "wb") as f:
+                f.write(content)
+        except Exception as e:
+            logger.error("Ошибка сохранения загруженного ZIP: %s", e)
+            raise HTTPException(status_code=500, detail=f"Ошибка сохранения загруженного файла: {e}")
+
+        # Безопасная распаковка с защитой от Zip Slip
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                for member in zf.infolist():
+                    target_path = os.path.abspath(os.path.join(temp_dir, member.filename))
+                    if not target_path.startswith(os.path.abspath(temp_dir)):
+                        raise HTTPException(status_code=400, detail="Обнаружена недопустимая попытка распаковки за пределы временной директории (Zip Slip)")
+                zf.extractall(temp_dir)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("Ошибка распаковки ZIP-архива: %s", e)
+            raise HTTPException(status_code=400, detail=f"Не удалось распаковать ZIP-архив: {e}")
+
+        # Поиск .shp файлов в распакованной структуре
+        shp_files = []
+        for root_dir, _, filenames in os.walk(temp_dir):
+            for f_name in filenames:
+                if f_name.lower().endswith(".shp"):
+                    shp_files.append(os.path.join(root_dir, f_name))
+
+        if not shp_files:
+            raise HTTPException(
+                status_code=400,
+                detail="В архиве не найден файл с расширением .shp. Убедитесь, что внутри архива содержатся файлы шейп-файла (.shp, .dbf, .shx, .prj)."
+            )
+
+        # Выбираем основной .shp файл (для границ / районов)
+        main_shp = None
+        for s in shp_files:
+            bname = os.path.basename(s).lower()
+            if any(k in bname for k in ['district', 'raion', 'region', 'boundary', 'rayon', 'border', 'adm']):
+                main_shp = s
+                break
+        if not main_shp:
+            main_shp = shp_files[0]
+
+        # Дополнительные слои (если присутствуют в архиве)
+        rivers_shp = next((s for s in shp_files if s != main_shp and any(k in os.path.basename(s).lower() for k in ['river', 'река', 'reka', 'water_line', 'water-line'])), None)
+        lakes_shp = next((s for s in shp_files if s != main_shp and any(k in os.path.basename(s).lower() for k in ['lake', 'водоем', 'ozero', 'water_poly', 'water-poly'])), None)
+        cities_shp = next((s for s in shp_files if s != main_shp and any(k in os.path.basename(s).lower() for k in ['city', 'cities', 'center', 'gorod', 'raicentr'])), None)
+
+        try:
+            districts_gdf = gpd.read_file(main_shp)
+        except Exception as e:
+            logger.error("Ошибка чтения Shapefile через GeoPandas: %s", e)
+            raise HTTPException(status_code=400, detail=f"Ошибка чтения Shapefile: {e}")
+
+        if districts_gdf.empty:
+            raise HTTPException(status_code=400, detail="Загруженный Shapefile пуст (не содержит геометрических объектов)")
+
+        clean_title = (region_name or "").strip()
+        if not clean_title:
+            base_name = os.path.splitext(os.path.basename(main_shp))[0]
+            clean_title = base_name.replace("_", " ").replace("-", " ").title()
+
+        c_rivers = gpd.read_file(rivers_shp) if rivers_shp else None
+        c_lakes = gpd.read_file(lakes_shp) if lakes_shp else None
+        c_cities = gpd.read_file(cities_shp) if cities_shp else None
+
+        try:
+            atlas = InteractiveAtlas(
+                region_name=clean_title,
+                region_districts=districts_gdf,
+                clipped_rivers=c_rivers,
+                clipped_lakes=c_lakes,
+                clipped_cities=c_cities
+            )
+            atlas.add_districts()
+            atlas.add_water_bodies()
+            atlas.add_rivers()
+            atlas.add_district_centers()
+            output_filepath = atlas.save()
+        except Exception as e:
+            logger.error("Ошибка генерации карты в InteractiveAtlas: %s", e)
+            raise HTTPException(status_code=500, detail=f"Ошибка генерации интерактивной карты: {e}")
+
+        map_filename = os.path.basename(output_filepath)
+        direct_url = f"/public/maps/{map_filename}"
+        slug = atlas.slug
+
+        # Добавляем в локальный реестр регионов бэкенда для мгновенной доступности
+        REGIONS_INFO[slug] = {
+            "id": slug,
+            "title": atlas.ru_title,
+            "center": atlas.center,
+            "zoom": atlas.zoom,
+            "map_file": output_filepath,
+            "geojson_file": f"{slug}.shp",
+            "is_rf": False,
+            "aliases": [slug, atlas.ru_title.lower()]
+        }
+
+        logger.info("Новая карта успешно сгенерирована: %s (%s)", atlas.ru_title, direct_url)
+
+        return {
+            "status": "ok",
+            "message": f"Карта «{atlas.ru_title}» успешно создана и сохранена!",
+            "region_name": atlas.ru_title,
+            "slug": slug,
+            "filename": map_filename,
+            "map_url": direct_url,
+            "direct_url": direct_url,
+            "districts_count": len(atlas.districts_gdf) if atlas.districts_gdf is not None else len(districts_gdf)
+        }
+
+@app.get("/public/maps/{file_name}", response_model=None)
+def get_public_map_file(file_name: str):
+    """Отдает файл карты из директории public/maps/."""
+    target = os.path.join("public", "maps", file_name)
+    if os.path.exists(target) and os.path.isfile(target):
+        return FileResponse(target)
+    if os.path.exists(file_name) and os.path.isfile(file_name):
+        return FileResponse(file_name)
+    raise HTTPException(status_code=404, detail=f"Карта '{file_name}' не найдена в public/maps/")
 
 @app.get("/", response_model=None)
 def get_index(region: Optional[str] = None):
@@ -661,18 +846,15 @@ def get_slug_route(slug: str):
         return render_dynamic_map_response(clean)
 
     # Проверка прямого вызова .html файлов
-    if clean.endswith(".html"):
-        if os.path.exists(clean):
-            if "_quiz_map" in clean:
-                return render_dynamic_map_response(clean)
-            return FileResponse(clean)
-    else:
-        candidate_map = f"{clean}_quiz_map.html"
-        if os.path.exists(candidate_map):
+    matched_html = find_map_file(clean)
+    if matched_html:
+        if "_quiz_map" in clean or "_quiz_map" in matched_html:
             return render_dynamic_map_response(clean)
-        candidate_html = f"{clean}.html"
-        if os.path.exists(candidate_html):
-            return FileResponse(candidate_html)
+        return FileResponse(matched_html)
+
+    candidate_map = find_map_file(f"{clean}_quiz_map.html")
+    if candidate_map:
+        return render_dynamic_map_response(clean)
 
     raise HTTPException(status_code=404, detail=f"Страница или регион '{slug}' не найден")
 
