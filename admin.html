@@ -1474,6 +1474,43 @@
         </div>
     </section>
 
+    <!-- 5. УПРАВЛЕНИЕ КАРТАМИ -->
+    <section class="section-card" id="maps-management-section">
+        <div class="section-header">
+            <div class="section-title">
+                <span>🗺️</span> <span>Управление картами</span>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span id="maps-counter-badge" style="font-size: 11.5px; font-weight: 700; color: #0284C7; background: #E0F2FE; border: 1px solid #BAE6FD; padding: 3px 10px; border-radius: 6px;">0 карт</span>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="loadMapsList()" title="Обновить список карт">
+                    <span>🔄</span> <span>Обновить</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="journal-table" id="maps-table">
+                <thead>
+                    <tr>
+                        <th style="width: 38%;">Файл интерактивной карты</th>
+                        <th style="width: 18%;">Размер файла</th>
+                        <th style="width: 22%;">Дата создания</th>
+                        <th style="width: 22%; text-align: right;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="maps-table-body">
+                    <!-- Заполняется динамически через JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <div id="maps-empty-placeholder" class="empty-placeholder" style="display: none; padding: 26px 16px;">
+            <div style="font-size: 32px; margin-bottom: 8px;">🗺️</div>
+            <div style="font-size: 15px; font-weight: 700; color: #334155;">Сгенерированные карты отсутствуют</div>
+            <div style="font-size: 13px; color: #64748B;">Загрузите архив с шейп-файлами выше, чтобы сгенерировать новую интерактивную карту.</div>
+        </div>
+    </section>
+
     <!-- Main Results Journal Section -->
     <section class="section-card">
         <div class="section-header">
@@ -2600,6 +2637,7 @@ __SERVER_SESSION_JSON__
                 }
 
                 showToast(`Карта «${data.region_name}» сгенерирована!`);
+                loadMapsList();
             }, 600);
 
         } catch (err) {
@@ -2625,6 +2663,115 @@ __SERVER_SESSION_JSON__
     }
 
     window.addEventListener('DOMContentLoaded', initDropzoneEvents);
+
+
+    // ==========================================
+    // УПРАВЛЕНИЕ КАРТАМИ (CRUD)
+    // ==========================================
+    async function loadMapsList() {
+        const tbody = document.getElementById('maps-table-body');
+        const emptyBox = document.getElementById('maps-empty-placeholder');
+        const counterBadge = document.getElementById('maps-counter-badge');
+        if (!tbody) return;
+
+        try {
+            const res = await fetch('/api/maps');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const maps = await res.json();
+
+            if (counterBadge) {
+                counterBadge.textContent = `${maps.length} ${getMapWordEnding(maps.length)}`;
+            }
+
+            if (!maps || maps.length === 0) {
+                tbody.innerHTML = '';
+                if (emptyBox) emptyBox.style.display = 'block';
+                return;
+            }
+
+            if (emptyBox) emptyBox.style.display = 'none';
+
+            tbody.innerHTML = maps.map(m => {
+                const safeName = escapeHtml(m.filename || m.name);
+                const sizeStr = escapeHtml(m.size_formatted || `${m.size} Б`);
+                const dateStr = escapeHtml(m.created_at || m.date || '—');
+                const mapUrl = m.url || `/public/maps/${encodeURIComponent(m.filename || m.name)}`;
+
+                return `
+                    <tr>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 20px;">🗺️</span>
+                                <div>
+                                    <div style="font-weight: 700; color: #0F172A;">${safeName}</div>
+                                    <div style="font-size: 11px; color: #64748B;">public/maps/${safeName}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span style="font-size: 12px; font-weight: 600; color: #334155; background: #F1F5F9; padding: 3px 8px; border-radius: 6px; border: 1px solid #E2E8F0;">
+                                ${sizeStr}
+                            </span>
+                        </td>
+                        <td>
+                            <span style="font-size: 12px; color: #475569;">
+                                ${dateStr}
+                            </span>
+                        </td>
+                        <td style="text-align: right;">
+                            <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
+                                <a href="${mapUrl}" target="_blank" class="btn btn-secondary btn-sm" title="Открыть карту в новой вкладке">
+                                    <span>↗️</span> <span>Открыть</span>
+                                </a>
+                                <button type="button" class="btn btn-danger btn-sm" onclick="deleteMap('${safeName}')" title="Удалить файл карты">
+                                    <span>🗑️</span> <span>Удалить</span>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (e) {
+            console.error('Ошибка загрузки списка карт:', e);
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #EF4444; padding: 18px;">⚠️ Не удалось загрузить список карт</td></tr>`;
+            }
+        }
+    }
+
+    async function deleteMap(filename) {
+        if (!filename) return;
+        const confirmed = window.confirm(`Вы уверены, что хотите удалить карту «${filename}»?\n\nФайл будет безвозвратно удален с сервера.`);
+        if (!confirmed) return;
+
+        try {
+            const res = await fetch(`/api/maps/${encodeURIComponent(filename)}`, {
+                method: 'DELETE'
+            });
+
+            if (res.ok) {
+                const data = await res.json().catch(() => ({}));
+                showToast(data.message || `Карта «${filename}» успешно удалена`);
+                loadMapsList();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                showToast(err.detail || 'Не удалось удалить карту', true);
+            }
+        } catch (e) {
+            showToast('Сетевая ошибка при удалении карты', true);
+        }
+    }
+
+    function getMapWordEnding(count) {
+        const rem10 = count % 10;
+        const rem100 = count % 100;
+        if (rem100 >= 11 && rem100 <= 19) return 'карт';
+        if (rem10 === 1) return 'карта';
+        if (rem10 >= 2 && rem10 <= 4) return 'карты';
+        return 'карт';
+    }
+
+    window.addEventListener('DOMContentLoaded', loadMapsList);
 
 </script>
 

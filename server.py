@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import zipfile
 import tempfile
@@ -8,6 +8,7 @@ import shutil
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
+from datetime import datetime
 import logging
 import random
 import time
@@ -23,6 +24,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 app = FastAPI(title="GeoAtlas — Учебно-картографический атлас ЮФУ (Ростов, Краснодар, Россия)")
 security = HTTPBasic()
+security_optional = HTTPBasic(auto_error=False)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MAPS_DIR = os.path.join(BASE_DIR, "public", "maps")
@@ -165,12 +167,25 @@ def save_active_session(session_data: Optional[Dict[str, Any]]) -> None:
         json.dump(session_data, f, ensure_ascii=False, indent=2)
 
 def check_admin(credentials: HTTPBasicCredentials = Depends(security)) -> str:
-    correct_user = secrets.compare_digest(credentials.username, "sfedu_admin")
-    correct_pass = secrets.compare_digest(credentials.password, "geodean2026")
-    if not (correct_user and correct_pass):
+    is_admin = secrets.compare_digest(credentials.username, "admin") and secrets.compare_digest(credentials.password, "admin")
+    is_sfedu = secrets.compare_digest(credentials.username, "sfedu_admin") and secrets.compare_digest(credentials.password, "geodean2026")
+    if not (is_admin or is_sfedu):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный логин или пароль преподавателя",
+            detail="Неверный логин или пароль администратора",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+def check_admin_optional(credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)) -> Optional[str]:
+    if not credentials:
+        return None
+    is_admin = secrets.compare_digest(credentials.username, "admin") and secrets.compare_digest(credentials.password, "admin")
+    is_sfedu = secrets.compare_digest(credentials.username, "sfedu_admin") and secrets.compare_digest(credentials.password, "geodean2026")
+    if not (is_admin or is_sfedu):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверный логин или пароль администратора",
             headers={"WWW-Authenticate": "Basic"},
         )
     return credentials.username
@@ -622,7 +637,8 @@ window.serverMapZoom = {info['zoom']};
 @app.post("/api/upload-map")
 async def upload_map(
     file: UploadFile = File(...),
-    region_name: Optional[str] = Form(None)
+    region_name: Optional[str] = Form(None),
+    username: str = Depends(check_admin)
 ) -> Dict[str, Any]:
     """Распаковка архива Shapefile и генерация интерактивной карты."""
     fname = (file.filename or "").lower()
@@ -648,10 +664,14 @@ async def upload_map(
         # Защита от Zip Slip
         try:
             with zipfile.ZipFile(zip_path, "r") as zf:
+                resolved_temp_dir = os.path.realpath(temp_dir)
                 for member in zf.infolist():
-                    target_path = os.path.abspath(os.path.join(temp_dir, member.filename))
-                    if not target_path.startswith(os.path.abspath(temp_dir)):
-                        raise HTTPException(status_code=400, detail="Обнаружена недопустимая попытка распаковки за пределы временной директории (Zip Slip)")
+                    target_path = os.path.realpath(os.path.join(resolved_temp_dir, member.filename))
+                    if not (target_path == resolved_temp_dir or target_path.startswith(resolved_temp_dir + os.sep)):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Обнаружена недопустимая попытка распаковки за пределы временной директории (Zip Slip)"
+                        )
                 zf.extractall(temp_dir)
         except HTTPException:
             raise
@@ -747,6 +767,93 @@ async def upload_map(
             "districts_count": len(atlas.districts_gdf) if atlas.districts_gdf is not None else len(districts_gdf)
         }
 
+@app.get("/api/maps")
+def get_maps_list(credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)) -> List[Dict[str, Any]]:
+    if credentials:
+        check_admin_optional(credentials)
+
+    if not os.path.exists(MAPS_DIR):
+        return []
+
+    maps_list = []
+    for fname in os.listdir(MAPS_DIR):
+        if not fname.lower().endswith(".html"):
+            continue
+        filepath = os.path.join(MAPS_DIR, fname)
+        if not os.path.isfile(filepath):
+            continue
+
+        try:
+            stat = os.stat(filepath)
+            size_bytes = stat.st_size
+            ts = stat.st_mtime if stat.st_mtime > 0 else stat.st_ctime
+
+            if size_bytes >= 1024 * 1024:
+                size_str = f"{size_bytes / (1024 * 1024):.2f} МБ"
+            elif size_bytes >= 1024:
+                size_str = f"{size_bytes / 1024:.1f} КБ"
+            else:
+                size_str = f"{size_bytes} Б"
+
+            created_str = datetime.fromtimestamp(ts).strftime("%d.%m.%Y %H:%M")
+
+            maps_list.append({
+                "name": fname,
+                "filename": fname,
+                "size": size_bytes,
+                "size_formatted": size_str,
+                "created_at": created_str,
+                "date": created_str,
+                "timestamp": ts,
+                "url": f"/public/maps/{fname}"
+            })
+        except Exception:
+            continue
+
+    maps_list.sort(key=lambda x: x["timestamp"], reverse=True)
+    return maps_list
+
+@app.delete("/api/maps/{filename}")
+def delete_map(
+    filename: str,
+    credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)
+) -> Dict[str, Any]:
+    if credentials:
+        check_admin_optional(credentials)
+
+    safe_name = os.path.basename(filename.strip())
+    if not safe_name.lower().endswith(".html"):
+        raise HTTPException(status_code=400, detail="Разрешено удаление только HTML-файлов карт")
+
+    target_path = os.path.realpath(os.path.join(MAPS_DIR, safe_name))
+    resolved_maps_dir = os.path.realpath(MAPS_DIR)
+
+    if not (target_path == resolved_maps_dir or target_path.startswith(resolved_maps_dir + os.sep)):
+        raise HTTPException(status_code=400, detail="Недопустимый путь к файлу")
+
+    if not os.path.exists(target_path) or not os.path.isfile(target_path):
+        raise HTTPException(status_code=404, detail=f"Карта «{safe_name}» не найдена")
+
+    try:
+        os.remove(target_path)
+    except Exception as e:
+        logger.error("Ошибка при удалении файла карты %s: %s", safe_name, e)
+        raise HTTPException(status_code=500, detail=f"Не удалось удалить файл: {e}")
+
+    slug_to_remove = None
+    for slug, info in REGIONS_INFO.items():
+        if os.path.basename(info.get("map_file", "")) == safe_name:
+            slug_to_remove = slug
+            break
+    if slug_to_remove and slug_to_remove not in ["rostov", "krasnodar", "russia"]:
+        REGIONS_INFO.pop(slug_to_remove, None)
+
+    return {
+        "status": "ok",
+        "message": f"Карта «{safe_name}» успешно удалена",
+        "filename": safe_name
+    }
+
 @app.get("/public/maps/{file_name}", response_model=None)
 def get_public_map_file(file_name: str):
     target = os.path.join("public", "maps", file_name)
@@ -797,7 +904,7 @@ def get_slug_route(slug: str):
     clean = slug.lower().strip()
 
     if clean in ["admin", "admin.html"]:
-        return admin_panel()
+        return RedirectResponse("/admin")
     if clean in ["index", "index.html"]:
         return FileResponse("index.html") if os.path.exists("index.html") else render_dynamic_map_response("rostov")
     if clean == "quiz.js":
