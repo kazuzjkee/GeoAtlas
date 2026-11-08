@@ -115,6 +115,7 @@ let allResults = [];
         }
 
         updateKPIs();
+        updateMistakesAnalytics();
         renderGroupsManager();
         renderDispatcherGroups();
         renderTable();
@@ -147,6 +148,80 @@ let allResults = [];
         allKnownStudents = Object.values(map);
     }
 
+    function updateMistakesAnalytics() {
+        const listEl = document.getElementById('mistakes-analytics-list');
+        const badgeEl = document.getElementById('analytics-total-mistakes-badge');
+        if (!listEl) return;
+
+        const counts = {};
+        let totalCount = 0;
+
+        allResults.forEach(r => {
+            const log = Array.isArray(r.mistakes_log) ? r.mistakes_log : [];
+            log.forEach(item => {
+                if (typeof item === 'string' && item.trim()) {
+                    const name = item.trim();
+                    counts[name] = (counts[name] || 0) + 1;
+                    totalCount++;
+                } else if (item && typeof item === 'object' && item.name) {
+                    const name = String(item.name).trim();
+                    counts[name] = (counts[name] || 0) + 1;
+                    totalCount++;
+                }
+            });
+        });
+
+        if (badgeEl) {
+            badgeEl.textContent = `Всего ошибок: ${totalCount}`;
+        }
+
+        const sortedEntries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        const top5 = sortedEntries.slice(0, 5);
+
+        if (top5.length === 0) {
+            listEl.innerHTML = '<div class="analytics-empty-state">Нет зафиксированных ошибок в текущей выборке тестирований</div>';
+            return;
+        }
+
+        const maxCount = top5[0][1] || 1;
+
+        let html = '';
+        top5.forEach(([objName, count], idx) => {
+            const pct = Math.max(12, Math.round((count / maxCount) * 100));
+            const rank = idx + 1;
+            let badgeClass = 'badge-purple';
+            if (rank === 1) badgeClass = 'badge-danger';
+            else if (rank === 2) badgeClass = 'badge-warning';
+
+            html += `
+                <div class="mistake-item">
+                    <div class="mistake-item-header">
+                        <div class="mistake-item-name">
+                            <span class="mistake-rank">#${rank}</span>
+                            <strong>${escapeHtml(objName)}</strong>
+                        </div>
+                        <span class="badge ${badgeClass}">${count} ${getNoun(count, 'ошибка', 'ошибки', 'ошибок')}</span>
+                    </div>
+                    <div class="mistake-bar-track">
+                        <div class="mistake-bar-fill rank-${rank}" style="width: ${pct}%;"></div>
+                    </div>
+                </div>
+            `;
+        });
+
+        listEl.innerHTML = html;
+    }
+
+    function getNoun(number, one, two, five) {
+        let n = Math.abs(number);
+        n %= 100;
+        if (n >= 5 && n <= 20) return five;
+        n %= 10;
+        if (n === 1) return one;
+        if (n >= 2 && n <= 4) return two;
+        return five;
+    }
+
     function updateKPIs() {
         const total = allResults.length;
         const exams = allResults.filter(r => r.is_exam).length;
@@ -173,6 +248,7 @@ let allResults = [];
         document.getElementById('cnt-exams').textContent = exams;
         document.getElementById('cnt-quizzes').textContent = total - exams;
         document.getElementById('cnt-violations').textContent = violatingTests;
+        updateMistakesAnalytics();
     }
 
     // ==========================================

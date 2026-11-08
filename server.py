@@ -116,6 +116,7 @@ class ResultSubmit(BaseModel):
     violations: int = 0
     exam_status: str = "Сдано"
     session_id: str = ""
+    mistakes_log: list = []
 
 class StudentItem(BaseModel):
     name: str
@@ -263,7 +264,8 @@ def save_quiz_result(res: ResultSubmit) -> Dict[str, str]:
         "exam_token": res.exam_token,
         "violations": res.violations,
         "exam_status": res.exam_status,
-        "session_id": res.session_id
+        "session_id": res.session_id,
+        "mistakes_log": res.mistakes_log
     }
     save_result_to_file(data)
     return {"status": "ok"}

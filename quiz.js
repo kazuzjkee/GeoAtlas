@@ -114,9 +114,11 @@ class QuizManagerClass {
         this.studyQueue = [];
         this.studyIndex = 0;
         this.studyCenterMarker = null;
+        this.currentSessionMistakes = [];
     }
 
     reset() {
+        this.currentSessionMistakes = [];
         this.currentQuiz = null;
         this.currentQuestion = 0;
         this.score = 0;
@@ -197,6 +199,7 @@ Object.defineProperty(_root, 'studyCategory', { get() { return QuizManager.study
 Object.defineProperty(_root, 'studyQueue', { get() { return QuizManager.studyQueue; }, set(v) { QuizManager.studyQueue = v; }, configurable: true });
 Object.defineProperty(_root, 'studyIndex', { get() { return QuizManager.studyIndex; }, set(v) { QuizManager.studyIndex = v; }, configurable: true });
 Object.defineProperty(_root, 'studyCenterMarker', { get() { return QuizManager.studyCenterMarker; }, set(v) { QuizManager.studyCenterMarker = v; }, configurable: true });
+Object.defineProperty(_root, 'currentSessionMistakes', { get() { return QuizManager.currentSessionMistakes; }, set(v) { QuizManager.currentSessionMistakes = v; }, configurable: true });
 
 Object.defineProperty(_root, 'isExamMode', { get() { return ExamProctor.isExam; }, set(v) { ExamProctor.isExam = Boolean(v); }, configurable: true });
 Object.defineProperty(_root, 'examCategory', { get() { return ExamProctor.category; }, set(v) { ExamProctor.category = v; }, configurable: true });
@@ -581,6 +584,7 @@ function removeExamKioskTopBar() {
 }
 
 async function initExamMode(options = {}) {
+    currentSessionMistakes = [];
     initServerRegionContext();
     const urlParams = new URLSearchParams(window.location.search);
 
@@ -1268,6 +1272,7 @@ function selectModeFromWelcome(mode) {
 }
 
 function startSelectedTestMode(mode = 'mixed', options = {}) {
+    currentSessionMistakes = [];
     const count = options.count || 15;
     const timeLimit = options.timeLimit || 10;
     const isExam = options.isExam !== undefined ? options.isExam : isExamMode;
@@ -1584,6 +1589,7 @@ function generateExamQuestions(category, count) {
 }
 
 function startPuzzleMode() {
+    currentSessionMistakes = [];
     if (typeof EMBEDDED_PUZZLE_DATA === 'undefined' || !EMBEDDED_PUZZLE_DATA || EMBEDDED_PUZZLE_DATA.length < 2) {
         alert('Для запуска режима пазла требуются пространственные данные районов этого региона.');
         return;
@@ -2513,6 +2519,9 @@ function placePuzzleDistrict(district) {
 
 function triggerPuzzleMismatch(targetDistrict, message = null) {
     puzzleMistakes++;
+    if (targetDistrict && targetDistrict.name) {
+        currentSessionMistakes.push(targetDistrict.name);
+    }
 
     const card = document.getElementById('puzzle-active-piece-card');
     if (card) {
@@ -3276,27 +3285,72 @@ function checkAnswer() {
     const oldButton = document.getElementById('confirm-button');
     if (oldButton) oldButton.remove();
 
+    const defaultDistrictStyle = {
+        color: '#2E8B57',
+        weight: 2,
+        fillColor: '#90EE90',
+        fillOpacity: 0.25,
+        dashArray: '5, 5'
+    };
+
     let delay = 1800;
 
     if (isCorrect) {
         score++;
         showFeedback('Правильно!', 'success');
+
+        // При правильном ответе (district, neighbor) подсвечиваем полигон зеленым и немного приближаем камеру
+        if (question.type === 'district' || question.type === 'neighbor') {
+            const correctName = question.correctAnswer || question.districtName;
+            const correctLayer = findDistrictLayerByName(correctName);
+
+            if (correctLayer) {
+                try {
+                    correctLayer.setStyle({
+                        color: '#10B981',
+                        weight: 4,
+                        fillColor: '#10B981',
+                        fillOpacity: 0.65,
+                        dashArray: null
+                    });
+                    if (correctLayer.bringToFront) correctLayer.bringToFront();
+                } catch(e) {}
+
+                const map = getMapObject();
+                if (map && typeof correctLayer.getBounds === 'function') {
+                    try {
+                        const bounds = correctLayer.getBounds();
+                        if (bounds && (!bounds.isValid || bounds.isValid())) {
+                            if (typeof map.flyToBounds === 'function') {
+                                map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 10, duration: 0.8 });
+                            } else {
+                                map.fitBounds(bounds, { animate: true, padding: [50, 50], maxZoom: 10 });
+                            }
+                        }
+                    } catch(e) {}
+                }
+
+                delay = 2200;
+                setTimeout(() => {
+                    try {
+                        correctLayer.setStyle(defaultDistrictStyle);
+                    } catch(e) {}
+                }, 2050);
+            }
+        }
     } else {
         showFeedback(`Неправильно! Ответ: ${question.correctAnswer}`, 'error');
 
-        // Цветовая подсветка ошибки на карте: неверный полигон — красный (#EF4444), правильный — зеленый (#10B981)
+        const problematicName = question.correctAnswer || question.districtName || question.riverName;
+        if (problematicName) {
+            currentSessionMistakes.push(problematicName);
+        }
+
+        // При ошибке: полигон ошибки — красный (#EF4444), полигон правильного ответа — зеленый (#10B981)
         if (question.type === 'district' || question.type === 'neighbor') {
             const wrongLayer = findDistrictLayerByName(selectedOption);
             const correctName = question.correctAnswer || question.districtName;
             const correctLayer = findDistrictLayerByName(correctName);
-
-            const defaultStyle = {
-                color: '#2E8B57',
-                weight: 2,
-                fillColor: '#90EE90',
-                fillOpacity: 0.25,
-                dashArray: '5, 5'
-            };
 
             const layersToRestore = [];
 
@@ -3304,13 +3358,7 @@ function checkAnswer() {
                 try {
                     layersToRestore.push({
                         layer: wrongLayer,
-                        style: {
-                            color: wrongLayer.options?.color || defaultStyle.color,
-                            weight: wrongLayer.options?.weight || defaultStyle.weight,
-                            fillColor: wrongLayer.options?.fillColor || defaultStyle.fillColor,
-                            fillOpacity: wrongLayer.options?.fillOpacity !== undefined ? wrongLayer.options.fillOpacity : defaultStyle.fillOpacity,
-                            dashArray: wrongLayer.options?.dashArray !== undefined ? wrongLayer.options.dashArray : defaultStyle.dashArray
-                        }
+                        style: defaultDistrictStyle
                     });
                     wrongLayer.setStyle({
                         color: '#EF4444',
@@ -3327,13 +3375,7 @@ function checkAnswer() {
                 try {
                     layersToRestore.push({
                         layer: correctLayer,
-                        style: {
-                            color: correctLayer.options?.color || defaultStyle.color,
-                            weight: correctLayer.options?.weight || defaultStyle.weight,
-                            fillColor: correctLayer.options?.fillColor || defaultStyle.fillColor,
-                            fillOpacity: correctLayer.options?.fillOpacity !== undefined ? correctLayer.options.fillOpacity : defaultStyle.fillOpacity,
-                            dashArray: correctLayer.options?.dashArray !== undefined ? correctLayer.options.dashArray : defaultStyle.dashArray
-                        }
+                        style: defaultDistrictStyle
                     });
                     correctLayer.setStyle({
                         color: '#10B981',
@@ -3346,13 +3388,46 @@ function checkAnswer() {
                 } catch(e) {}
             }
 
+            // Авто-зум камеры: объединяем bounds обоих полигонов (красного и зеленого)
+            const map = getMapObject();
+            if (map) {
+                try {
+                    let combinedBounds = null;
+                    const wrongBounds = (wrongLayer && typeof wrongLayer.getBounds === 'function') ? wrongLayer.getBounds() : null;
+                    const correctBounds = (correctLayer && typeof correctLayer.getBounds === 'function') ? correctLayer.getBounds() : null;
+
+                    if (wrongBounds && correctBounds) {
+                        combinedBounds = L.latLngBounds(wrongBounds).extend(correctBounds);
+                    } else if (wrongBounds) {
+                        combinedBounds = wrongBounds;
+                    } else if (correctBounds) {
+                        combinedBounds = correctBounds;
+                    }
+
+                    if (combinedBounds && (!combinedBounds.isValid || combinedBounds.isValid())) {
+                        const zoomOpts = {
+                            padding: [60, 60],
+                            maxZoom: 9,
+                            duration: 1.2
+                        };
+                        if (typeof map.flyToBounds === 'function') {
+                            map.flyToBounds(combinedBounds, zoomOpts);
+                        } else {
+                            map.fitBounds(combinedBounds, { animate: true, padding: [60, 60], maxZoom: 9 });
+                        }
+                    }
+                } catch(e) {
+                    console.error('Error zooming to combined bounds:', e);
+                }
+            }
+
             if (layersToRestore.length > 0) {
-                delay = 2500;
+                delay = 3200;
                 setTimeout(() => {
                     layersToRestore.forEach(item => {
                         try { item.layer.setStyle(item.style); } catch(e) {}
                     });
-                }, 2400);
+                }, 3050);
             }
         }
     }
@@ -3410,6 +3485,10 @@ function handleMapClick(lat, lon, question) {
         pointsAwarded = 0;
         message = `Мимо! (${distance.toFixed(0)} км от цели)`;
         badgeType = 'error';
+        const centerName = question.correctAnswer || question.name;
+        if (centerName) {
+            currentSessionMistakes.push(centerName);
+        }
     }
 
     score += pointsAwarded;
@@ -4219,7 +4298,8 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         exam_token: token,
         violations: violations,
         exam_status: displayStatus,
-        session_id: currentSyncSessionId || ''
+        session_id: currentSyncSessionId || '',
+        mistakes_log: currentSessionMistakes || []
     });
     localStorage.setItem(storageKey, JSON.stringify(results));
     localStorage.setItem('rostovQuizResults', JSON.stringify(results));
@@ -4243,7 +4323,8 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         exam_token: token,
         violations: violations,
         exam_status: displayStatus,
-        session_id: currentSyncSessionId || ''
+        session_id: currentSyncSessionId || '',
+        mistakes_log: currentSessionMistakes || []
     };
 
     fetch('/api/results/save', {
@@ -4414,6 +4495,7 @@ function closeLeaderboardModal() {
 
 function resetQuiz() {
     stopTimer();
+    currentSessionMistakes = [];
     currentQuestion = 0;
     score = 0;
     maxPossibleScore = 0;
