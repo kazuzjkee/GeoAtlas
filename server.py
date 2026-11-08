@@ -43,6 +43,8 @@ AUTH_SESSIONS_FILE = "auth_sessions.json"
 RESULTS_FILE = "quiz_results.json"
 GROUPS_FILE = "groups.json"
 ACTIVE_SESSION_FILE = "active_session.json"
+TEACHERS_FILE = "teachers.json"
+SESSIONS_HISTORY_FILE = "sessions_history.json"
 
 def load_auth_sessions() -> Dict[str, Any]:
     if os.path.exists(AUTH_SESSIONS_FILE):
@@ -59,6 +61,79 @@ def save_auth_sessions(sessions: Dict[str, Any]) -> None:
             json.dump(sessions, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logger.error("Ошибка сохранения auth_sessions: %s", e)
+
+DEFAULT_TEACHERS = [
+    {
+        "teacher_id": "teacher-geo-01",
+        "username": "prof_geo",
+        "password": "geo_password_2026",
+        "full_name": "Проф. Смирнов А. В.",
+        "organization": "Институт наук о Земле ЮФУ"
+    },
+    {
+        "teacher_id": "teacher-eco-02",
+        "username": "prof_eco",
+        "password": "eco_password_2026",
+        "full_name": "Доц. Кузнецова М. И.",
+        "organization": "Экономический факультет ЮФУ"
+    },
+    {
+        "teacher_id": "teacher-admin",
+        "username": "admin",
+        "password": "admin",
+        "full_name": "Главный администратор",
+        "organization": "Южный федеральный университет"
+    },
+    {
+        "teacher_id": "teacher-geo-01",
+        "username": "sfedu_admin",
+        "password": "geodean2026",
+        "full_name": "Деканат наук о Земле",
+        "organization": "Институт наук о Земле ЮФУ"
+    }
+]
+
+def load_teachers() -> List[Dict[str, Any]]:
+    if os.path.exists(TEACHERS_FILE):
+        try:
+            with open(TEACHERS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) > 0:
+                    return data
+        except Exception:
+            pass
+    save_teachers(DEFAULT_TEACHERS)
+    return DEFAULT_TEACHERS
+
+def save_teachers(teachers: List[Dict[str, Any]]) -> None:
+    try:
+        with open(TEACHERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(teachers, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("Ошибка сохранения teachers: %s", e)
+
+def load_sessions_history() -> List[Dict[str, Any]]:
+    if os.path.exists(SESSIONS_HISTORY_FILE):
+        try:
+            with open(SESSIONS_HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def record_session_history(session_data: Dict[str, Any]) -> None:
+    history = load_sessions_history()
+    sess_id = session_data.get("sessionId") or session_data.get("session_id")
+    idx = next((i for i, s in enumerate(history) if (s.get("sessionId") or s.get("session_id")) == sess_id), -1)
+    if idx >= 0:
+        history[idx] = session_data
+    else:
+        history.append(session_data)
+    try:
+        with open(SESSIONS_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("Ошибка сохранения sessions_history: %s", e)
 
 DEFAULT_GROUPS = [
     {
@@ -117,6 +192,7 @@ class ResultSubmit(BaseModel):
     exam_status: str = "Сдано"
     session_id: str = ""
     mistakes_log: list = []
+    teacher_id: str = "teacher-geo-01"
 
 class StudentItem(BaseModel):
     name: str
@@ -128,6 +204,7 @@ class GroupModel(BaseModel):
     description: str = ""
     students: list[StudentItem] = []
     created_at: str = ""
+    teacher_id: str = "teacher-geo-01"
 
 class LaunchSessionRequest(BaseModel):
     groupId: str
@@ -138,12 +215,18 @@ class LaunchSessionRequest(BaseModel):
     quizTypeName: str
     questionCount: int = 15
     timeLimitMinutes: int = 10
+    teacher_id: str = "teacher-geo-01"
 
 def load_results() -> List[Dict[str, Any]]:
     if os.path.exists(RESULTS_FILE):
         try:
             with open(RESULTS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                if isinstance(data, list):
+                    for r in data:
+                        if not r.get("teacher_id"):
+                            r["teacher_id"] = "teacher-eco-02" if "эконом" in str(r.get("group", "")).lower() else "teacher-geo-01"
+                    return data
         except Exception:
             return []
     return []
@@ -160,6 +243,9 @@ def load_groups() -> List[Dict[str, Any]]:
             with open(GROUPS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list) and len(data) > 0:
+                    for g in data:
+                        if not g.get("teacher_id"):
+                            g["teacher_id"] = "teacher-eco-02" if "эконом" in str(g.get("name", "")).lower() else "teacher-geo-01"
                     return data
         except Exception:
             pass
@@ -183,39 +269,27 @@ def save_active_session(session_data: Optional[Dict[str, Any]]) -> None:
     with open(ACTIVE_SESSION_FILE, "w", encoding="utf-8") as f:
         json.dump(session_data, f, ensure_ascii=False, indent=2)
 
-def check_admin(credentials: HTTPBasicCredentials = Depends(security)) -> str:
-    admin_user = os.environ.get("ADMIN_USERNAME", "admin")
-    admin_pass = os.environ.get("ADMIN_PASSWORD", "admin")
-    sfedu_user = os.environ.get("SFEDU_ADMIN_USER", "sfedu_admin")
-    sfedu_pass = os.environ.get("SFEDU_ADMIN_PASSWORD", "geodean2026")
+def check_admin(credentials: HTTPBasicCredentials = Depends(security)) -> Dict[str, Any]:
+    teachers = load_teachers()
+    for t in teachers:
+        if secrets.compare_digest(credentials.username, t.get("username", "")) and \
+           secrets.compare_digest(credentials.password, t.get("password", "")):
+            return t
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Неверный логин или пароль преподавателя",
+        headers={"WWW-Authenticate": "Basic"},
+    )
 
-    is_admin = secrets.compare_digest(credentials.username, admin_user) and secrets.compare_digest(credentials.password, admin_pass)
-    is_sfedu = secrets.compare_digest(credentials.username, sfedu_user) and secrets.compare_digest(credentials.password, sfedu_pass)
-    if not (is_admin or is_sfedu):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный логин или пароль администратора",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
-
-def check_admin_optional(credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)) -> Optional[str]:
+def check_admin_optional(credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)) -> Optional[Dict[str, Any]]:
     if not credentials:
         return None
-    admin_user = os.environ.get("ADMIN_USERNAME", "admin")
-    admin_pass = os.environ.get("ADMIN_PASSWORD", "admin")
-    sfedu_user = os.environ.get("SFEDU_ADMIN_USER", "sfedu_admin")
-    sfedu_pass = os.environ.get("SFEDU_ADMIN_PASSWORD", "geodean2026")
-
-    is_admin = secrets.compare_digest(credentials.username, admin_user) and secrets.compare_digest(credentials.password, admin_pass)
-    is_sfedu = secrets.compare_digest(credentials.username, sfedu_user) and secrets.compare_digest(credentials.password, sfedu_pass)
-    if not (is_admin or is_sfedu):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный логин или пароль администратора",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
+    teachers = load_teachers()
+    for t in teachers:
+        if secrets.compare_digest(credentials.username, t.get("username", "")) and \
+           secrets.compare_digest(credentials.password, t.get("password", "")):
+            return t
+    return None
 
 @app.post("/api/auth/send-code")
 def send_code(req: AuthRequest) -> Dict[str, Any]:
@@ -250,6 +324,26 @@ def verify_code(req: VerifyRequest) -> Dict[str, Any]:
 
 @app.post("/api/results/save")
 def save_quiz_result(res: ResultSubmit) -> Dict[str, str]:
+    assigned_teacher_id = res.teacher_id or "teacher-geo-01"
+
+    if res.session_id:
+        active_sess = load_active_session()
+        if active_sess and (active_sess.get("sessionId") == res.session_id or active_sess.get("session_id") == res.session_id):
+            assigned_teacher_id = active_sess.get("teacher_id", assigned_teacher_id)
+        else:
+            history = load_sessions_history()
+            for s in history:
+                if s.get("sessionId") == res.session_id or s.get("session_id") == res.session_id:
+                    assigned_teacher_id = s.get("teacher_id", assigned_teacher_id)
+                    break
+    
+    if assigned_teacher_id == "teacher-geo-01" and res.group:
+        all_groups = load_groups()
+        for g in all_groups:
+            if g.get("name") == res.group or g.get("id") == res.group:
+                assigned_teacher_id = g.get("teacher_id", assigned_teacher_id)
+                break
+
     data = {
         "date": time.strftime("%d.%m.%Y %H:%M"),
         "email": res.email,
@@ -265,7 +359,8 @@ def save_quiz_result(res: ResultSubmit) -> Dict[str, str]:
         "violations": res.violations,
         "exam_status": res.exam_status,
         "session_id": res.session_id,
-        "mistakes_log": res.mistakes_log
+        "mistakes_log": res.mistakes_log,
+        "teacher_id": assigned_teacher_id
     }
     save_result_to_file(data)
     return {"status": "ok"}
@@ -277,34 +372,51 @@ def get_leaderboard() -> List[Dict[str, Any]]:
     return sorted_res[:25]
 
 @app.get("/api/admin/groups")
-def get_admin_groups() -> List[Dict[str, Any]]:
-    return load_groups()
+def get_admin_groups(teacher: Dict[str, Any] = Depends(check_admin)) -> List[Dict[str, Any]]:
+    groups = load_groups()
+    if teacher.get("username") == "admin":
+        return groups
+    return [g for g in groups if g.get("teacher_id", "teacher-geo-01") == teacher.get("teacher_id")]
 
 @app.post("/api/admin/groups")
-def save_or_update_group(group: GroupModel) -> Dict[str, Any]:
+def save_or_update_group(group: GroupModel, teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[str, Any]:
     groups = load_groups()
     group_dict = group.model_dump()
+    group_dict["teacher_id"] = teacher.get("teacher_id", "teacher-geo-01")
     if not group_dict.get("created_at"):
         group_dict["created_at"] = time.strftime("%d.%m.%Y %H:%M")
     idx = next((i for i, g in enumerate(groups) if g.get("id") == group.id), -1)
     if idx >= 0:
+        if teacher.get("username") != "admin" and groups[idx].get("teacher_id", "teacher-geo-01") != teacher.get("teacher_id"):
+            raise HTTPException(status_code=403, detail="У вас нет прав на редактирование группы другого преподавателя")
         groups[idx] = group_dict
     else:
         groups.append(group_dict)
     save_groups_to_file(groups)
-    return {"status": "ok", "groups": groups}
+    if teacher.get("username") == "admin":
+        return {"status": "ok", "groups": groups}
+    return {"status": "ok", "groups": [g for g in groups if g.get("teacher_id", "teacher-geo-01") == teacher.get("teacher_id")]}
 
 @app.delete("/api/admin/groups/{group_id}")
-def delete_group(group_id: str) -> Dict[str, Any]:
+def delete_group(group_id: str, teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[str, Any]:
     groups = load_groups()
+    target = next((g for g in groups if g.get("id") == group_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+    if teacher.get("username") != "admin" and target.get("teacher_id", "teacher-geo-01") != teacher.get("teacher_id"):
+        raise HTTPException(status_code=403, detail="У вас нет прав на удаление группы другого преподавателя")
     groups = [g for g in groups if g.get("id") != group_id]
     save_groups_to_file(groups)
-    return {"status": "ok", "groups": groups}
+    if teacher.get("username") == "admin":
+        return {"status": "ok", "groups": groups}
+    return {"status": "ok", "groups": [g for g in groups if g.get("teacher_id", "teacher-geo-01") == teacher.get("teacher_id")]}
 
 @app.get("/api/admin/students")
-def get_all_students() -> List[Dict[str, Any]]:
-    groups = load_groups()
-    results = load_results()
+def get_all_students(teacher: Dict[str, Any] = Depends(check_admin)) -> List[Dict[str, Any]]:
+    is_super = teacher.get("username") == "admin"
+    t_id = teacher.get("teacher_id")
+    groups = load_groups() if is_super else [g for g in load_groups() if g.get("teacher_id", "teacher-geo-01") == t_id]
+    results = load_results() if is_super else [r for r in load_results() if r.get("teacher_id", "teacher-geo-01") == t_id]
     students_map = {}
     for g in groups:
         for s in g.get("students", []):
@@ -323,10 +435,11 @@ def get_server_time() -> Dict[str, int]:
     return {"server_time": int(time.time() * 1000)}
 
 @app.post("/api/exam/launch")
-def launch_exam_session(req: LaunchSessionRequest) -> Dict[str, Any]:
+def launch_exam_session(req: LaunchSessionRequest, teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[str, Any]:
     now_ms = int(time.time() * 1000)
     duration_ms = req.timeLimitMinutes * 60 * 1000
     sess_id = f"SES-SFEDU-{int(time.time())}"
+    teacher_id = teacher.get("teacher_id", "teacher-geo-01")
     session_data = {
         "sessionId": sess_id,
         "session_id": sess_id,
@@ -354,18 +467,26 @@ def launch_exam_session(req: LaunchSessionRequest) -> Dict[str, Any]:
         "endTime": now_ms + duration_ms,
         "end_time": now_ms + duration_ms,
         "status": "active",
-        "created_date": time.strftime("%d.%m.%Y %H:%M:%S")
+        "created_date": time.strftime("%d.%m.%Y %H:%M:%S"),
+        "teacher_id": teacher_id,
+        "teacher_name": teacher.get("full_name", teacher.get("username", "Преподаватель")),
+        "organization": teacher.get("organization", "")
     }
     save_active_session(session_data)
+    record_session_history(session_data)
     return {"status": "ok", "session": session_data, "server_time": now_ms}
 
 @app.get("/api/exam/active-session")
-def get_active_exam_session() -> Dict[str, Any]:
+def get_active_exam_session(teacher: Optional[Dict[str, Any]] = Depends(check_admin_optional)) -> Dict[str, Any]:
     session = load_active_session()
     now_ms = int(time.time() * 1000)
     if not session or session.get("status") in ["stopped", "completed"]:
         return {"session": None, "current_server_time": now_ms, "remaining_seconds": 0}
     
+    # Преподавателю показываем только его сессию (суперадмину — любую)
+    if teacher and teacher.get("username") != "admin" and session.get("teacher_id") != teacher.get("teacher_id"):
+        return {"session": None, "current_server_time": now_ms, "remaining_seconds": 0}
+
     started = session.get("sessionStartedAt", 0) or session.get("started_at", 0)
     duration = session.get("durationMs", 0) or session.get("duration_ms", 0)
     remaining_sec = max(0, int((started + duration - now_ms) / 1000))
@@ -373,6 +494,7 @@ def get_active_exam_session() -> Dict[str, Any]:
     if remaining_sec <= 0 and session.get("status") == "active":
         session["status"] = "completed"
         save_active_session(session)
+        record_session_history(session)
         return {"session": None, "current_server_time": now_ms, "remaining_seconds": 0}
 
     session_copy = dict(session)
@@ -381,50 +503,69 @@ def get_active_exam_session() -> Dict[str, Any]:
     return {"session": session_copy, "current_server_time": now_ms, "remaining_seconds": remaining_sec}
 
 @app.post("/api/exam/stop")
-def stop_exam_session() -> Dict[str, str]:
+def stop_exam_session(teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[str, str]:
     session = load_active_session()
     if session:
-        session["status"] = "stopped"
-        save_active_session(session)
+        if teacher.get("username") == "admin" or session.get("teacher_id") == teacher.get("teacher_id"):
+            session["status"] = "stopped"
+            save_active_session(session)
+            record_session_history(session)
     return {"status": "ok"}
 
 @app.get("/admin", response_class=HTMLResponse, response_model=None)
 @app.get("/admin.html", response_class=HTMLResponse, response_model=None)
-def admin_panel(username: str = Depends(check_admin)):
-    results = load_results()
-    groups = load_groups()
+def admin_panel(teacher: Dict[str, Any] = Depends(check_admin)):
+    t_id = teacher.get("teacher_id")
+    is_super = teacher.get("username") == "admin"
+    all_results = load_results()
+    all_groups = load_groups()
     active_session = load_active_session()
+
+    results = all_results if is_super else [r for r in all_results if r.get("teacher_id", "teacher-geo-01") == t_id]
+    groups = all_groups if is_super else [g for g in all_groups if g.get("teacher_id", "teacher-geo-01") == t_id]
+    
+    teacher_session = None
+    if active_session and (is_super or active_session.get("teacher_id") == t_id):
+        teacher_session = active_session
+
     admin_path = os.path.join(os.path.dirname(__file__), "admin.html")
     if os.path.exists(admin_path):
         with open(admin_path, "r", encoding="utf-8") as f:
             template = f.read()
         results_json = json.dumps(results, ensure_ascii=False)
         groups_json = json.dumps(groups, ensure_ascii=False)
-        session_json = json.dumps(active_session, ensure_ascii=False)
+        session_json = json.dumps(teacher_session, ensure_ascii=False)
+        teacher_json = json.dumps(teacher, ensure_ascii=False)
+
         rendered = template.replace("__SERVER_RESULTS_JSON__", results_json)
         rendered = rendered.replace("__SERVER_GROUPS_JSON__", groups_json)
         rendered = rendered.replace("__SERVER_SESSION_JSON__", session_json)
+        rendered = rendered.replace("__SERVER_TEACHER_JSON__", teacher_json)
         return HTMLResponse(content=rendered)
 
     total_tests = len(results)
     avg_accuracy = round(sum(r.get("accuracy", 0) for r in results) / total_tests, 1) if total_tests else 0
-    return HTMLResponse(f"<h2>Институт наук о Земле ЮФУ</h2><p>Всего сдано тестов: {total_tests}, средняя точность: {avg_accuracy}%</p>")
+    return HTMLResponse(f"<h2>{teacher.get('organization', 'Институт наук о Земле ЮФУ')}</h2><p>Преподаватель: {teacher.get('full_name')}</p><p>Всего сдано тестов: {total_tests}, средняя точность: {avg_accuracy}%</p>")
 
 @app.get("/api/admin/results")
-def get_admin_results(username: str = Depends(check_admin)) -> List[Dict[str, Any]]:
-    return load_results()
+def get_admin_results(teacher: Dict[str, Any] = Depends(check_admin)) -> List[Dict[str, Any]]:
+    results = load_results()
+    if teacher.get("username") == "admin":
+        return results
+    return [r for r in results if r.get("teacher_id", "teacher-geo-01") == teacher.get("teacher_id")]
 
 @app.get("/admin/export-csv", response_class=PlainTextResponse, response_model=None)
-def export_csv(username: str = Depends(check_admin)):
-    results = load_results()
+def export_csv(teacher: Dict[str, Any] = Depends(check_admin)):
+    t_id = teacher.get("teacher_id")
+    is_super = teacher.get("username") == "admin"
+    results = load_results() if is_super else [r for r in load_results() if r.get("teacher_id", "teacher-geo-01") == t_id]
     output = io.StringIO()
-    # BOM для Excel
     output.write('\ufeff')
     writer = csv.writer(output, delimiter=';')
     writer.writerow([
         'Дата', 'ФИО студента', 'Email', 'Группа', 'Категория/Тема', 'Режим',
         'Статус сдачи', 'Нарушений фокуса', 'Цифровой токен сдачи',
-        'Баллы', 'Макс баллов', 'Успешность (%)', 'Затраченное время'
+        'Баллы', 'Макс баллов', 'Успешность (%)', 'Затраченное время', 'ID Преподавателя'
     ])
     
     for r in results:
@@ -436,18 +577,18 @@ def export_csv(username: str = Depends(check_admin)):
             r.get('email', '-'),
             r.get('group', '-'),
             r.get('quiz_type', 'Общий'),
-            'Контрольная (Экзамен)' if is_exam else ('Пазл (Сборка региона)' if 'Пазл' in str(r.get('quiz_type', '')) else 'Обычная викторина'),
+            'Контрольный срез' if is_exam else 'Практика',
             status_text,
             r.get('violations', 0),
             r.get('exam_token', '-'),
             r.get('score', 0),
             r.get('max_score', 0),
-            r.get('accuracy', 0),
-            r.get('time_spent', '-')
+            f"{r.get('accuracy', 0)}%",
+            r.get('time_spent', '-'),
+            r.get('teacher_id', t_id)
         ])
-    
     response = PlainTextResponse(output.getvalue(), media_type="text/csv; charset=utf-8")
-    response.headers["Content-Disposition"] = "attachment; filename=vedomost_sfedu_geos.csv"
+    response.headers["Content-Disposition"] = f"attachment; filename=vedomost_{teacher.get('username', 'export')}.csv"
     return response
 
 REGION_DATA_CACHE = {}
@@ -672,7 +813,7 @@ window.serverMapZoom = {info['zoom']};
 async def upload_map(
     file: UploadFile = File(...),
     region_name: Optional[str] = Form(None),
-    username: str = Depends(check_admin)
+    teacher: Dict[str, Any] = Depends(check_admin)
 ) -> Dict[str, Any]:
     """Распаковка архива Shapefile и генерация интерактивной карты."""
     fname = (file.filename or "").lower()
@@ -802,10 +943,7 @@ async def upload_map(
         }
 
 @app.get("/api/maps")
-def get_maps_list(credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)) -> List[Dict[str, Any]]:
-    if credentials:
-        check_admin_optional(credentials)
-
+def get_maps_list(teacher: Optional[Dict[str, Any]] = Depends(check_admin_optional)) -> List[Dict[str, Any]]:
     if not os.path.exists(MAPS_DIR):
         return []
 
@@ -850,11 +988,8 @@ def get_maps_list(credentials: Optional[HTTPBasicCredentials] = Depends(security
 @app.delete("/api/maps/{filename}")
 def delete_map(
     filename: str,
-    credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)
+    teacher: Optional[Dict[str, Any]] = Depends(check_admin_optional)
 ) -> Dict[str, Any]:
-    if credentials:
-        check_admin_optional(credentials)
-
     safe_name = os.path.basename(filename.strip())
     if not safe_name.lower().endswith(".html"):
         raise HTTPException(status_code=400, detail="Разрешено удаление только HTML-файлов карт")

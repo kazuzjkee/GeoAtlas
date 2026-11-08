@@ -5,6 +5,7 @@ let allResults = [];
     let allKnownStudents = [];
     let activeFilter = 'all';
     let searchQuery = '';
+    let currentTeacher = null;
 
     const DEFAULT_PRESET_GROUPS = [
         {
@@ -40,17 +41,47 @@ let allResults = [];
     ];
 
     function initData() {
-        // 1. Загрузка результатов
+        // 0. Загрузка профиля преподавателя (B2B SaaS Мультитенантность)
+        try {
+            const teacherRaw = document.getElementById('server-teacher-data')?.textContent.trim();
+            if (teacherRaw && teacherRaw !== '__SERVER_TEACHER_JSON__') {
+                currentTeacher = JSON.parse(teacherRaw);
+            }
+        } catch (e) {}
+
+        if (currentTeacher) {
+            const orgTitle = document.getElementById('portal-org-title');
+            const teacherNameEl = document.getElementById('teacher-fullname');
+            const teacherOrgEl = document.getElementById('teacher-org');
+            const teacherIdBadge = document.getElementById('teacher-id-badge');
+
+            if (teacherNameEl && currentTeacher.full_name) {
+                teacherNameEl.textContent = currentTeacher.full_name;
+            }
+            if (teacherOrgEl && currentTeacher.organization) {
+                teacherOrgEl.textContent = currentTeacher.organization;
+            }
+            if (orgTitle && currentTeacher.organization) {
+                orgTitle.textContent = `${currentTeacher.organization} — Панель преподавателя`;
+            }
+            if (teacherIdBadge) {
+                teacherIdBadge.textContent = currentTeacher.teacher_id || currentTeacher.username;
+            }
+        }
+
+        // 1. Загрузка результатов с сервера
+        let serverResultsLoaded = false;
         try {
             const raw = document.getElementById('server-results-data').textContent.trim();
             if (raw && raw !== '__SERVER_RESULTS_JSON__') {
                 allResults = JSON.parse(raw);
+                serverResultsLoaded = true;
             }
         } catch (e) {
             allResults = [];
         }
 
-        if (allResults.length === 0) {
+        if (!serverResultsLoaded) {
             try {
                 const local = localStorage.getItem('rostovQuizResults');
                 if (local) {
@@ -77,15 +108,17 @@ let allResults = [];
             } catch (e) {}
         }
 
-        // 2. Загрузка групп (сервер + localStorage + дефолты)
+        // 2. Загрузка групп с сервера
+        let serverGroupsLoaded = false;
         try {
             const grpRaw = document.getElementById('server-groups-data')?.textContent.trim();
             if (grpRaw && grpRaw !== '__SERVER_GROUPS_JSON__') {
                 allGroups = JSON.parse(grpRaw);
+                serverGroupsLoaded = true;
             }
         } catch (e) {}
 
-        if (!allGroups || allGroups.length === 0) {
+        if (!serverGroupsLoaded) {
             try {
                 const localGrp = localStorage.getItem('sfeduGroups');
                 if (localGrp) allGroups = JSON.parse(localGrp);
@@ -435,7 +468,8 @@ let allResults = [];
             name: nameInput,
             description: descInput,
             students: students,
-            created_at: new Date().toLocaleDateString('ru-RU') + ' ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+            created_at: new Date().toLocaleDateString('ru-RU') + ' ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+            teacher_id: (currentTeacher && currentTeacher.teacher_id) ? currentTeacher.teacher_id : 'teacher-geo-01'
         };
 
         const existingIdx = allGroups.findIndex(g => g.id === groupId);
@@ -543,7 +577,8 @@ let allResults = [];
             durationMs: durationMs,
             endTime: now + durationMs,
             status: "active",
-            students: group.students || []
+            students: group.students || [],
+            teacher_id: (currentTeacher && currentTeacher.teacher_id) ? currentTeacher.teacher_id : 'teacher-geo-01'
         };
 
         // Сохранение в localStorage для мгновенного прототипа
@@ -561,7 +596,8 @@ let allResults = [];
                 quizType: quizType,
                 quizTypeName: quizTypeName,
                 questionCount: questionCount,
-                timeLimitMinutes: timeLimitMinutes
+                timeLimitMinutes: timeLimitMinutes,
+                teacher_id: (currentTeacher && currentTeacher.teacher_id) ? currentTeacher.teacher_id : 'teacher-geo-01'
             })
         }).catch(() => {});
 

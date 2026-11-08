@@ -1,0 +1,30 @@
+[
+  {
+    "teacher_id": "teacher-geo-01",
+    "username": "prof_geo",
+    "password": "geo_password_2026",
+    "full_name": "Проф. Смирнов А. В.",
+    "organization": "Институт наук о Земле ЮФУ"
+  },
+  {
+    "teacher_id": "teacher-eco-02",
+    "username": "prof_eco",
+    "password": "eco_password_2026",
+    "full_name": "Доц. Кузнецова М. И.",
+    "organization": "Экономический факультет ЮФУ"
+  },
+  {
+    "teacher_id": "teacher-admin",
+    "username": "admin",
+    "password": "admin",
+    "full_name": "Главный администратор",
+    "organization": "Южный федеральный университет"
+  },
+  {
+    "teacher_id": "teacher-geo-01",
+    "username": "sfedu_admin",
+    "password": "geodean2026",
+    "full_name": "Деканат наук о Земле",
+    "organization": "Институт наук о Земле ЮФУ"
+  }
+]

@@ -18,6 +18,7 @@ class ExamProctorClass {
     #syncGroupName = null;
     #syncRemainingSec = null;
     #syncHeartbeatTimer = null;
+    #syncTeacherId = null;
 
     get isExam() { return this.#isExam; }
     set isExam(v) { this.#isExam = Boolean(v); }
@@ -80,6 +81,9 @@ class ExamProctorClass {
     get syncHeartbeatTimer() { return this.#syncHeartbeatTimer; }
     set syncHeartbeatTimer(v) { this.#syncHeartbeatTimer = v; }
 
+    get syncTeacherId() { return this.#syncTeacherId; }
+    set syncTeacherId(v) { this.#syncTeacherId = v; }
+
     reset() {
         this.#isExam = false;
         this.#isActive = false;
@@ -88,6 +92,7 @@ class ExamProctorClass {
         this.#token = '';
         this.#globalTimer = null;
         this.#blurCooldown = false;
+        this.#syncTeacherId = null;
     }
 }
 
@@ -226,6 +231,7 @@ Object.defineProperty(_root, 'antiCheatActive', {
 Object.defineProperty(_root, 'blurCooldown', { get() { return ExamProctor.blurCooldown; }, set(v) { ExamProctor.blurCooldown = v; }, configurable: true });
 Object.defineProperty(_root, 'currentSyncSessionId', { get() { return ExamProctor.syncSessionId; }, set(v) { ExamProctor.syncSessionId = v; }, configurable: true });
 Object.defineProperty(_root, 'currentSyncGroupName', { get() { return ExamProctor.syncGroupName; }, set(v) { ExamProctor.syncGroupName = v; }, configurable: true });
+Object.defineProperty(_root, 'currentSyncTeacherId', { get() { return ExamProctor.syncTeacherId; }, set(v) { ExamProctor.syncTeacherId = v; }, configurable: true });
 Object.defineProperty(_root, 'syncExamRemainingSec', { get() { return ExamProctor.syncRemainingSec; }, set(v) { ExamProctor.syncRemainingSec = v; }, configurable: true });
 Object.defineProperty(_root, 'syncSessionHeartbeatTimer', { get() { return ExamProctor.syncHeartbeatTimer; }, set(v) { ExamProctor.syncHeartbeatTimer = v; }, configurable: true });
 
@@ -2894,7 +2900,8 @@ function savePuzzleResult(total, accuracy, timeStr, token, mistakes) {
                 is_exam: false,
                 exam_token: token,
                 violations: mistakes,
-                exam_status: mistakes === 0 ? 'Идеально' : 'Собрано'
+                exam_status: mistakes === 0 ? 'Идеально' : 'Собрано',
+                teacher_id: currentSyncTeacherId || (student && student.teacher_id) || 'teacher-geo-01'
             })
         }).catch(e => {});
     }
@@ -4324,7 +4331,8 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         violations: violations,
         exam_status: displayStatus,
         session_id: currentSyncSessionId || '',
-        mistakes_log: currentSessionMistakes || []
+        mistakes_log: currentSessionMistakes || [],
+        teacher_id: currentSyncTeacherId || (student && student.teacher_id) || 'teacher-geo-01'
     };
 
     fetch('/api/results/save', {
@@ -5058,6 +5066,7 @@ async function checkAndApplySyncExamSession() {
 
     currentSyncSessionId = session.session_id;
     currentSyncGroupName = session.group_name;
+    currentSyncTeacherId = session.teacher_id || session.teacherId || '';
     syncExamRemainingSec = remainingSeconds;
     window.currentSyncQuestionCount = session.questions_count || 15;
     window.currentSyncTimeLimit = session.time_limit_minutes || 10;

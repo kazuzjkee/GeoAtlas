@@ -15,9 +15,17 @@
         <div class="header-title-wrap">
             <div class="sfedu-emblem">🎓</div>
             <div>
-                <h1 class="portal-title">Институт наук о Земле ЮФУ — Панель преподавателя</h1>
+                <h1 class="portal-title" id="portal-org-title">Институт наук о Земле ЮФУ — Панель преподавателя</h1>
                 <p class="portal-subtitle">Электронная ведомость проверочных работ, контрольных срезов и мониторинг успеваемости</p>
             </div>
+        </div>
+        <div class="teacher-profile-badge" id="teacher-profile-badge" style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.05); padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+            <div style="width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #3B82F6, #8B5CF6); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: bold; color: #fff;" id="teacher-avatar">👨‍🏫</div>
+            <div>
+                <div style="font-weight: 600; font-size: 0.95rem; color: #F3F4F6;" id="teacher-fullname">Преподаватель</div>
+                <div style="font-size: 0.8rem; color: #9CA3AF;" id="teacher-org">Институт наук о Земле ЮФУ</div>
+            </div>
+            <span class="badge badge-blue" id="teacher-id-badge" style="font-size: 0.75rem; margin-left: 6px;">SaaS Tenant</span>
         </div>
         <div class="header-actions">
             <a href="/" class="btn btn-glass" title="Вернуться к интерактивному атласу">
@@ -503,6 +511,9 @@ __SERVER_GROUPS_JSON__
 </script>
 <script id="server-session-data" type="application/json">
 __SERVER_SESSION_JSON__
+</script>
+<script id="server-teacher-data" type="application/json">
+__SERVER_TEACHER_JSON__
 </script>
 
 <script src="/public/admin.js"></script>
