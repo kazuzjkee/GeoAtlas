@@ -1392,7 +1392,17 @@ window.serverMapZoom = {self.zoom};
         self.map.get_root().html.add_child(folium.Element(f"<script>{dynamic_js}\n{quiz_js}</script>"))
 
         quiz_html = f'''
+        <!-- OVERLAY LOADER ПЕРВИЧНОЙ ЗАГРУЗКИ КАРТЫ -->
+        <div id="map-loader" class="map-loader-overlay">
+            <div class="map-loader-content">
+                <div class="map-loader-spinner"></div>
+                <div class="map-loader-title">Загрузка геоданных...</div>
+                <div class="map-loader-subtitle">Подготовка пространственных слоев и номенклатуры</div>
+            </div>
+        </div>
+
         <div class="top-nav-buttons" id="top-nav-panel">
+            <a href="index.html" class="btn btn-secondary nav-top-btn" title="Вернуться к выбору региона"><span>🏠 На главную</span></a>
             <button class="btn btn-secondary nav-top-btn reset-map-btn" onclick="resetMapView()" title="Показать всю карту">
                 <span>🌍 Вся карта</span>
             </button>
@@ -1430,6 +1440,9 @@ window.serverMapZoom = {self.zoom};
                 <div class="exam-sidebar-meta">
                     <div class="exam-sidebar-student">Студент: <b id="exam-sidebar-student-name">Студент</b></div>
                     <div class="exam-sidebar-group">Группа: <b id="exam-sidebar-group-name">ЮФУ</b></div>
+                </div>
+                <div class="timer-track" style="margin-top: 8px;">
+                    <div id="timer-bar"></div>
                 </div>
             </div>
 
@@ -1606,22 +1619,6 @@ window.serverMapZoom = {self.zoom};
                 <div class="quiz-status-header">
                     <h4 id="quiz-title">Викторина</h4>
                     <div id="quiz-progress">Вопрос: <span id="current-question">1</span>/<span id="total-questions">10</span></div>
-                </div>
-
-                <div id="timer-bar-container" class="exam-proctor-panel" style="display: none; margin-bottom: 12px;">
-                    <div class="exam-panel-top">
-                        <div class="exam-status-badge">
-                            <span class="exam-status-dot"></span>
-                            <span id="exam-proctor-status-text">Контроль Anti-Cheat</span>
-                        </div>
-                        <div class="exam-timer-wrapper">
-                            <span class="exam-timer-icon">⏳</span>
-                            <span id="timer-text" class="exam-timer-display">10:00</span>
-                        </div>
-                    </div>
-                    <div class="timer-track">
-                        <div id="timer-bar"></div>
-                    </div>
                 </div>
 
                 <div id="question-container">
@@ -3100,73 +3097,72 @@ window.serverMapZoom = {self.zoom};
         .quiz-status-header h4 {{ margin: 0; font-size: 13px; font-weight: 700; }}
         #quiz-progress {{ font-size: 11px; opacity: 0.9; margin-top: 2px; }}
 
-        /* ==================== ПРЕМИАЛЬНЫЙ ВИДЖЕТ ТАЙМЕРА И ПРОКТОРИНГА ==================== */
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap');
-
-        .exam-proctor-panel {{
-            background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 60%, #1E293B 100%);
-            border: 1px solid rgba(139, 92, 246, 0.4);
-            border-radius: 12px;
-            padding: 10px 14px;
-            margin-bottom: 12px;
-            box-shadow: 0 4px 18px rgba(15, 23, 42, 0.28), 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            box-sizing: border-box;
-            transition: all 0.3s ease;
-        }}
-
-        .exam-panel-top {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }}
-
-        .exam-status-badge {{
+        /* ==================== LOADER ПЕРВИЧНОЙ ЗАГРУЗКИ КАРТЫ ==================== */
+        .map-loader-overlay {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            font-weight: 700;
-            color: #CBD5E1;
-            letter-spacing: 0.3px;
-            text-transform: uppercase;
+            justify-content: center;
+            z-index: 999999;
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+            pointer-events: auto;
         }}
 
-        .exam-status-dot {{
-            width: 8px;
-            height: 8px;
+        .map-loader-overlay.hidden {{
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }}
+
+        .map-loader-content {{
+            text-align: center;
+            color: #FFFFFF;
+            padding: 32px 40px;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 20px;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5);
+        }}
+
+        .map-loader-spinner {{
+            width: 52px;
+            height: 52px;
+            margin: 0 auto 18px auto;
+            border: 4px solid rgba(56, 189, 248, 0.2);
+            border-top: 4px solid #38BDF8;
+            border-right: 4px solid #818CF8;
             border-radius: 50%;
-            background: #10B981;
-            box-shadow: 0 0 8px #10B981;
-            animation: proctorDotPulse 1.8s infinite;
+            animation: mapLoaderSpin 1s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
         }}
 
-        @keyframes proctorDotPulse {{
-            0% {{ transform: scale(0.95); opacity: 0.8; }}
-            50% {{ transform: scale(1.25); opacity: 1; }}
-            100% {{ transform: scale(0.95); opacity: 0.8; }}
+        @keyframes mapLoaderSpin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
         }}
 
-        .exam-timer-wrapper {{
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(15, 23, 42, 0.7);
-            padding: 4px 10px;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
+        .map-loader-title {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+            color: #F8FAFC;
+            margin-bottom: 6px;
         }}
 
-        .exam-timer-icon {{
-            font-size: 13px;
-        }}
-
-        .exam-timer-display, #timer-text {{
-            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace !important;
-            font-size: 15px !important;
-            font-weight: 800 !important;
-            color: #38BDF8 !important;
-            letter-spacing: 0.5px !important;
+        .map-loader-subtitle {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 12.5px;
+            color: #94A3B8;
+            letter-spacing: 0.1px;
         }}
 
         .timer-track {{

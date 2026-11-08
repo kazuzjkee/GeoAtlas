@@ -557,6 +557,9 @@ function ensureExamKioskTopBar(opts = {}) {
                 <div class="exam-sidebar-student">Студент: <b id="exam-sidebar-student-name">${escapeHtml(studentName)}</b></div>
                 <div class="exam-sidebar-group">Группа: <b id="exam-sidebar-group-name">${escapeHtml(groupName)}</b></div>
             </div>
+            <div class="timer-track" style="margin-top: 8px;">
+                <div id="timer-bar"></div>
+            </div>
         `;
         sidebarHeader.style.display = 'block';
     }
@@ -780,15 +783,9 @@ function toggleTimer() {
 
 function startTimer() {
     stopTimer();
-    if (isExamMode) {
-                return;
-    }
-    const tb = document.getElementById('timer-bar-container');
-    if (!timerEnabled) {
-        if (tb) tb.style.display = 'none';
+    if (isExamMode || !timerEnabled) {
         return;
     }
-    if (tb) tb.style.display = 'block';
     timeLeft = QUESTION_TIME_LIMIT;
     updateTimerDisplay();
 
@@ -810,28 +807,7 @@ function stopTimer() {
 }
 
 function ensureExamProctorWidgetDOM() {
-    let tb = document.getElementById('timer-bar-container');
-    if (!tb) return;
-    
-    tb.classList.add('exam-proctor-panel');
-    
-    if (!tb.querySelector('.exam-panel-top')) {
-        tb.innerHTML = `
-            <div class="exam-panel-top">
-                <div class="exam-status-badge">
-                    <span class="exam-status-dot"></span>
-                    <span id="exam-proctor-status-text">Контроль Anti-Cheat</span>
-                </div>
-                <div class="exam-timer-wrapper">
-                    <span class="exam-timer-icon">⏳</span>
-                    <span id="timer-text" class="exam-timer-display">10:00</span>
-                </div>
-            </div>
-            <div class="timer-track">
-                <div id="timer-bar"></div>
-            </div>
-        `;
-    }
+    // Устаревший виджет #timer-bar-container удален, таймер и Anti-Cheat объединены в #exam-sidebar-header
 }
 
 function showExamTimeoutBanner() {
@@ -850,10 +826,7 @@ function startGlobalExamTimer() {
     stopTimer();
     stopGlobalExamTimer();
 
-    ensureExamProctorWidgetDOM();
-
-    const tb = document.getElementById('timer-bar-container');
-    if (tb) tb.style.display = 'block';
+    ensureExamKioskTopBar();
 
     // Фиксация абсолютной метки завершения для защиты от засыпания вкладки
     window.examTimerEndTime = Date.now() + (Math.max(1, examTimeRemaining) * 1000);
@@ -896,9 +869,7 @@ function stopGlobalExamTimer() {
 function updateGlobalExamTimerDisplay() {
     if (!_cachedTimerElements) {
         _cachedTimerElements = {
-            timerText: document.getElementById('timer-text'),
             timerBar: document.getElementById('timer-bar'),
-            statusText: document.getElementById('exam-proctor-status-text'),
             sidebarTimer: document.getElementById('exam-sidebar-timer'),
             kioskTimer: document.getElementById('kiosk-timer-display')
         };
@@ -912,13 +883,7 @@ function updateGlobalExamTimerDisplay() {
 
     if (timeStr !== _prevTimerStr) {
         _prevTimerStr = timeStr;
-        const color = safeSec < 60 ? '#EF4444' : (safeSec < 180 ? '#F59E0B' : '#38BDF8');
         const kColor = safeSec < 60 ? '#EF4444' : (safeSec < 180 ? '#F59E0B' : '#FBBF24');
-
-        if (els.timerText) {
-            els.timerText.textContent = timeStr;
-            if (els.timerText.style.color !== color) els.timerText.style.color = color;
-        }
 
         const activeTimer = els.sidebarTimer || document.getElementById('exam-sidebar-timer') || els.kioskTimer;
         if (activeTimer) {
@@ -927,50 +892,22 @@ function updateGlobalExamTimerDisplay() {
         }
     }
 
-    if (els.statusText) {
-        let newStatus = '';
-        let newColor = '#CBD5E1';
-        if (safeSec <= 0) {
-            newStatus = 'Время истекло';
-            newColor = '#EF4444';
-        } else if (safeSec < 60) {
-            newStatus = 'Финал: Менее 1 мин!';
-            newColor = '#FCA5A5';
-        } else if (currentSyncGroupName) {
-            newStatus = 'Экзамен • ' + currentSyncGroupName;
-        } else {
-            const catTitles = {
-                'mixed': 'Комплексный экзамен',
-                'districts': 'Номенклатура районов',
-                'rivers': 'Гидрография (Реки)',
-                'centers': 'Административные центры',
-                'neighbors': 'Топология смежности',
-                'puzzle': 'Сборка-пазл'
-            };
-            newStatus = catTitles[examCategory] || 'Экзамен (Anti-Cheat)';
-        }
-        if (newStatus !== _prevStatusText) {
-            _prevStatusText = newStatus;
-            els.statusText.textContent = newStatus;
-            els.statusText.style.color = newColor;
-        }
-    }
-
-    if (els.timerBar) {
+    const timerBar = els.timerBar || document.getElementById('timer-bar');
+    if (timerBar) {
         const totalSec = Math.max(1, examTimeLimitMinutes * 60);
         const percent = Math.min(100, Math.max(0, Math.round((safeSec / totalSec) * 100)));
         if (percent !== _prevTimerPercent) {
             _prevTimerPercent = percent;
-            els.timerBar.style.width = percent + '%';
+            timerBar.style.width = percent + '%';
             if (percent > 40) {
-                els.timerBar.style.background = 'linear-gradient(90deg, #8B5CF6, #38BDF8)';
-                els.timerBar.style.boxShadow = '0 0 8px rgba(56, 189, 248, 0.4)';
+                timerBar.style.background = 'linear-gradient(90deg, #8B5CF6, #38BDF8)';
+                timerBar.style.boxShadow = '0 0 8px rgba(56, 189, 248, 0.4)';
             } else if (percent > 20) {
-                els.timerBar.style.background = 'linear-gradient(90deg, #F59E0B, #FBBF24)';
-                els.timerBar.style.boxShadow = '0 0 8px rgba(245, 158, 11, 0.4)';
+                timerBar.style.background = 'linear-gradient(90deg, #F59E0B, #FBBF24)';
+                timerBar.style.boxShadow = '0 0 8px rgba(245, 158, 11, 0.4)';
             } else {
-                els.timerBar.style.background = 'linear-gradient(90deg, #DC2626, #EF4444)';
-                els.timerBar.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.7)';
+                timerBar.style.background = 'linear-gradient(90deg, #DC2626, #EF4444)';
+                timerBar.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.7)';
             }
         }
     }
@@ -3339,17 +3276,91 @@ function checkAnswer() {
     const oldButton = document.getElementById('confirm-button');
     if (oldButton) oldButton.remove();
 
+    let delay = 1800;
+
     if (isCorrect) {
         score++;
         showFeedback('Правильно!', 'success');
     } else {
         showFeedback(`Неправильно! Ответ: ${question.correctAnswer}`, 'error');
+
+        // Цветовая подсветка ошибки на карте: неверный полигон — красный (#EF4444), правильный — зеленый (#10B981)
+        if (question.type === 'district' || question.type === 'neighbor') {
+            const wrongLayer = findDistrictLayerByName(selectedOption);
+            const correctName = question.correctAnswer || question.districtName;
+            const correctLayer = findDistrictLayerByName(correctName);
+
+            const defaultStyle = {
+                color: '#2E8B57',
+                weight: 2,
+                fillColor: '#90EE90',
+                fillOpacity: 0.25,
+                dashArray: '5, 5'
+            };
+
+            const layersToRestore = [];
+
+            if (wrongLayer) {
+                try {
+                    layersToRestore.push({
+                        layer: wrongLayer,
+                        style: {
+                            color: wrongLayer.options?.color || defaultStyle.color,
+                            weight: wrongLayer.options?.weight || defaultStyle.weight,
+                            fillColor: wrongLayer.options?.fillColor || defaultStyle.fillColor,
+                            fillOpacity: wrongLayer.options?.fillOpacity !== undefined ? wrongLayer.options.fillOpacity : defaultStyle.fillOpacity,
+                            dashArray: wrongLayer.options?.dashArray !== undefined ? wrongLayer.options.dashArray : defaultStyle.dashArray
+                        }
+                    });
+                    wrongLayer.setStyle({
+                        color: '#EF4444',
+                        weight: 4,
+                        fillColor: '#EF4444',
+                        fillOpacity: 0.65,
+                        dashArray: null
+                    });
+                    if (wrongLayer.bringToFront) wrongLayer.bringToFront();
+                } catch(e) {}
+            }
+
+            if (correctLayer) {
+                try {
+                    layersToRestore.push({
+                        layer: correctLayer,
+                        style: {
+                            color: correctLayer.options?.color || defaultStyle.color,
+                            weight: correctLayer.options?.weight || defaultStyle.weight,
+                            fillColor: correctLayer.options?.fillColor || defaultStyle.fillColor,
+                            fillOpacity: correctLayer.options?.fillOpacity !== undefined ? correctLayer.options.fillOpacity : defaultStyle.fillOpacity,
+                            dashArray: correctLayer.options?.dashArray !== undefined ? correctLayer.options.dashArray : defaultStyle.dashArray
+                        }
+                    });
+                    correctLayer.setStyle({
+                        color: '#10B981',
+                        weight: 4,
+                        fillColor: '#10B981',
+                        fillOpacity: 0.65,
+                        dashArray: null
+                    });
+                    if (correctLayer.bringToFront) correctLayer.bringToFront();
+                } catch(e) {}
+            }
+
+            if (layersToRestore.length > 0) {
+                delay = 2500;
+                setTimeout(() => {
+                    layersToRestore.forEach(item => {
+                        try { item.layer.setStyle(item.style); } catch(e) {}
+                    });
+                }, 2400);
+            }
+        }
     }
     updateScore();
     setTimeout(() => {
         currentQuestion++;
         showQuestion();
-    }, 1800);
+    }, delay);
 }
 
 function setupMapClickListener(question) {
@@ -3519,22 +3530,18 @@ function normalizeDistrictName(str) {
     return clean;
 }
 
-function highlightDistrictOnMapByName(districtName) {
+function findDistrictLayerByName(districtName) {
     const map = getMapObject();
-    if (!map) return;
+    if (!map || !districtName) return null;
 
-    resetActiveHighlight();
     const targetNorm = normalizeDistrictName(districtName);
     const targetSimple = districtName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
-
     let targetLayer = null;
 
     map.eachLayer(function(layer) {
         if (layer.feature && layer.feature.properties && !targetLayer) {
             const props = layer.feature.properties;
-            
-                        if (props.is_district_layer !== 1) return;
-
+            if (props.is_district_layer !== 1) return;
             const pName = props.display_name || props.NAME_1 || props.NAME_RU || props.NAME || '';
             if (normalizeDistrictName(pName) === targetNorm) {
                 targetLayer = layer;
@@ -3542,13 +3549,11 @@ function highlightDistrictOnMapByName(districtName) {
         }
     });
 
-        if (!targetLayer) {
+    if (!targetLayer) {
         map.eachLayer(function(layer) {
             if (layer.feature && layer.feature.properties && !targetLayer) {
                 const props = layer.feature.properties;
-                
                 if (props.is_district_layer !== 1) return;
-
                 const pName = (props.display_name || props.NAME_1 || props.NAME_RU || props.NAME || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
                 if (pName === targetSimple || pName.includes(targetSimple) || targetSimple.includes(pName)) {
                     targetLayer = layer;
@@ -3556,6 +3561,16 @@ function highlightDistrictOnMapByName(districtName) {
             }
         });
     }
+
+    return targetLayer;
+}
+
+function highlightDistrictOnMapByName(districtName) {
+    const map = getMapObject();
+    if (!map) return;
+
+    resetActiveHighlight();
+    const targetLayer = findDistrictLayerByName(districtName);
 
     if (targetLayer) {
         highlightedDistrictLayer = targetLayer;
@@ -4482,72 +4497,6 @@ function injectExamProctorStyles() {
     style.textContent = `
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap');
 
-        #timer-bar-container.exam-proctor-panel {
-            background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 60%, #1E293B 100%) !important;
-            border: 1px solid rgba(139, 92, 246, 0.4) !important;
-            border-radius: 12px !important;
-            padding: 10px 14px !important;
-            margin-bottom: 12px !important;
-            box-shadow: 0 4px 18px rgba(15, 23, 42, 0.28), 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
-            box-sizing: border-box !important;
-            transition: all 0.3s ease !important;
-        }
-
-        .exam-panel-top {
-            display: flex !important;
-            justify-content: space-between !important;
-            align-items: center !important;
-            margin-bottom: 8px !important;
-        }
-
-        .exam-status-badge {
-            display: flex !important;
-            align-items: center !important;
-            gap: 6px !important;
-            font-size: 11px !important;
-            font-weight: 700 !important;
-            color: #CBD5E1 !important;
-            letter-spacing: 0.3px !important;
-            text-transform: uppercase !important;
-        }
-
-        .exam-status-dot {
-            width: 8px !important;
-            height: 8px !important;
-            border-radius: 50% !important;
-            background: #10B981 !important;
-            box-shadow: 0 0 8px #10B981 !important;
-            animation: proctorDotPulse 1.8s infinite !important;
-        }
-
-        @keyframes proctorDotPulse {
-            0% { transform: scale(0.95); opacity: 0.8; }
-            50% { transform: scale(1.25); opacity: 1; }
-            100% { transform: scale(0.95); opacity: 0.8; }
-        }
-
-        .exam-timer-wrapper {
-            display: flex !important;
-            align-items: center !important;
-            gap: 6px !important;
-            background: rgba(15, 23, 42, 0.7) !important;
-            padding: 4px 10px !important;
-            border-radius: 8px !important;
-            border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        }
-
-        .exam-timer-icon {
-            font-size: 13px !important;
-        }
-
-        .exam-timer-display, #timer-text {
-            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace !important;
-            font-size: 15px !important;
-            font-weight: 800 !important;
-            color: #38BDF8 !important;
-            letter-spacing: 0.5px !important;
-        }
-
         .timer-track {
             width: 100% !important;
             height: 6px !important;
@@ -4722,13 +4671,83 @@ function injectExamProctorStyles() {
     document.head.appendChild(style);
 }
 
+function hideMapLoader() {
+    const loader = document.getElementById('map-loader');
+    if (!loader) return;
+    loader.classList.add('hidden');
+    setTimeout(() => {
+        if (loader && loader.classList.contains('hidden')) {
+            loader.style.display = 'none';
+        }
+    }, 450);
+}
+
+function setupQuizHotkeys() {
+    window.addEventListener('keydown', function(e) {
+        // Проверяем фокус: не перехватываем ввод в формах и полях
+        const activeEl = document.activeElement;
+        const tag = activeEl ? activeEl.tagName.toLowerCase() : '';
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || (activeEl && activeEl.isContentEditable)) {
+            return;
+        }
+
+        // Проверяем модальные окна
+        const visibleModals = document.querySelectorAll('.welcome-overlay, .modal-backdrop, #main-auth-modal, #leaderboard-modal-container');
+        for (const modal of visibleModals) {
+            if (modal.style.display && modal.style.display !== 'none' && window.getComputedStyle(modal).display !== 'none') {
+                return;
+            }
+        }
+
+        // Горячие клавиши активны ТОЛЬКО когда открыт вопрос теста
+        const quizMode = document.getElementById('quiz-mode');
+        if (!quizMode || quizMode.style.display === 'none' || window.getComputedStyle(quizMode).display === 'none') {
+            return;
+        }
+
+        // Клавиши 1, 2, 3, 4 выбирают вариант
+        if (['1', '2', '3', '4'].includes(e.key)) {
+            const index = parseInt(e.key, 10) - 1;
+            const options = document.querySelectorAll('.quiz-option');
+            if (options && options[index] && !options[index].disabled) {
+                e.preventDefault();
+                options[index].click();
+            }
+            return;
+        }
+
+        // Клавиша Enter подтверждает ответ
+        if (e.key === 'Enter') {
+            const confirmBtn = document.getElementById('confirm-button');
+            if (confirmBtn && !confirmBtn.disabled && confirmBtn.offsetParent !== null) {
+                e.preventDefault();
+                confirmBtn.click();
+            } else if (selectedOption && currentQuiz !== 'center') {
+                e.preventDefault();
+                checkAnswer();
+            }
+        }
+    });
+}
+
 window.addEventListener('load', function() {
     initServerRegionContext();
     injectExamProctorStyles();
-    ensureExamProctorWidgetDOM();
+    setupQuizHotkeys();
     resetMapView();
     setTimeout(setupDistrictClickListeners, 400);
     updateStudentHeader();
+
+    function checkMapRenderedAndHideLoader() {
+        const map = getMapObject();
+        if (map && (document.querySelector('.leaflet-tile-pane') || document.querySelector('.leaflet-overlay-pane'))) {
+            hideMapLoader();
+        } else {
+            setTimeout(hideMapLoader, 200);
+        }
+    }
+    setTimeout(checkMapRenderedAndHideLoader, 250);
+    setTimeout(hideMapLoader, 2000);
 
     const hideWelcomeKey = `geoatlas_hide_welcome_${resolveRegionKey(window.location.pathname)}`;
     if (!localStorage.getItem(hideWelcomeKey) && !localStorage.getItem('rostovMapHideWelcome')) {
