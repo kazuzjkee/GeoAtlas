@@ -248,7 +248,7 @@ REGIONS_CONFIG = {
 
 ACTIVE_REGION = 'russia'
 
-CARTO_KEY = 'cb1_3wsm_1_6bdccfe40c07a69c4fce7b68'
+CARTO_KEY = os.environ.get('CARTO_KEY', 'cb1_3wsm_1_6bdccfe40c07a69c4fce7b68')
 
 STYLES = {
     'districts': {
@@ -1347,6 +1347,16 @@ class InteractiveAtlas:
                     "neighbor_ids": n_map["neighbor_ids"],
                     "neighbors": n_map["neighbor_names"]
                 })
+
+        self.region_metadata = {
+            "REGION_BOUNDS": region_bounds,
+            "EMBEDDED_DISTRICTS": districts_data,
+            "EMBEDDED_CENTERS": centers_data,
+            "EMBEDDED_NEIGHBORS": neighbors_data,
+            "EMBEDDED_RIVERS": rivers_data,
+            "EMBEDDED_PUZZLE_DATA": puzzle_districts,
+            "REGION_OUTLINE_GEOJSON": region_outline_geojson
+        }
 
         map_basename = os.path.basename(self.output_filename)
         server_ctx = {
@@ -3891,8 +3901,17 @@ window.serverMapZoom = {self.zoom};
         else:
             html += my_attribution_html
 
+        CHUNK_SIZE = 1024 * 1024
         with open(filename, 'w', encoding='utf-8') as f:
-            f.write(html)
+            for i in range(0, len(html), CHUNK_SIZE):
+                f.write(html[i:i + CHUNK_SIZE])
+
+        meta_filename = os.path.join(out_dir, f"{self.slug}_meta.json")
+        try:
+            with open(meta_filename, 'w', encoding='utf-8') as f:
+                json.dump(getattr(self, 'region_metadata', {}), f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
         if open_browser:
             try:

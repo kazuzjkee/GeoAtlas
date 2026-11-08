@@ -1,60 +1,246 @@
-let currentQuiz = null;
-let currentQuestion = 0;
-let score = 0;
-let maxPossibleScore = 0;
-let totalQuestions = 10;
-let quizData = [];
-let selectedOption = null;
-let clickMarker = null;
-let resultMarker = null;
-let resultLine = null;
-let popupsDisabled = false;
-let highlightedDistrictLayer = null;
-let highlightedRiverLayers = [];
+const _root = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this);
 
-let timerEnabled = false;
-let questionTimer = null;
 const QUESTION_TIME_LIMIT = 20;
-let timeLeft = QUESTION_TIME_LIMIT;
-let quizStartTime = 0;
 
-let isExamMode = false;
-let examCategory = 'mixed';
-let examQuestionCount = 15;
-let examTimeLimitMinutes = 10;
-let examTimeRemaining = 600; // секунды обратного отсчета
-let examGlobalTimer = null;
-let examCheatingViolations = 0;
-let examStatus = 'passed'; // 'passed', 'warning', 'cheating_detected'
-let examToken = '';
-let antiCheatActive = false;
-let blurCooldown = false;
+class ExamProctorClass {
+    #violations = 0;
+    #isActive = false;
+    #isExam = false;
+    #status = 'passed';
+    #token = '';
+    #category = 'mixed';
+    #questionCount = 15;
+    #timeLimitMinutes = 10;
+    #timeRemaining = 600;
+    #globalTimer = null;
+    #blurCooldown = false;
+    #syncSessionId = null;
+    #syncGroupName = null;
+    #syncRemainingSec = null;
+    #syncHeartbeatTimer = null;
 
-let currentSyncSessionId = null;
-let currentSyncGroupName = null;
-let syncExamRemainingSec = null;
-let syncSessionHeartbeatTimer = null;
+    get isExam() { return this.#isExam; }
+    set isExam(v) { this.#isExam = Boolean(v); }
 
-let studyCategory = 'districts';
-let studyQueue = [];
-let studyIndex = 0;
-let studyCenterMarker = null;
+    get active() { return this.#isActive; }
+    enable() { this.#isActive = true; }
+    disable() { this.#isActive = false; }
 
-let isPuzzleMode = false;
-let puzzleDistricts = [];
-let puzzleUnplacedQueue = [];
-let puzzleActivePiece = null;
-let puzzleAnchorDistrict = null;
-let puzzlePlacedDistricts = new Set();
-let puzzleSlotLayers = {};
-let puzzlePlacedMarkers = [];
-let puzzleOutlineLayer = null;
-let puzzleTimerInterval = null;
-let puzzleStartTime = 0;
-let puzzleMistakes = 0;
-let puzzleHintsUsed = 0;
-let puzzleToken = '';
-let puzzleSavedLayerStyles = [];
+    get violations() { return this.#violations; }
+    recordViolation() {
+        this.#violations++;
+        if (this.#violations >= 2) {
+            this.#status = 'cheating_detected';
+        } else if (this.#violations === 1) {
+            this.#status = 'warning';
+        }
+        return this.#violations;
+    }
+
+    resetViolations(force = false) {
+        if (force || !this.#isExam) {
+            this.#violations = 0;
+            this.#status = 'passed';
+        }
+    }
+
+    get status() { return this.#status; }
+    set status(v) { this.#status = String(v || 'passed'); }
+
+    get token() { return this.#token; }
+    set token(v) { this.#token = String(v || ''); }
+
+    get category() { return this.#category; }
+    set category(v) { this.#category = v; }
+
+    get questionCount() { return this.#questionCount; }
+    set questionCount(v) { this.#questionCount = Number(v) || 15; }
+
+    get timeLimitMinutes() { return this.#timeLimitMinutes; }
+    set timeLimitMinutes(v) { this.#timeLimitMinutes = Number(v) || 10; }
+
+    get timeRemaining() { return this.#timeRemaining; }
+    set timeRemaining(v) { this.#timeRemaining = Number(v); }
+
+    get globalTimer() { return this.#globalTimer; }
+    set globalTimer(v) { this.#globalTimer = v; }
+
+    get blurCooldown() { return this.#blurCooldown; }
+    set blurCooldown(v) { this.#blurCooldown = Boolean(v); }
+
+    get syncSessionId() { return this.#syncSessionId; }
+    set syncSessionId(v) { this.#syncSessionId = v; }
+
+    get syncGroupName() { return this.#syncGroupName; }
+    set syncGroupName(v) { this.#syncGroupName = v; }
+
+    get syncRemainingSec() { return this.#syncRemainingSec; }
+    set syncRemainingSec(v) { this.#syncRemainingSec = v; }
+
+    get syncHeartbeatTimer() { return this.#syncHeartbeatTimer; }
+    set syncHeartbeatTimer(v) { this.#syncHeartbeatTimer = v; }
+
+    reset() {
+        this.#isExam = false;
+        this.#isActive = false;
+        this.#violations = 0;
+        this.#status = 'passed';
+        this.#token = '';
+        this.#globalTimer = null;
+        this.#blurCooldown = false;
+    }
+}
+
+class QuizManagerClass {
+    constructor() {
+        this.currentQuiz = null;
+        this.currentQuestion = 0;
+        this.score = 0;
+        this.maxPossibleScore = 0;
+        this.totalQuestions = 10;
+        this.quizData = [];
+        this.selectedOption = null;
+        this.clickMarker = null;
+        this.resultMarker = null;
+        this.resultLine = null;
+        this.popupsDisabled = false;
+        this.highlightedDistrictLayer = null;
+        this.highlightedRiverLayers = [];
+        this.timerEnabled = false;
+        this.questionTimer = null;
+        this.timeLeft = QUESTION_TIME_LIMIT;
+        this.quizStartTime = 0;
+        this.studyCategory = 'districts';
+        this.studyQueue = [];
+        this.studyIndex = 0;
+        this.studyCenterMarker = null;
+    }
+
+    reset() {
+        this.currentQuiz = null;
+        this.currentQuestion = 0;
+        this.score = 0;
+        this.maxPossibleScore = 0;
+        this.selectedOption = null;
+        this.clickMarker = null;
+        this.resultMarker = null;
+        this.resultLine = null;
+        this.popupsDisabled = false;
+        this.highlightedDistrictLayer = null;
+        this.highlightedRiverLayers = [];
+        this.timeLeft = QUESTION_TIME_LIMIT;
+    }
+}
+
+class PuzzleEngineClass {
+    constructor() {
+        this.isPuzzleMode = false;
+        this.districts = [];
+        this.unplacedQueue = [];
+        this.activePiece = null;
+        this.anchorDistrict = null;
+        this.placedDistricts = new Set();
+        this.slotLayers = {};
+        this.placedMarkers = [];
+        this.outlineLayer = null;
+        this.timerInterval = null;
+        this.startTime = 0;
+        this.mistakes = 0;
+        this.hintsUsed = 0;
+        this.token = '';
+        this.savedLayerStyles = [];
+    }
+
+    reset() {
+        this.isPuzzleMode = false;
+        this.districts = [];
+        this.unplacedQueue = [];
+        this.activePiece = null;
+        this.anchorDistrict = null;
+        this.placedDistricts.clear();
+        this.slotLayers = {};
+        this.placedMarkers = [];
+        this.outlineLayer = null;
+        this.timerInterval = null;
+        this.mistakes = 0;
+        this.hintsUsed = 0;
+        this.token = '';
+    }
+}
+
+const ExamProctor = new ExamProctorClass();
+const QuizManager = new QuizManagerClass();
+const PuzzleEngine = new PuzzleEngineClass();
+
+_root.ExamProctor = ExamProctor;
+_root.QuizManager = QuizManager;
+_root.PuzzleEngine = PuzzleEngine;
+
+Object.defineProperty(_root, 'currentQuiz', { get() { return QuizManager.currentQuiz; }, set(v) { QuizManager.currentQuiz = v; }, configurable: true });
+Object.defineProperty(_root, 'currentQuestion', { get() { return QuizManager.currentQuestion; }, set(v) { QuizManager.currentQuestion = v; }, configurable: true });
+Object.defineProperty(_root, 'score', { get() { return QuizManager.score; }, set(v) { QuizManager.score = v; }, configurable: true });
+Object.defineProperty(_root, 'maxPossibleScore', { get() { return QuizManager.maxPossibleScore; }, set(v) { QuizManager.maxPossibleScore = v; }, configurable: true });
+Object.defineProperty(_root, 'totalQuestions', { get() { return QuizManager.totalQuestions; }, set(v) { QuizManager.totalQuestions = v; }, configurable: true });
+Object.defineProperty(_root, 'quizData', { get() { return QuizManager.quizData; }, set(v) { QuizManager.quizData = v; }, configurable: true });
+Object.defineProperty(_root, 'selectedOption', { get() { return QuizManager.selectedOption; }, set(v) { QuizManager.selectedOption = v; }, configurable: true });
+Object.defineProperty(_root, 'clickMarker', { get() { return QuizManager.clickMarker; }, set(v) { QuizManager.clickMarker = v; }, configurable: true });
+Object.defineProperty(_root, 'resultMarker', { get() { return QuizManager.resultMarker; }, set(v) { QuizManager.resultMarker = v; }, configurable: true });
+Object.defineProperty(_root, 'resultLine', { get() { return QuizManager.resultLine; }, set(v) { QuizManager.resultLine = v; }, configurable: true });
+Object.defineProperty(_root, 'popupsDisabled', { get() { return QuizManager.popupsDisabled; }, set(v) { QuizManager.popupsDisabled = v; }, configurable: true });
+Object.defineProperty(_root, 'highlightedDistrictLayer', { get() { return QuizManager.highlightedDistrictLayer; }, set(v) { QuizManager.highlightedDistrictLayer = v; }, configurable: true });
+Object.defineProperty(_root, 'highlightedRiverLayers', { get() { return QuizManager.highlightedRiverLayers; }, set(v) { QuizManager.highlightedRiverLayers = v; }, configurable: true });
+Object.defineProperty(_root, 'timerEnabled', { get() { return QuizManager.timerEnabled; }, set(v) { QuizManager.timerEnabled = v; }, configurable: true });
+Object.defineProperty(_root, 'questionTimer', { get() { return QuizManager.questionTimer; }, set(v) { QuizManager.questionTimer = v; }, configurable: true });
+Object.defineProperty(_root, 'timeLeft', { get() { return QuizManager.timeLeft; }, set(v) { QuizManager.timeLeft = v; }, configurable: true });
+Object.defineProperty(_root, 'quizStartTime', { get() { return QuizManager.quizStartTime; }, set(v) { QuizManager.quizStartTime = v; }, configurable: true });
+Object.defineProperty(_root, 'studyCategory', { get() { return QuizManager.studyCategory; }, set(v) { QuizManager.studyCategory = v; }, configurable: true });
+Object.defineProperty(_root, 'studyQueue', { get() { return QuizManager.studyQueue; }, set(v) { QuizManager.studyQueue = v; }, configurable: true });
+Object.defineProperty(_root, 'studyIndex', { get() { return QuizManager.studyIndex; }, set(v) { QuizManager.studyIndex = v; }, configurable: true });
+Object.defineProperty(_root, 'studyCenterMarker', { get() { return QuizManager.studyCenterMarker; }, set(v) { QuizManager.studyCenterMarker = v; }, configurable: true });
+
+Object.defineProperty(_root, 'isExamMode', { get() { return ExamProctor.isExam; }, set(v) { ExamProctor.isExam = Boolean(v); }, configurable: true });
+Object.defineProperty(_root, 'examCategory', { get() { return ExamProctor.category; }, set(v) { ExamProctor.category = v; }, configurable: true });
+Object.defineProperty(_root, 'examQuestionCount', { get() { return ExamProctor.questionCount; }, set(v) { ExamProctor.questionCount = v; }, configurable: true });
+Object.defineProperty(_root, 'examTimeLimitMinutes', { get() { return ExamProctor.timeLimitMinutes; }, set(v) { ExamProctor.timeLimitMinutes = v; }, configurable: true });
+Object.defineProperty(_root, 'examTimeRemaining', { get() { return ExamProctor.timeRemaining; }, set(v) { ExamProctor.timeRemaining = v; }, configurable: true });
+Object.defineProperty(_root, 'examGlobalTimer', { get() { return ExamProctor.globalTimer; }, set(v) { ExamProctor.globalTimer = v; }, configurable: true });
+Object.defineProperty(_root, 'examCheatingViolations', {
+    get() { return ExamProctor.violations; },
+    set(v) {
+        if (v === 0 && !ExamProctor.isExam) {
+            ExamProctor.resetViolations();
+        }
+    },
+    configurable: true
+});
+Object.defineProperty(_root, 'examStatus', { get() { return ExamProctor.status; }, set(v) { ExamProctor.status = v; }, configurable: true });
+Object.defineProperty(_root, 'examToken', { get() { return ExamProctor.token; }, set(v) { ExamProctor.token = v; }, configurable: true });
+Object.defineProperty(_root, 'antiCheatActive', {
+    get() { return ExamProctor.active; },
+    set(v) { if (v) ExamProctor.enable(); else ExamProctor.disable(); },
+    configurable: true
+});
+Object.defineProperty(_root, 'blurCooldown', { get() { return ExamProctor.blurCooldown; }, set(v) { ExamProctor.blurCooldown = v; }, configurable: true });
+Object.defineProperty(_root, 'currentSyncSessionId', { get() { return ExamProctor.syncSessionId; }, set(v) { ExamProctor.syncSessionId = v; }, configurable: true });
+Object.defineProperty(_root, 'currentSyncGroupName', { get() { return ExamProctor.syncGroupName; }, set(v) { ExamProctor.syncGroupName = v; }, configurable: true });
+Object.defineProperty(_root, 'syncExamRemainingSec', { get() { return ExamProctor.syncRemainingSec; }, set(v) { ExamProctor.syncRemainingSec = v; }, configurable: true });
+Object.defineProperty(_root, 'syncSessionHeartbeatTimer', { get() { return ExamProctor.syncHeartbeatTimer; }, set(v) { ExamProctor.syncHeartbeatTimer = v; }, configurable: true });
+
+Object.defineProperty(_root, 'isPuzzleMode', { get() { return PuzzleEngine.isPuzzleMode; }, set(v) { PuzzleEngine.isPuzzleMode = Boolean(v); }, configurable: true });
+Object.defineProperty(_root, 'puzzleDistricts', { get() { return PuzzleEngine.districts; }, set(v) { PuzzleEngine.districts = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzleUnplacedQueue', { get() { return PuzzleEngine.unplacedQueue; }, set(v) { PuzzleEngine.unplacedQueue = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzleActivePiece', { get() { return PuzzleEngine.activePiece; }, set(v) { PuzzleEngine.activePiece = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzleAnchorDistrict', { get() { return PuzzleEngine.anchorDistrict; }, set(v) { PuzzleEngine.anchorDistrict = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzlePlacedDistricts', { get() { return PuzzleEngine.placedDistricts; }, set(v) { PuzzleEngine.placedDistricts = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzleSlotLayers', { get() { return PuzzleEngine.slotLayers; }, set(v) { PuzzleEngine.slotLayers = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzlePlacedMarkers', { get() { return PuzzleEngine.placedMarkers; }, set(v) { PuzzleEngine.placedMarkers = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzleOutlineLayer', { get() { return PuzzleEngine.outlineLayer; }, set(v) { PuzzleEngine.outlineLayer = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzleTimerInterval', { get() { return PuzzleEngine.timerInterval; }, set(v) { PuzzleEngine.timerInterval = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzleStartTime', { get() { return PuzzleEngine.startTime; }, set(v) { PuzzleEngine.startTime = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzleMistakes', { get() { return PuzzleEngine.mistakes; }, set(v) { PuzzleEngine.mistakes = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzleHintsUsed', { get() { return PuzzleEngine.hintsUsed; }, set(v) { PuzzleEngine.hintsUsed = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzleToken', { get() { return PuzzleEngine.token; }, set(v) { PuzzleEngine.token = v; }, configurable: true });
+Object.defineProperty(_root, 'puzzleSavedLayerStyles', { get() { return PuzzleEngine.savedLayerStyles; }, set(v) { PuzzleEngine.savedLayerStyles = v; }, configurable: true });
 
 const PUZZLE_PALETTE = [
     '#38BDF8', '#34D399', '#F472B6', '#A78BFA',
@@ -1212,9 +1398,9 @@ function startExamQuiz(category = 'mixed', count = 15, timeLimitMinutes = 10) {
     } else {
         examTimeRemaining = examTimeLimitMinutes * 60;
     }
-    examCheatingViolations = 0;
-    examStatus = 'passed';
-    examToken = '';
+    ExamProctor.resetViolations(true);
+    ExamProctor.status = 'passed';
+    ExamProctor.token = '';
     currentQuiz = 'exam_' + category;
     totalQuestions = examQuestionCount;
     currentQuestion = 0;

@@ -39,10 +39,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-verification_storage = {}
+AUTH_SESSIONS_FILE = "auth_sessions.json"
 RESULTS_FILE = "quiz_results.json"
 GROUPS_FILE = "groups.json"
 ACTIVE_SESSION_FILE = "active_session.json"
+
+def load_auth_sessions() -> Dict[str, Any]:
+    if os.path.exists(AUTH_SESSIONS_FILE):
+        try:
+            with open(AUTH_SESSIONS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_auth_sessions(sessions: Dict[str, Any]) -> None:
+    try:
+        with open(AUTH_SESSIONS_FILE, "w", encoding="utf-8") as f:
+            json.dump(sessions, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("Ошибка сохранения auth_sessions: %s", e)
 
 DEFAULT_GROUPS = [
     {
@@ -167,8 +183,13 @@ def save_active_session(session_data: Optional[Dict[str, Any]]) -> None:
         json.dump(session_data, f, ensure_ascii=False, indent=2)
 
 def check_admin(credentials: HTTPBasicCredentials = Depends(security)) -> str:
-    is_admin = secrets.compare_digest(credentials.username, "admin") and secrets.compare_digest(credentials.password, "admin")
-    is_sfedu = secrets.compare_digest(credentials.username, "sfedu_admin") and secrets.compare_digest(credentials.password, "geodean2026")
+    admin_user = os.environ.get("ADMIN_USERNAME", "admin")
+    admin_pass = os.environ.get("ADMIN_PASSWORD", "admin")
+    sfedu_user = os.environ.get("SFEDU_ADMIN_USER", "sfedu_admin")
+    sfedu_pass = os.environ.get("SFEDU_ADMIN_PASSWORD", "geodean2026")
+
+    is_admin = secrets.compare_digest(credentials.username, admin_user) and secrets.compare_digest(credentials.password, admin_pass)
+    is_sfedu = secrets.compare_digest(credentials.username, sfedu_user) and secrets.compare_digest(credentials.password, sfedu_pass)
     if not (is_admin or is_sfedu):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -180,8 +201,13 @@ def check_admin(credentials: HTTPBasicCredentials = Depends(security)) -> str:
 def check_admin_optional(credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)) -> Optional[str]:
     if not credentials:
         return None
-    is_admin = secrets.compare_digest(credentials.username, "admin") and secrets.compare_digest(credentials.password, "admin")
-    is_sfedu = secrets.compare_digest(credentials.username, "sfedu_admin") and secrets.compare_digest(credentials.password, "geodean2026")
+    admin_user = os.environ.get("ADMIN_USERNAME", "admin")
+    admin_pass = os.environ.get("ADMIN_PASSWORD", "admin")
+    sfedu_user = os.environ.get("SFEDU_ADMIN_USER", "sfedu_admin")
+    sfedu_pass = os.environ.get("SFEDU_ADMIN_PASSWORD", "geodean2026")
+
+    is_admin = secrets.compare_digest(credentials.username, admin_user) and secrets.compare_digest(credentials.password, admin_pass)
+    is_sfedu = secrets.compare_digest(credentials.username, sfedu_user) and secrets.compare_digest(credentials.password, sfedu_pass)
     if not (is_admin or is_sfedu):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -197,24 +223,28 @@ def send_code(req: AuthRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Разрешена авторизация только по корпоративной почте ЮФУ (@sfedu.ru)")
     
     code = f"{random.randint(100000, 999999)}"
-    verification_storage[email] = {
+    sessions = load_auth_sessions()
+    sessions[email] = {
         "code": code,
         "expires_at": time.time() + 600,
         "name": req.full_name.strip(),
         "group": req.group_num.strip()
     }
+    save_auth_sessions(sessions)
     logger.info("ЮФУ Авторизация: сгенерирован код подтверждения для %s", email)
     return {"status": "ok", "message": "Код подтверждения отправлен", "dev_code": code}
 
 @app.post("/api/auth/verify-code")
 def verify_code(req: VerifyRequest) -> Dict[str, Any]:
     email = req.email.strip().lower()
-    record = verification_storage.get(email)
-    if not record or time.time() > record["expires_at"] or record["code"] != req.code.strip():
+    sessions = load_auth_sessions()
+    record = sessions.get(email)
+    if not record or time.time() > record.get("expires_at", 0) or record.get("code") != req.code.strip():
         raise HTTPException(status_code=400, detail="Неверный или просроченный код")
     
-    user_data = {"email": email, "name": record["name"], "group": record["group"]}
-    del verification_storage[email]
+    user_data = {"email": email, "name": record.get("name", ""), "group": record.get("group", "")}
+    sessions.pop(email, None)
+    save_auth_sessions(sessions)
     return {"status": "ok", "user": user_data}
 
 @app.post("/api/results/save")
@@ -439,54 +469,56 @@ def find_map_file(filename_or_slug: str) -> Optional[str]:
     return None
 
 def get_region_data(region_key: str) -> Optional[Dict[str, Any]]:
-    clean = region_key.lower().strip().replace('_quiz_map.html', '').replace('.html', '')
+    clean = region_key.lower().strip()
+    clean = clean.replace('_meta.json', '').replace('_quiz_map.html', '').replace('.html', '').replace('.json', '').strip()
     if clean in REGION_DATA_CACHE:
         return REGION_DATA_CACHE[clean]
 
-    candidates = [
-        os.path.join("public", "maps", f"{clean}_quiz_map.html"),
-        f"{clean}_quiz_map.html",
-        os.path.join("public", "maps", f"{clean}.html"),
-        f"{clean}.html"
-    ]
-    matched_file = None
-    for c in candidates:
-        if os.path.exists(c):
-            matched_file = c
-            break
+    target_meta_file = None
+    if os.path.exists(MAPS_DIR):
+        for fname in os.listdir(MAPS_DIR):
+            if fname.lower().endswith('_meta.json'):
+                stem = fname[:-10].lower()
+                if stem == clean or clean in stem or stem in clean:
+                    target_meta_file = os.path.join(MAPS_DIR, fname)
+                    clean = stem
+                    break
 
-    if not matched_file:
+    if not target_meta_file or not os.path.exists(target_meta_file):
+        direct_cand = os.path.join(MAPS_DIR, f"{clean}_meta.json")
+        if os.path.exists(direct_cand):
+            target_meta_file = direct_cand
+
+    if not target_meta_file or not os.path.exists(target_meta_file):
         return None
 
     try:
-        with open(matched_file, 'r', encoding='utf-8') as f:
-            html = f.read()
-
-        def extract_var(name, text):
-            m = re.search(r'const\s+' + name + r'\s*=\s*(.*?);\s*(?=const|\n|$)', text, re.DOTALL)
-            if m:
-                try:
-                    return json.loads(m.group(1).strip())
-                except Exception:
-                    return None
-            return None
+        with open(target_meta_file, 'r', encoding='utf-8') as f:
+            meta = json.load(f)
 
         data = {
             "status": "ok",
             "region": clean,
-            "map_url": matched_file,
-            "bounds": extract_var('REGION_BOUNDS', html),
-            "districts": extract_var('EMBEDDED_DISTRICTS', html),
-            "centers": extract_var('EMBEDDED_CENTERS', html),
-            "neighbors": extract_var('EMBEDDED_NEIGHBORS', html),
-            "rivers": extract_var('EMBEDDED_RIVERS', html),
-            "puzzle_data": extract_var('EMBEDDED_PUZZLE_DATA', html),
-            "outline_geojson": extract_var('REGION_OUTLINE_GEOJSON', html)
+            "map_url": f"public/maps/{clean}_quiz_map.html",
+            "bounds": meta.get("REGION_BOUNDS"),
+            "districts": meta.get("EMBEDDED_DISTRICTS"),
+            "centers": meta.get("EMBEDDED_CENTERS"),
+            "neighbors": meta.get("EMBEDDED_NEIGHBORS"),
+            "rivers": meta.get("EMBEDDED_RIVERS"),
+            "puzzle_data": meta.get("EMBEDDED_PUZZLE_DATA"),
+            "outline_geojson": meta.get("REGION_OUTLINE_GEOJSON"),
+            "REGION_BOUNDS": meta.get("REGION_BOUNDS"),
+            "EMBEDDED_DISTRICTS": meta.get("EMBEDDED_DISTRICTS"),
+            "EMBEDDED_CENTERS": meta.get("EMBEDDED_CENTERS"),
+            "EMBEDDED_NEIGHBORS": meta.get("EMBEDDED_NEIGHBORS"),
+            "EMBEDDED_RIVERS": meta.get("EMBEDDED_RIVERS"),
+            "EMBEDDED_PUZZLE_DATA": meta.get("EMBEDDED_PUZZLE_DATA"),
+            "REGION_OUTLINE_GEOJSON": meta.get("REGION_OUTLINE_GEOJSON")
         }
         REGION_DATA_CACHE[clean] = data
         return data
     except Exception as e:
-        logger.warning("Ошибка извлечения данных региона %s: %s", region_key, e)
+        logger.warning("Ошибка чтения метаданных региона %s: %s", region_key, e)
         return None
 
 @app.get("/api/region/{region_id}/data")
