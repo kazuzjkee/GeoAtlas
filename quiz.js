@@ -3004,7 +3004,7 @@ function startCenterQuiz() {
         alert('Недостаточно данных об административных центрах для запуска викторины.');
         return;
     }
-    prepareQuizUI('center', 'Найти центр на карте', true, true);
+    prepareQuizUI('center', 'Найти центр на карте', true, false);
     loadCenterQuiz();
 }
 
@@ -3194,7 +3194,7 @@ function showQuestion() {
             setQuizLayers('river');
             restoreAllRiverStyles();
         } else if (question.type === 'center') {
-            setBasemapVisible(true);
+            setBasemapVisible(false);
             setQuizLayers('center');
         }
     }
@@ -4108,7 +4108,7 @@ function exitQuiz() {
         return;
     }
     if (confirm('Завершить викторину?')) {
-        exitQuizDirectly();
+        showResults();
     }
 }
 
@@ -4169,13 +4169,21 @@ function showResults() {
         finalExamStatus = 'cheating_detected';
     }
 
-    currentQuiz = null;
     setTimeout(setupDistrictClickListeners, 500);
 
     document.getElementById('quiz-mode').style.display = 'none';
     document.getElementById('normal-mode').style.display = 'none';
     document.getElementById('study-mode').style.display = 'none';
     document.getElementById('results-mode').style.display = 'block';
+
+    // Гарантируем корректный расчет максимального балла при досрочном выходе
+    if (!maxPossibleScore || maxPossibleScore <= 0) {
+        if (quizData && quizData.length > 0) {
+            maxPossibleScore = quizData.reduce((acc, q) => acc + (q.type === 'center' ? 3 : 1), 0);
+        } else {
+            maxPossibleScore = totalQuestions || 10;
+        }
+    }
 
     const accuracy = maxPossibleScore > 0 ? Math.round((score / maxPossibleScore) * 100) : 0;
     const studentInfo = getCurrentStudentInfo();
@@ -4269,6 +4277,7 @@ function showResults() {
 
     saveResult(accuracy, wasExam, examToken, finalExamViolations, finalExamStatus);
     isExamMode = false;
+    currentQuiz = null;
 }
 
 function closeResultsAndReturnToMenu() {

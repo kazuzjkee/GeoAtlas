@@ -1407,7 +1407,7 @@ window.serverMapZoom = {self.zoom};
                 <span>🌍 Вся карта</span>
             </button>
             <button class="btn btn-secondary nav-top-btn admin-btn" onclick="window.open('/admin', '_blank')" title="Панель преподавателя">
-                <span>📊 Преподавателю</span>
+                <span>👨‍🏫 Кабинет</span>
             </button>
             <button id="auth-top-btn" class="btn btn-primary nav-top-btn auth-btn" onclick="goToMainAuth()" title="Авторизация через главное меню">
                 <span>🎓 Войти через Главное меню</span>
@@ -1420,8 +1420,7 @@ window.serverMapZoom = {self.zoom};
                 </div>
                 <button onclick="event.stopPropagation(); logoutStudent()" class="badge-logout" title="Выйти">&times;</button>
             </div>
-            <button class="btn btn-secondary nav-top-btn achievements-top-btn" onclick="openStudentProfileModal()" title="Витрина достижений студента">🏅 Ачивки</button>
-            <button class="btn btn-secondary nav-top-btn leaderboard-top-btn" onclick="showLeaderboard()" title="Глобальная таблица лидеров и профиль">🏆 Топ лидеров</button>
+            <button class="btn btn-secondary nav-top-btn leaderboard-top-btn" onclick="showLeaderboard()" title="Глобальная таблица лидеров и профиль">🏆 Рейтинг</button>
             <button class="btn btn-secondary help-circle-btn" onclick="openWelcomeModal()" title="О проекте и справка">?</button>
         </div>
 
@@ -2260,6 +2259,8 @@ window.serverMapZoom = {self.zoom};
             align-items: center;
             gap: 8px;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+            max-width: 220px;
+            flex-shrink: 0;
         }}
         .badge-avatar {{
             width: 26px;
@@ -2271,10 +2272,11 @@ window.serverMapZoom = {self.zoom};
             align-items: center;
             justify-content: center;
             font-size: 13px;
+            flex-shrink: 0;
         }}
-        .badge-info {{ display: flex; flex-direction: column; text-align: left; }}
-        .badge-name {{ font-size: 11.5px; font-weight: 700; color: #1E293B; line-height: 1.2; }}
-        .badge-group {{ font-size: 10px; color: #64748B; }}
+        .badge-info {{ display: flex; flex-direction: column; text-align: left; min-width: 0; overflow: hidden; }}
+        .badge-name {{ font-size: 11.5px; font-weight: 700; color: #1E293B; line-height: 1.2; max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+        .badge-group {{ font-size: 10px; color: #64748B; max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
         .badge-logout {{
             background: none;
             border: none;

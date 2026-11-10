@@ -308,7 +308,6 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            flex-wrap: wrap;
         }
 
         .nav-btn {
@@ -325,6 +324,8 @@
             align-items: center;
             gap: 8px;
             box-shadow: var(--shadow-xs);
+            max-width: 220px;
+            flex-shrink: 0;
         }
 
         .badge-avatar {
@@ -345,6 +346,8 @@
             display: flex;
             flex-direction: column;
             text-align: left;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .badge-name {
@@ -352,7 +355,7 @@
             font-weight: 700;
             color: var(--text-main);
             line-height: 1.2;
-            max-width: 140px;
+            max-width: 120px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -363,6 +366,10 @@
             color: var(--text-muted);
             font-weight: 600;
             font-family: 'JetBrains Mono', monospace;
+            max-width: 120px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .badge-logout {
@@ -456,6 +463,13 @@
             pointer-events: none;
             user-select: none;
             transition: all 0.25s ease;
+        }
+
+
+        @media (max-width: 1200px) {
+            .nav-menu {
+                display: none !important;
+            }
         }
 
         @media (min-width: 1024px) {
@@ -3277,10 +3291,7 @@
             
             <div class="nav-actions">
                 <button type="button" onclick="window.open('/admin', '_blank')" class="btn btn-secondary nav-btn" title="Личный кабинет педагога и аналитика успеваемости">
-                    <span>👨‍🏫 Кабинет преподавателя</span>
-                </button>
-                <button type="button" onclick="openStudentProfileModal()" class="btn btn-secondary nav-btn" title="Витрина достижений студента">
-                    <span>🏅 Достижения</span>
+                    <span>👨‍🏫 Кабинет</span>
                 </button>
                 <button type="button" id="auth-top-btn" onclick="openAuthModal()" class="btn btn-primary nav-btn" title="Авторизация студента по корпоративной почте ЮФУ">
                     <span>🎓 Вход для студентов</span>
