@@ -3,7 +3,7 @@
     "id": "grp-geofak-51",
     "name": "Геофак-51 (ВКР)",
     "description": "5 курс, профиль: География и Экономика (ВКР)",
-    "teacher_id": "teacher-geo-01",
+    "teacher_id": "teacher-ivanov",
     "students": [
       {
         "name": "Литвинов Е. К.",
@@ -24,7 +24,7 @@
     "id": "grp-econom-31",
     "name": "Эконом-31 (ЮФО)",
     "description": "3 курс, экономический анализ и ВРП",
-    "teacher_id": "teacher-eco-02",
+    "teacher_id": "teacher-petrov",
     "students": [
       {
         "name": "Петров А. С.",
@@ -37,7 +37,7 @@
     "id": "grp-geofak-41",
     "name": "Геофак-41 (Бакалавриат)",
     "description": "4 курс, картография и ГИС",
-    "teacher_id": "teacher-geo-01",
+    "teacher_id": "teacher-ivanov",
     "students": [
       {
         "name": "Ковалев Д. В.",

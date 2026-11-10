@@ -1412,14 +1412,15 @@ window.serverMapZoom = {self.zoom};
             <button id="auth-top-btn" class="btn btn-primary nav-top-btn auth-btn" onclick="goToMainAuth()" title="Авторизация через главное меню">
                 <span>🎓 Войти через Главное меню</span>
             </button>
-            <div id="student-profile-badge" class="student-badge" style="display: none;">
+            <div id="student-profile-badge" class="student-badge" style="display: none; cursor: pointer;" onclick="openStudentProfileModal()" title="Личный кабинет и витрина достижений">
                 <div class="badge-avatar">🎓</div>
                 <div class="badge-info">
                     <span id="student-badge-name" class="badge-name">Студент</span>
                     <span id="student-badge-group" class="badge-group">Группа</span>
                 </div>
-                <button onclick="logoutStudent()" class="badge-logout" title="Выйти">&times;</button>
+                <button onclick="event.stopPropagation(); logoutStudent()" class="badge-logout" title="Выйти">&times;</button>
             </div>
+            <button class="btn btn-secondary nav-top-btn achievements-top-btn" onclick="openStudentProfileModal()" title="Витрина достижений студента">🏅 Ачивки</button>
             <button class="btn btn-secondary nav-top-btn leaderboard-top-btn" onclick="showLeaderboard()" title="Глобальная таблица лидеров и профиль">🏆 Топ лидеров</button>
             <button class="btn btn-secondary help-circle-btn" onclick="openWelcomeModal()" title="О проекте и справка">?</button>
         </div>

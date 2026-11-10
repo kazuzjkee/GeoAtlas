@@ -3279,16 +3279,19 @@
                 <button type="button" onclick="window.open('/admin', '_blank')" class="btn btn-secondary nav-btn" title="Личный кабинет педагога и аналитика успеваемости">
                     <span>👨‍🏫 Кабинет преподавателя</span>
                 </button>
+                <button type="button" onclick="openStudentProfileModal()" class="btn btn-secondary nav-btn" title="Витрина достижений студента">
+                    <span>🏅 Достижения</span>
+                </button>
                 <button type="button" id="auth-top-btn" onclick="openAuthModal()" class="btn btn-primary nav-btn" title="Авторизация студента по корпоративной почте ЮФУ">
                     <span>🎓 Вход для студентов</span>
                 </button>
-                <div id="student-profile-badge" class="student-badge" style="display: none;">
+                <div id="student-profile-badge" class="student-badge" style="display: none; cursor: pointer;" onclick="openStudentProfileModal()" title="Личный кабинет и витрина достижений">
                     <div class="badge-avatar">🎓</div>
                     <div class="badge-info">
                         <span id="student-badge-name" class="badge-name">Студент</span>
                         <span id="student-badge-group" class="badge-group">Группа</span>
                     </div>
-                    <button onclick="logoutStudent()" class="badge-logout" title="Выйти из аккаунта">&times;</button>
+                    <button onclick="event.stopPropagation(); logoutStudent()" class="badge-logout" title="Выйти из аккаунта">&times;</button>
                 </div>
             </div>
         </div>
@@ -4752,6 +4755,124 @@
                 return null;
             }
         }
+
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        const GEOATLAS_ACHIEVEMENTS = [
+            { id: 'sniper', icon: '🏅', title: 'Снайпер', desc: '3 раза подряд указать центр с погрешностью менее 15 км' },
+            { id: 'cartographer', icon: '🧩', title: 'Картограф', desc: 'Собрать пазл региона с точностью 100%' },
+            { id: 'speedrunner', icon: '⚡', title: 'Спидранер', desc: 'Сдать любой тест быстрее половины отведенного времени при точности > 80%' },
+            { id: 'hydrologist', icon: '🌊', title: 'Гидролог', desc: 'Ответить на 100% вопросов в викторине по рекам' },
+            { id: 'geo_erudite', icon: '🧠', title: 'Гео-Эрудит', desc: 'Набрать максимальный балл в «Комплексном экзамене»' },
+            { id: 'steel_nerves', icon: '🛡️', title: 'Стальные нервы', desc: 'Сдать экзамен на 100% без единого срабатывания Anti-Cheat' }
+        ];
+
+        function getUnlockedAchievements() {
+            try {
+                const raw = localStorage.getItem('geoatlas_achievements');
+                return raw ? JSON.parse(raw) : {};
+            } catch(e) {
+                return {};
+            }
+        }
+
+        function openStudentProfileModal() {
+            const student = getCurrentStudentInfo();
+            const studentName = student ? student.name : 'Студент ЮФУ';
+            const studentGroup = student ? student.group : 'Группа не выбрана';
+            const studentEmail = student ? student.email : 'student@sfedu.ru';
+
+            const unlocked = getUnlockedAchievements();
+            const unlockedCount = Object.keys(unlocked).length;
+            const totalCount = GEOATLAS_ACHIEVEMENTS.length;
+            const progressPct = Math.round((unlockedCount / totalCount) * 100);
+
+            let modal = document.getElementById('student-achievements-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'student-achievements-modal';
+                modal.className = 'app-modal-overlay';
+                modal.style.cssText = 'position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px;';
+                document.body.appendChild(modal);
+            }
+
+            let cardsHtml = '';
+            GEOATLAS_ACHIEVEMENTS.forEach(ach => {
+                const isUnlocked = !!unlocked[ach.id];
+                const unlockInfo = unlocked[ach.id];
+                const cardStyle = isUnlocked
+                    ? 'background: linear-gradient(145deg, rgba(245, 158, 11, 0.15), rgba(30, 41, 59, 0.9)); border: 2px solid #F59E0B; box-shadow: 0 0 20px rgba(245, 158, 11, 0.3); opacity: 1;'
+                    : 'background: rgba(15, 23, 42, 0.6); border: 1px dashed rgba(255, 255, 255, 0.2); opacity: 0.45; filter: grayscale(1);';
+
+                const badgeHtml = isUnlocked
+                    ? `<span style="background: rgba(245, 158, 11, 0.2); color: #FBBF24; border: 1px solid #F59E0B; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;">Разблокировано • ${unlockInfo.unlockedAt || ''}</span>`
+                    : `<span style="background: rgba(255, 255, 255, 0.05); color: #94A3B8; border: 1px solid rgba(255, 255, 255, 0.1); padding: 3px 8px; border-radius: 6px; font-size: 11px;">🔒 Закрыто</span>`;
+
+                cardsHtml += `
+                    <div style="${cardStyle} border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: all 0.3s ease;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-size: 32px;">${ach.icon}</div>
+                            ${badgeHtml}
+                        </div>
+                        <div>
+                            <div style="font-size: 16px; font-weight: 700; color: #F8FAFC;">${ach.title}</div>
+                            <div style="font-size: 12px; color: #94A3B8; margin-top: 4px; line-height: 1.35;">${ach.desc}</div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            modal.innerHTML = `
+                <div style="background: #0F172A; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; max-width: 760px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 28px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 16px; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 14px;">
+                            <div style="width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #3B82F6, #8B5CF6); display: flex; align-items: center; justify-content: center; font-size: 24px;">🎓</div>
+                            <div>
+                                <div style="font-size: 20px; font-weight: 800; color: #FFFFFF;">${escapeHtml(studentName)}</div>
+                                <div style="font-size: 13px; color: #94A3B8;">${escapeHtml(studentGroup)} • ${escapeHtml(studentEmail)}</div>
+                            </div>
+                        </div>
+                        <button onclick="closeStudentProfileModal()" style="background: transparent; border: none; font-size: 28px; color: #94A3B8; cursor: pointer;">&times;</button>
+                    </div>
+
+                    <div style="margin-bottom: 24px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-weight: 700; font-size: 14px; color: #E2E8F0;">Прогресс достижений</span>
+                            <span style="font-weight: 800; font-size: 14px; color: #F59E0B;">${unlockedCount} из ${totalCount} (${progressPct}%)</span>
+                        </div>
+                        <div style="width: 100%; height: 10px; background: rgba(255, 255, 255, 0.1); border-radius: 999px; overflow: hidden;">
+                            <div style="width: ${progressPct}%; height: 100%; background: linear-gradient(90deg, #F59E0B, #10B981); border-radius: 999px; transition: width 0.5s ease;"></div>
+                        </div>
+                    </div>
+
+                    <h3 style="font-size: 16px; font-weight: 700; color: #F8FAFC; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                        <span>🏆</span> <span>Витрина достижений (Ачивки)</span>
+                    </h3>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px;">
+                        ${cardsHtml}
+                    </div>
+
+                    <div style="margin-top: 24px; text-align: right;">
+                        <button onclick="closeStudentProfileModal()" class="btn btn-secondary" style="padding: 8px 20px; border-radius: 10px; cursor: pointer;">Закрыть</button>
+                    </div>
+                </div>
+            `;
+
+            modal.style.display = 'flex';
+        }
+
+        function closeStudentProfileModal() {
+            const modal = document.getElementById('student-achievements-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        window.openStudentProfileModal = openStudentProfileModal;
+        window.closeStudentProfileModal = closeStudentProfileModal;
 
         function updateStudentHeader() {
             const student = getCurrentStudentInfo();

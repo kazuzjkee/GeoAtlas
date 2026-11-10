@@ -64,34 +64,76 @@ def save_auth_sessions(sessions: Dict[str, Any]) -> None:
 
 DEFAULT_TEACHERS = [
     {
-        "teacher_id": "teacher-geo-01",
-        "username": "prof_geo",
-        "password": "geo_password_2026",
-        "full_name": "Проф. Смирнов А. В.",
-        "organization": "Институт наук о Земле ЮФУ"
+        "teacher_id": "teacher-ivanov",
+        "username": "prof_ivanov",
+        "password": "ivanov_pass_2026",
+        "full_name": "Проф. Иванов И. И.",
+        "organization": "Институт наук о Земле ЮФУ",
+        "department": "Кафедра физической географии",
+        "role": "teacher"
     },
     {
-        "teacher_id": "teacher-eco-02",
-        "username": "prof_eco",
-        "password": "eco_password_2026",
-        "full_name": "Доц. Кузнецова М. И.",
-        "organization": "Экономический факультет ЮФУ"
+        "teacher_id": "teacher-petrov",
+        "username": "prof_petrov",
+        "password": "petrov_pass_2026",
+        "full_name": "Доц. Петров П. П.",
+        "organization": "Экономический факультет ЮФУ",
+        "department": "Кафедра экономической географии",
+        "role": "teacher"
+    },
+    {
+        "teacher_id": "dean-geo",
+        "username": "dean_geo",
+        "password": "dean_pass_2026",
+        "full_name": "Декан наук о Земле ЮФУ",
+        "organization": "Институт наук о Земле ЮФУ",
+        "department": "Деканат геолого-географического факультета",
+        "role": "dean"
     },
     {
         "teacher_id": "teacher-admin",
         "username": "admin",
         "password": "admin",
         "full_name": "Главный администратор",
-        "organization": "Южный федеральный университет"
+        "organization": "Южный федеральный университет",
+        "department": "Центр цифровых образовательных технологий",
+        "role": "dean"
     },
     {
-        "teacher_id": "teacher-geo-01",
+        "teacher_id": "teacher-ivanov",
+        "username": "prof_geo",
+        "password": "geo_password_2026",
+        "full_name": "Проф. Смирнов А. В.",
+        "organization": "Институт наук о Земле ЮФУ",
+        "department": "Кафедра физической географии",
+        "role": "teacher"
+    },
+    {
+        "teacher_id": "teacher-petrov",
+        "username": "prof_eco",
+        "password": "eco_password_2026",
+        "full_name": "Доц. Кузнецова М. И.",
+        "organization": "Экономический факультет ЮФУ",
+        "department": "Кафедра экономической географии",
+        "role": "teacher"
+    },
+    {
+        "teacher_id": "dean-geo",
         "username": "sfedu_admin",
         "password": "geodean2026",
         "full_name": "Деканат наук о Земле",
-        "organization": "Институт наук о Земле ЮФУ"
+        "organization": "Институт наук о Земле ЮФУ",
+        "department": "Деканат",
+        "role": "dean"
     }
 ]
+
+def is_dean_or_admin(teacher: Dict[str, Any]) -> bool:
+    return (
+        teacher.get("role") in ["dean", "admin"]
+        or teacher.get("username") in ["dean_geo", "admin", "sfedu_admin"]
+        or teacher.get("teacher_id") in ["dean-geo", "teacher-admin"]
+    )
 
 def load_teachers() -> List[Dict[str, Any]]:
     if os.path.exists(TEACHERS_FILE):
@@ -192,7 +234,7 @@ class ResultSubmit(BaseModel):
     exam_status: str = "Сдано"
     session_id: str = ""
     mistakes_log: list = []
-    teacher_id: str = "teacher-geo-01"
+    teacher_id: str = "teacher-ivanov"
 
 class StudentItem(BaseModel):
     name: str
@@ -204,7 +246,7 @@ class GroupModel(BaseModel):
     description: str = ""
     students: list[StudentItem] = []
     created_at: str = ""
-    teacher_id: str = "teacher-geo-01"
+    teacher_id: str = "teacher-ivanov"
 
 class LaunchSessionRequest(BaseModel):
     groupId: str
@@ -215,7 +257,7 @@ class LaunchSessionRequest(BaseModel):
     quizTypeName: str
     questionCount: int = 15
     timeLimitMinutes: int = 10
-    teacher_id: str = "teacher-geo-01"
+    teacher_id: str = "teacher-ivanov"
 
 def load_results() -> List[Dict[str, Any]]:
     if os.path.exists(RESULTS_FILE):
@@ -225,7 +267,7 @@ def load_results() -> List[Dict[str, Any]]:
                 if isinstance(data, list):
                     for r in data:
                         if not r.get("teacher_id"):
-                            r["teacher_id"] = "teacher-eco-02" if "эконом" in str(r.get("group", "")).lower() else "teacher-geo-01"
+                            r["teacher_id"] = "teacher-petrov" if "эконом" in str(r.get("group", "")).lower() else "teacher-ivanov"
                     return data
         except Exception:
             return []
@@ -245,7 +287,7 @@ def load_groups() -> List[Dict[str, Any]]:
                 if isinstance(data, list) and len(data) > 0:
                     for g in data:
                         if not g.get("teacher_id"):
-                            g["teacher_id"] = "teacher-eco-02" if "эконом" in str(g.get("name", "")).lower() else "teacher-geo-01"
+                            g["teacher_id"] = "teacher-petrov" if "эконом" in str(g.get("name", "")).lower() else "teacher-ivanov"
                     return data
         except Exception:
             pass
@@ -337,7 +379,7 @@ def save_quiz_result(res: ResultSubmit) -> Dict[str, str]:
                     assigned_teacher_id = s.get("teacher_id", assigned_teacher_id)
                     break
     
-    if assigned_teacher_id == "teacher-geo-01" and res.group:
+    if assigned_teacher_id in ["teacher-ivanov", "teacher-geo-01"] and res.group:
         all_groups = load_groups()
         for g in all_groups:
             if g.get("name") == res.group or g.get("id") == res.group:
@@ -374,28 +416,28 @@ def get_leaderboard() -> List[Dict[str, Any]]:
 @app.get("/api/admin/groups")
 def get_admin_groups(teacher: Dict[str, Any] = Depends(check_admin)) -> List[Dict[str, Any]]:
     groups = load_groups()
-    if teacher.get("username") == "admin":
+    if is_dean_or_admin(teacher):
         return groups
-    return [g for g in groups if g.get("teacher_id", "teacher-geo-01") == teacher.get("teacher_id")]
+    return [g for g in groups if g.get("teacher_id", "teacher-ivanov") == teacher.get("teacher_id")]
 
 @app.post("/api/admin/groups")
 def save_or_update_group(group: GroupModel, teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[str, Any]:
     groups = load_groups()
     group_dict = group.model_dump()
-    group_dict["teacher_id"] = teacher.get("teacher_id", "teacher-geo-01")
+    group_dict["teacher_id"] = teacher.get("teacher_id", "teacher-ivanov")
     if not group_dict.get("created_at"):
         group_dict["created_at"] = time.strftime("%d.%m.%Y %H:%M")
     idx = next((i for i, g in enumerate(groups) if g.get("id") == group.id), -1)
     if idx >= 0:
-        if teacher.get("username") != "admin" and groups[idx].get("teacher_id", "teacher-geo-01") != teacher.get("teacher_id"):
+        if not is_dean_or_admin(teacher) and groups[idx].get("teacher_id", "teacher-ivanov") != teacher.get("teacher_id"):
             raise HTTPException(status_code=403, detail="У вас нет прав на редактирование группы другого преподавателя")
         groups[idx] = group_dict
     else:
         groups.append(group_dict)
     save_groups_to_file(groups)
-    if teacher.get("username") == "admin":
+    if is_dean_or_admin(teacher):
         return {"status": "ok", "groups": groups}
-    return {"status": "ok", "groups": [g for g in groups if g.get("teacher_id", "teacher-geo-01") == teacher.get("teacher_id")]}
+    return {"status": "ok", "groups": [g for g in groups if g.get("teacher_id", "teacher-ivanov") == teacher.get("teacher_id")]}
 
 @app.delete("/api/admin/groups/{group_id}")
 def delete_group(group_id: str, teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[str, Any]:
@@ -403,31 +445,31 @@ def delete_group(group_id: str, teacher: Dict[str, Any] = Depends(check_admin)) 
     target = next((g for g in groups if g.get("id") == group_id), None)
     if not target:
         raise HTTPException(status_code=404, detail="Группа не найдена")
-    if teacher.get("username") != "admin" and target.get("teacher_id", "teacher-geo-01") != teacher.get("teacher_id"):
+    if not is_dean_or_admin(teacher) and target.get("teacher_id", "teacher-ivanov") != teacher.get("teacher_id"):
         raise HTTPException(status_code=403, detail="У вас нет прав на удаление группы другого преподавателя")
     groups = [g for g in groups if g.get("id") != group_id]
     save_groups_to_file(groups)
-    if teacher.get("username") == "admin":
+    if is_dean_or_admin(teacher):
         return {"status": "ok", "groups": groups}
-    return {"status": "ok", "groups": [g for g in groups if g.get("teacher_id", "teacher-geo-01") == teacher.get("teacher_id")]}
+    return {"status": "ok", "groups": [g for g in groups if g.get("teacher_id", "teacher-ivanov") == teacher.get("teacher_id")]}
 
 @app.get("/api/admin/students")
 def get_all_students(teacher: Dict[str, Any] = Depends(check_admin)) -> List[Dict[str, Any]]:
-    is_super = teacher.get("username") == "admin"
+    is_super = is_dean_or_admin(teacher)
     t_id = teacher.get("teacher_id")
-    groups = load_groups() if is_super else [g for g in load_groups() if g.get("teacher_id", "teacher-geo-01") == t_id]
-    results = load_results() if is_super else [r for r in load_results() if r.get("teacher_id", "teacher-geo-01") == t_id]
+    groups = load_groups() if is_super else [g for g in load_groups() if g.get("teacher_id", "teacher-ivanov") == t_id]
+    results = load_results() if is_super else [r for r in load_results() if r.get("teacher_id", "teacher-ivanov") == t_id]
     students_map = {}
     for g in groups:
         for s in g.get("students", []):
             key = (s.get("email") or s.get("name") or "").strip().lower()
             if key and key not in students_map:
-                students_map[key] = {"name": s.get("name"), "email": s.get("email", ""), "group": g.get("name")}
+                students_map[key] = {"name": s.get("name"), "email": s.get("email", ""), "group": g.get("name"), "teacher_id": g.get("teacher_id", "teacher-ivanov")}
     for r in results:
         email = (r.get("email") or "").strip().lower()
         name = r.get("name")
         if email and email != "-" and email not in students_map:
-            students_map[email] = {"name": name, "email": email, "group": r.get("group", "")}
+            students_map[email] = {"name": name, "email": email, "group": r.get("group", ""), "teacher_id": r.get("teacher_id", "teacher-ivanov")}
     return list(students_map.values())
 
 @app.get("/api/server-time")
@@ -439,7 +481,7 @@ def launch_exam_session(req: LaunchSessionRequest, teacher: Dict[str, Any] = Dep
     now_ms = int(time.time() * 1000)
     duration_ms = req.timeLimitMinutes * 60 * 1000
     sess_id = f"SES-SFEDU-{int(time.time())}"
-    teacher_id = teacher.get("teacher_id", "teacher-geo-01")
+    teacher_id = teacher.get("teacher_id", "teacher-ivanov")
     session_data = {
         "sessionId": sess_id,
         "session_id": sess_id,
@@ -483,8 +525,8 @@ def get_active_exam_session(teacher: Optional[Dict[str, Any]] = Depends(check_ad
     if not session or session.get("status") in ["stopped", "completed"]:
         return {"session": None, "current_server_time": now_ms, "remaining_seconds": 0}
     
-    # Преподавателю показываем только его сессию (суперадмину — любую)
-    if teacher and teacher.get("username") != "admin" and session.get("teacher_id") != teacher.get("teacher_id"):
+    # Преподавателю показываем только его сессию (декану / суперадмину — любую)
+    if teacher and not is_dean_or_admin(teacher) and session.get("teacher_id") != teacher.get("teacher_id"):
         return {"session": None, "current_server_time": now_ms, "remaining_seconds": 0}
 
     started = session.get("sessionStartedAt", 0) or session.get("started_at", 0)
@@ -506,7 +548,7 @@ def get_active_exam_session(teacher: Optional[Dict[str, Any]] = Depends(check_ad
 def stop_exam_session(teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[str, str]:
     session = load_active_session()
     if session:
-        if teacher.get("username") == "admin" or session.get("teacher_id") == teacher.get("teacher_id"):
+        if is_dean_or_admin(teacher) or session.get("teacher_id") == teacher.get("teacher_id"):
             session["status"] = "stopped"
             save_active_session(session)
             record_session_history(session)
@@ -516,13 +558,14 @@ def stop_exam_session(teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[st
 @app.get("/admin.html", response_class=HTMLResponse, response_model=None)
 def admin_panel(teacher: Dict[str, Any] = Depends(check_admin)):
     t_id = teacher.get("teacher_id")
-    is_super = teacher.get("username") == "admin"
+    is_super = is_dean_or_admin(teacher)
     all_results = load_results()
     all_groups = load_groups()
     active_session = load_active_session()
+    all_teachers = load_teachers()
 
-    results = all_results if is_super else [r for r in all_results if r.get("teacher_id", "teacher-geo-01") == t_id]
-    groups = all_groups if is_super else [g for g in all_groups if g.get("teacher_id", "teacher-geo-01") == t_id]
+    results = all_results if is_super else [r for r in all_results if r.get("teacher_id", "teacher-ivanov") == t_id]
+    groups = all_groups if is_super else [g for g in all_groups if g.get("teacher_id", "teacher-ivanov") == t_id]
     
     teacher_session = None
     if active_session and (is_super or active_session.get("teacher_id") == t_id):
@@ -536,11 +579,13 @@ def admin_panel(teacher: Dict[str, Any] = Depends(check_admin)):
         groups_json = json.dumps(groups, ensure_ascii=False)
         session_json = json.dumps(teacher_session, ensure_ascii=False)
         teacher_json = json.dumps(teacher, ensure_ascii=False)
+        all_teachers_json = json.dumps(all_teachers, ensure_ascii=False)
 
         rendered = template.replace("__SERVER_RESULTS_JSON__", results_json)
         rendered = rendered.replace("__SERVER_GROUPS_JSON__", groups_json)
         rendered = rendered.replace("__SERVER_SESSION_JSON__", session_json)
         rendered = rendered.replace("__SERVER_TEACHER_JSON__", teacher_json)
+        rendered = rendered.replace("__SERVER_ALL_TEACHERS_JSON__", all_teachers_json)
         return HTMLResponse(content=rendered)
 
     total_tests = len(results)
@@ -550,15 +595,15 @@ def admin_panel(teacher: Dict[str, Any] = Depends(check_admin)):
 @app.get("/api/admin/results")
 def get_admin_results(teacher: Dict[str, Any] = Depends(check_admin)) -> List[Dict[str, Any]]:
     results = load_results()
-    if teacher.get("username") == "admin":
+    if is_dean_or_admin(teacher):
         return results
-    return [r for r in results if r.get("teacher_id", "teacher-geo-01") == teacher.get("teacher_id")]
+    return [r for r in results if r.get("teacher_id", "teacher-ivanov") == teacher.get("teacher_id")]
 
 @app.get("/admin/export-csv", response_class=PlainTextResponse, response_model=None)
 def export_csv(teacher: Dict[str, Any] = Depends(check_admin)):
     t_id = teacher.get("teacher_id")
-    is_super = teacher.get("username") == "admin"
-    results = load_results() if is_super else [r for r in load_results() if r.get("teacher_id", "teacher-geo-01") == t_id]
+    is_super = is_dean_or_admin(teacher)
+    results = load_results() if is_super else [r for r in load_results() if r.get("teacher_id", "teacher-ivanov") == t_id]
     output = io.StringIO()
     output.write('\ufeff')
     writer = csv.writer(output, delimiter=';')
@@ -589,6 +634,104 @@ def export_csv(teacher: Dict[str, Any] = Depends(check_admin)):
         ])
     response = PlainTextResponse(output.getvalue(), media_type="text/csv; charset=utf-8")
     response.headers["Content-Disposition"] = f"attachment; filename=vedomost_{teacher.get('username', 'export')}.csv"
+    return response
+
+@app.get("/api/admin/export-moodle")
+def export_moodle(
+    format: str = "xml",
+    teacher: Dict[str, Any] = Depends(check_admin)
+) -> Response:
+    is_super = is_dean_or_admin(teacher)
+    t_id = teacher.get("teacher_id")
+    results = load_results() if is_super else [r for r in load_results() if r.get("teacher_id", "teacher-ivanov") == t_id]
+
+    if format.lower() == "json":
+        lti_payload = {
+            "https://purl.imsglobal.org/spec/lti-ags/scope/score": {
+                "context": {
+                    "id": "sfedu-geoatlas-2026",
+                    "label": "Институт наук о Земле ЮФУ — Географический атлас",
+                    "exported_by": teacher.get("full_name", "Преподаватель"),
+                    "organization": teacher.get("organization", "ЮФУ"),
+                    "department": teacher.get("department", "Геофак"),
+                    "is_executive_summary": is_super
+                },
+                "lineItem": {
+                    "id": "https://moodle.sfedu.ru/mod/lti/service/lineitem/geoatlas-exam",
+                    "label": "Контрольные срезы и практические работы GeoAtlas",
+                    "scoreMaximum": 100
+                },
+                "scores": [
+                    {
+                        "userId": r.get("email", ""),
+                        "userName": r.get("name", "Анонимный студент"),
+                        "userGroup": r.get("group", ""),
+                        "scoreGiven": int(r.get("accuracy", 0)),
+                        "scoreMaximum": 100,
+                        "pointsScored": int(r.get("score", 0)),
+                        "pointsTotal": int(r.get("max_score", 0)),
+                        "activityProgress": "Completed",
+                        "gradingProgress": "FullyGraded",
+                        "comment": f"GeoAtlas: {r.get('quiz_type', 'Тест')}, статус: {r.get('exam_status', 'Сдано')}, нарушений: {r.get('violations', 0)}",
+                        "timestamp": r.get("date", "")
+                    }
+                    for r in results
+                ]
+            }
+        }
+        content = json.dumps(lti_payload, ensure_ascii=False, indent=2)
+        response = PlainTextResponse(content, media_type="application/json; charset=utf-8")
+        response.headers["Content-Disposition"] = "attachment; filename=moodle_lti_grades_sfedu.json"
+        return response
+
+    xml_lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
+        '  <gradebook>',
+        '    <generator>GeoAtlas B2B SaaS LMS Exporter</generator>',
+        '    <institution>Южный федеральный университет (ЮФУ)</institution>',
+        f'    <faculty>{teacher.get("organization", "Институт наук о Земле ЮФУ")}</faculty>',
+        f'    <teacher>{teacher.get("full_name", "Преподаватель")}</teacher>',
+        f'    <exported_at>{datetime.now().strftime("%d.%m.%Y %H:%M:%S")}</exported_at>',
+        f'    <is_dean_summary>{str(is_super).lower()}</is_dean_summary>',
+        '    <items>'
+    ]
+
+    for idx, r in enumerate(results, start=1):
+        clean_email = (r.get("email") or "student@sfedu.ru").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        clean_name = (r.get("name") or "Студент").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        clean_group = (r.get("group") or "-").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        clean_type = (r.get("quiz_type") or "Общий").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        id_num = clean_email.split("@")[0]
+        
+        xml_lines.extend([
+            f'      <result id="{idx}">',
+            f'        <assignment id="geoatlas_exam_{idx}">{clean_type}</assignment>',
+            '        <student>',
+            f'          <email>{clean_email}</email>',
+            f'          <idnumber>{id_num}</idnumber>',
+            f'          <fullname>{clean_name}</fullname>',
+            f'          <group>{clean_group}</group>',
+            '        </student>',
+            f'        <score>{r.get("score", 0)}</score>',
+            f'        <maxscore>{r.get("max_score", 0)}</maxscore>',
+            f'        <percentage>{r.get("accuracy", 0)}</percentage>',
+            f'        <status>{r.get("exam_status", "Сдано")}</status>',
+            f'        <violations>{r.get("violations", 0)}</violations>',
+            f'        <token>{r.get("exam_token", "")}</token>',
+            '        <feedback>Сдано в системе интерактивного геоатласа GeoAtlas ЮФУ</feedback>',
+            f'        <timestamp>{r.get("date", "")}</timestamp>',
+            '      </result>'
+        ])
+
+    xml_lines.extend([
+        '    </items>',
+        '  </gradebook>',
+        '</results>'
+    ])
+    xml_content = "\n".join(xml_lines)
+    response = PlainTextResponse(xml_content, media_type="application/xml; charset=utf-8")
+    response.headers["Content-Disposition"] = "attachment; filename=moodle_grades_sfedu.xml"
     return response
 
 REGION_DATA_CACHE = {}

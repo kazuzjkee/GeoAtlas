@@ -3480,6 +3480,15 @@ function handleMapClick(lat, lon, question) {
         pointsAwarded = 3;
         message = `Идеально! (${distance.toFixed(0)} км) +3 очка!`;
         badgeType = 'success';
+        window._consecutiveSniperCount = (window._consecutiveSniperCount || 0) + 1;
+        if (window._consecutiveSniperCount >= 3) {
+            unlockAchievement('sniper');
+        }
+    } else {
+        window._consecutiveSniperCount = 0;
+    }
+    if (distance <= 15) {
+        // already handled
     } else if (distance <= 40) {
         pointsAwarded = 2;
         message = `Хорошо! (${distance.toFixed(0)} км) +2 очка!`;
@@ -4290,6 +4299,10 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         }
     }
 
+    if (accuracy === 100 || (mistakes === 0 && total > 0)) {
+        unlockAchievement('cartographer');
+    }
+
     const storageKey = getResultsStorageKey();
     const results = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('rostovQuizResults') || '[]');
     results.push({
@@ -4340,6 +4353,30 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(submitPayload)
     }).catch(e => {});
+
+    // --- ТРИГГЕРЫ ДОСТИЖЕНИЙ ---
+    // ⚡ «Спидранер»: сдать быстрее половины отведенного времени при точности > 80%
+    const totalAllowedTime = wasExam ? ((window.currentSyncTimeLimit || 10) * 60) : (totalQuestions * 20);
+    if (totalAllowedTime > 0 && timeSec <= (totalAllowedTime / 2) && accuracy > 80) {
+        unlockAchievement('speedrunner');
+    }
+
+    // 🌊 «Гидролог»: 100% в викторине по рекам
+    const isRiverQuiz = (currentQuiz === 'river' || (examCategory && examCategory.toLowerCase().includes('рек')) || (currentQuiz && currentQuiz.toLowerCase().includes('рек')));
+    if (isRiverQuiz && accuracy === 100) {
+        unlockAchievement('hydrologist');
+    }
+
+    // 🧠 «Гео-Эрудит»: максимальный балл в Комплексном экзамене
+    const isMixedExam = wasExam && (examCategory === 'mixed' || String(examCategory).toLowerCase().includes('комплекс'));
+    if (isMixedExam && accuracy === 100) {
+        unlockAchievement('geo_erudite');
+    }
+
+    // 🛡️ «Стальные нервы»: сдать экзамен на 100% без единого срабатывания Anti-Cheat
+    if (wasExam && accuracy === 100 && violations === 0) {
+        unlockAchievement('steel_nerves');
+    }
 }
 
 let globalLeaderboardCache = [];
@@ -4570,7 +4607,7 @@ function updateStudentHeader() {
     if (student) {
         if (authBtn) authBtn.style.display = 'none';
         if (profileBox) {
-            profileBox.style.display = 'flex';
+            profileBox.style.display = 'flex'; profileBox.style.cursor = 'pointer'; profileBox.onclick = openStudentProfileModal;
             document.getElementById('student-badge-name').textContent = student.name;
             document.getElementById('student-badge-group').textContent = `${student.group}`;
         }
@@ -5081,3 +5118,224 @@ async function checkAndApplySyncExamSession() {
         }, 1200);
     }
 }
+
+
+// ==========================================
+// 🏆 РАСШИРЕННАЯ ГЕЙМИФИКАЦИЯ: ДОСТИЖЕНИЯ
+// ==========================================
+const GEOATLAS_ACHIEVEMENTS = [
+    {
+        id: 'sniper',
+        icon: '🏅',
+        title: 'Снайпер',
+        desc: '3 раза подряд указать центр с погрешностью менее 15 км'
+    },
+    {
+        id: 'cartographer',
+        icon: '🧩',
+        title: 'Картограф',
+        desc: 'Собрать пазл региона с точностью 100%'
+    },
+    {
+        id: 'speedrunner',
+        icon: '⚡',
+        title: 'Спидранер',
+        desc: 'Сдать любой тест быстрее половины отведенного времени при точности > 80%'
+    },
+    {
+        id: 'hydrologist',
+        icon: '🌊',
+        title: 'Гидролог',
+        desc: 'Ответить на 100% вопросов в викторине по рекам'
+    },
+    {
+        id: 'geo_erudite',
+        icon: '🧠',
+        title: 'Гео-Эрудит',
+        desc: 'Набрать максимальный балл в «Комплексном экзамене»'
+    },
+    {
+        id: 'steel_nerves',
+        icon: '🛡️',
+        title: 'Стальные нервы',
+        desc: 'Сдать экзамен на 100% без единого срабатывания Anti-Cheat'
+    }
+];
+
+function getUnlockedAchievements() {
+    try {
+        const raw = localStorage.getItem('geoatlas_achievements');
+        return raw ? JSON.parse(raw) : {};
+    } catch(e) {
+        return {};
+    }
+}
+
+function unlockAchievement(achievementId) {
+    const ach = GEOATLAS_ACHIEVEMENTS.find(a => a.id === achievementId);
+    if (!ach) return;
+
+    const current = getUnlockedAchievements();
+    if (current[achievementId]) return;
+
+    const dateStr = new Date().toLocaleDateString('ru-RU');
+    current[achievementId] = {
+        unlockedAt: dateStr,
+        timestamp: Date.now()
+    };
+    try {
+        localStorage.setItem('geoatlas_achievements', JSON.stringify(current));
+    } catch(e) {}
+
+    showAchievementToast(ach);
+}
+
+function showAchievementToast(ach) {
+    let container = document.getElementById('geoatlas-achievement-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'geoatlas-achievement-toast-container';
+        container.style.cssText = 'position: fixed; bottom: 25px; right: 25px; z-index: 999999; display: flex; flex-direction: column; gap: 12px; pointer-events: none;';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'achievement-toast-card';
+    toast.style.cssText = 'pointer-events: auto; min-width: 320px; max-width: 400px; background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%); border: 2px solid #F59E0B; border-radius: 16px; padding: 16px 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 25px rgba(245, 158, 11, 0.4); display: flex; align-items: center; gap: 16px; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; transform: translateX(120%); transition: transform 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease; opacity: 0;';
+
+    toast.innerHTML = `
+        <div style="font-size: 38px; flex-shrink: 0; filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.6));">${ach.icon}</div>
+        <div style="flex: 1;">
+            <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #FBBF24;">✨ Достижение разблокировано!</div>
+            <div style="font-size: 16px; font-weight: 700; color: #FFFFFF; margin-top: 2px;">${ach.title}</div>
+            <div style="font-size: 12px; color: #94A3B8; margin-top: 3px; line-height: 1.3;">${ach.desc}</div>
+        </div>
+    `;
+
+    container.appendChild(toast);
+
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = audioCtx.currentTime;
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + i * 0.08);
+            gain.gain.setValueAtTime(0.12, now + i * 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.35);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now + i * 0.08);
+            osc.stop(now + i * 0.08 + 0.35);
+        });
+    } catch(e) {}
+
+    setTimeout(() => {
+        toast.style.transform = 'translateX(0)';
+        toast.style.opacity = '1';
+    }, 50);
+
+    setTimeout(() => {
+        toast.style.transform = 'translateX(120%)';
+        toast.style.opacity = '0';
+        setTimeout(() => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 500);
+    }, 5000);
+}
+
+function openStudentProfileModal() {
+    const student = getCurrentStudentInfo();
+    const studentName = student ? student.name : 'Студент ЮФУ';
+    const studentGroup = student ? student.group : 'Группа не выбрана';
+    const studentEmail = student ? student.email : 'student@sfedu.ru';
+
+    const unlocked = getUnlockedAchievements();
+    const unlockedCount = Object.keys(unlocked).length;
+    const totalCount = GEOATLAS_ACHIEVEMENTS.length;
+    const progressPct = Math.round((unlockedCount / totalCount) * 100);
+
+    let modal = document.getElementById('student-achievements-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'student-achievements-modal';
+        modal.className = 'app-modal-overlay';
+        modal.style.cssText = 'position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px;';
+        document.body.appendChild(modal);
+    }
+
+    let cardsHtml = '';
+    GEOATLAS_ACHIEVEMENTS.forEach(ach => {
+        const isUnlocked = !!unlocked[ach.id];
+        const unlockInfo = unlocked[ach.id];
+        const cardStyle = isUnlocked
+            ? 'background: linear-gradient(145deg, rgba(245, 158, 11, 0.15), rgba(30, 41, 59, 0.9)); border: 2px solid #F59E0B; box-shadow: 0 0 20px rgba(245, 158, 11, 0.3); opacity: 1;'
+            : 'background: rgba(15, 23, 42, 0.6); border: 1px dashed rgba(255, 255, 255, 0.2); opacity: 0.45; filter: grayscale(1);';
+
+        const badgeHtml = isUnlocked
+            ? `<span style="background: rgba(245, 158, 11, 0.2); color: #FBBF24; border: 1px solid #F59E0B; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;">Разблокировано • ${unlockInfo.unlockedAt || ''}</span>`
+            : `<span style="background: rgba(255, 255, 255, 0.05); color: #94A3B8; border: 1px solid rgba(255, 255, 255, 0.1); padding: 3px 8px; border-radius: 6px; font-size: 11px;">🔒 Закрыто</span>`;
+
+        cardsHtml += `
+            <div style="${cardStyle} border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: all 0.3s ease;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 32px;">${ach.icon}</div>
+                    ${badgeHtml}
+                </div>
+                <div>
+                    <div style="font-size: 16px; font-weight: 700; color: #F8FAFC;">${ach.title}</div>
+                    <div style="font-size: 12px; color: #94A3B8; margin-top: 4px; line-height: 1.35;">${ach.desc}</div>
+                </div>
+            </div>
+        `;
+    });
+
+    modal.innerHTML = `
+        <div style="background: #0F172A; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; max-width: 760px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 28px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 16px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #3B82F6, #8B5CF6); display: flex; align-items: center; justify-content: center; font-size: 24px;">🎓</div>
+                    <div>
+                        <div style="font-size: 20px; font-weight: 800; color: #FFFFFF;">${escapeHtml(studentName)}</div>
+                        <div style="font-size: 13px; color: #94A3B8;">${escapeHtml(studentGroup)} • ${escapeHtml(studentEmail)}</div>
+                    </div>
+                </div>
+                <button onclick="closeStudentProfileModal()" style="background: transparent; border: none; font-size: 28px; color: #94A3B8; cursor: pointer;">&times;</button>
+            </div>
+
+            <div style="margin-bottom: 24px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-weight: 700; font-size: 14px; color: #E2E8F0;">Прогресс достижений</span>
+                    <span style="font-weight: 800; font-size: 14px; color: #F59E0B;">${unlockedCount} из ${totalCount} (${progressPct}%)</span>
+                </div>
+                <div style="width: 100%; height: 10px; background: rgba(255, 255, 255, 0.1); border-radius: 999px; overflow: hidden;">
+                    <div style="width: ${progressPct}%; height: 100%; background: linear-gradient(90deg, #F59E0B, #10B981); border-radius: 999px; transition: width 0.5s ease;"></div>
+                </div>
+            </div>
+
+            <h3 style="font-size: 16px; font-weight: 700; color: #F8FAFC; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                <span>🏆</span> <span>Витрина достижений (Ачивки)</span>
+            </h3>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px;">
+                ${cardsHtml}
+            </div>
+
+            <div style="margin-top: 24px; text-align: right;">
+                <button onclick="closeStudentProfileModal()" class="btn btn-secondary" style="padding: 8px 20px; border-radius: 10px; cursor: pointer;">Закрыть</button>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+}
+
+function closeStudentProfileModal() {
+    const modal = document.getElementById('student-achievements-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+window.openStudentProfileModal = openStudentProfileModal;
+window.closeStudentProfileModal = closeStudentProfileModal;
+window.unlockAchievement = unlockAchievement;

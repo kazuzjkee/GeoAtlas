@@ -6,6 +6,9 @@ let allResults = [];
     let activeFilter = 'all';
     let searchQuery = '';
     let currentTeacher = null;
+    let allTeachers = [];
+    let rawServerResults = [];
+    let rawServerGroups = [];
 
     const DEFAULT_PRESET_GROUPS = [
         {
@@ -41,11 +44,18 @@ let allResults = [];
     ];
 
     function initData() {
-        // 0. Загрузка профиля преподавателя (B2B SaaS Мультитенантность)
+        // 0. Загрузка профиля преподавателя и списка преподавателей (B2B SaaS Мультитенантность)
         try {
             const teacherRaw = document.getElementById('server-teacher-data')?.textContent.trim();
             if (teacherRaw && teacherRaw !== '__SERVER_TEACHER_JSON__') {
                 currentTeacher = JSON.parse(teacherRaw);
+            }
+        } catch (e) {}
+
+        try {
+            const allTRaw = document.getElementById('server-all-teachers-data')?.textContent.trim();
+            if (allTRaw && allTRaw !== '__SERVER_ALL_TEACHERS_JSON__') {
+                allTeachers = JSON.parse(allTRaw);
             }
         } catch (e) {}
 
@@ -152,6 +162,18 @@ let allResults = [];
         renderGroupsManager();
         renderDispatcherGroups();
         renderTable();
+
+        rawServerResults = allResults.slice();
+        rawServerGroups = allGroups.slice();
+
+        const isDean = currentTeacher && (
+            currentTeacher.role === 'dean' ||
+            currentTeacher.username === 'dean_geo' ||
+            currentTeacher.username === 'admin'
+        );
+        if (isDean) {
+            initExecutiveDashboard();
+        }
 
         if (activeSession) {
             checkActiveSessionState();
@@ -1241,3 +1263,242 @@ let allResults = [];
     }
 
     window.addEventListener('DOMContentLoaded', loadMapsList);
+
+
+    // ==========================================
+    // 🏛️ EXECUTIVE DASHBOARD (ДЕКАНАТ ЮФУ)
+    // ==========================================
+    function initExecutiveDashboard() {
+        const section = document.getElementById('executive-dashboard-section');
+        if (section) section.style.display = 'block';
+
+        const filterSelect = document.getElementById('executive-teacher-filter');
+        if (filterSelect && allTeachers.length > 0) {
+            const seen = new Set();
+            filterSelect.innerHTML = '<option value="all">🌐 Сводка по всем преподавателям (ЮФУ)</option>';
+            allTeachers.forEach(t => {
+                if (t.role !== 'dean' && !seen.has(t.teacher_id)) {
+                    seen.add(t.teacher_id);
+                    const opt = document.createElement('option');
+                    opt.value = t.teacher_id;
+                    opt.textContent = `👨‍🏫 ${t.full_name} (${t.department || t.organization || 'Кафедра'})`;
+                    filterSelect.appendChild(opt);
+                }
+            });
+        }
+        updateExecutiveMetrics();
+    }
+
+    function updateExecutiveMetrics() {
+        const deptsEl = document.getElementById('exec-metric-depts');
+        const teachersEl = document.getElementById('exec-metric-teachers');
+        const avgScoreEl = document.getElementById('exec-metric-avg-score');
+        const integrityEl = document.getElementById('exec-metric-integrity');
+
+        const uniqueDepts = new Set();
+        const uniqueTeachers = new Set();
+        allTeachers.forEach(t => {
+            if (t.department) uniqueDepts.add(t.department);
+            if (t.role !== 'dean') uniqueTeachers.add(t.teacher_id);
+        });
+
+        if (deptsEl) deptsEl.textContent = `${uniqueDepts.size || 2} кафедры`;
+        if (teachersEl) teachersEl.textContent = `${uniqueTeachers.size || 2} преподавателя`;
+
+        const total = allResults.length;
+        if (total > 0) {
+            const avgAcc = Math.round(allResults.reduce((sum, r) => sum + (r.accuracy || 0), 0) / total);
+            if (avgScoreEl) avgScoreEl.textContent = `${avgAcc}%`;
+
+            const violationsCount = allResults.reduce((sum, r) => sum + (r.violations || 0), 0);
+            const integrityPct = Math.max(70, Math.min(100, Math.round(100 - (violationsCount / total) * 15)));
+            if (integrityEl) integrityEl.textContent = `${integrityPct}%`;
+        }
+    }
+
+    function onExecutiveTeacherFilterChange(teacherId) {
+        if (teacherId === 'all') {
+            allResults = rawServerResults.slice();
+            allGroups = rawServerGroups.slice();
+        } else {
+            allResults = rawServerResults.filter(r => (r.teacher_id || 'teacher-ivanov') === teacherId);
+            allGroups = rawServerGroups.filter(g => (g.teacher_id || 'teacher-ivanov') === teacherId);
+        }
+
+        buildKnownStudentsRoster();
+        updateKPIs();
+        updateMistakesAnalytics();
+        renderGroupsManager();
+        renderDispatcherGroups();
+        renderTable();
+        updateExecutiveMetrics();
+        showToast(teacherId === 'all' ? 'Показана сводка по всему факультету' : 'Применен фильтр преподавателя');
+    }
+    window.onExecutiveTeacherFilterChange = onExecutiveTeacherFilterChange;
+
+    // ==========================================
+    // 📄 ГЕНЕРАЦИЯ EXECUTIVE PDF-ОТЧЕТА (html2pdf)
+    // ==========================================
+    function generateExecutivePDFReport() {
+        if (typeof html2pdf === 'undefined') {
+            alert('Библиотека html2pdf.js еще инициализируется. Пожалуйста, повторите попытку через 2 секунды.');
+            return;
+        }
+
+        showToast('⏳ Формирование официального PDF-отчета...');
+
+        const dateStr = new Date().toLocaleDateString('ru-RU') + ' ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        const teacherName = currentTeacher ? currentTeacher.full_name : 'Преподаватель ЮФУ';
+        const orgName = currentTeacher ? currentTeacher.organization : 'Институт наук о Земле ЮФУ';
+        const deptName = currentTeacher ? (currentTeacher.department || 'Геолого-географический факультет') : 'Кафедра физической географии';
+        const isDean = currentTeacher && (currentTeacher.role === 'dean' || currentTeacher.username === 'dean_geo' || currentTeacher.username === 'admin');
+
+        // Подсчет ключевых метрик для отчета
+        const totalTests = allResults.length;
+        const examTests = allResults.filter(r => r.is_exam).length;
+        const avgAcc = totalTests > 0 ? Math.round(allResults.reduce((s, r) => s + (r.accuracy || 0), 0) / totalTests) : 0;
+        const totalViolations = allResults.reduce((s, r) => s + (r.violations || 0), 0);
+
+        // Формирование строк таблицы результатов
+        let tableRowsHtml = '';
+        allResults.slice(0, 35).forEach((r, idx) => {
+            const statusClass = r.is_exam ? (r.violations > 0 ? '#DC2626' : '#10B981') : '#2563EB';
+            tableRowsHtml += `
+                <tr style="border-bottom: 1px solid #E5E7EB; font-size: 11px;">
+                    <td style="padding: 6px 8px; text-align: center;">${idx + 1}</td>
+                    <td style="padding: 6px 8px;"><strong>${escapeHtml(r.name || 'Анонимно')}</strong></td>
+                    <td style="padding: 6px 8px;">${escapeHtml(r.group || '-')}</td>
+                    <td style="padding: 6px 8px;">${escapeHtml(r.quiz_type || 'Общий')}</td>
+                    <td style="padding: 6px 8px; text-align: center; color: ${statusClass}; font-weight: bold;">${escapeHtml(r.exam_status || (r.is_exam ? 'Сдано' : 'Пройдено'))}</td>
+                    <td style="padding: 6px 8px; text-align: center; font-weight: bold;">${r.score} / ${r.max_score}</td>
+                    <td style="padding: 6px 8px; text-align: center; font-weight: bold; color: ${r.accuracy >= 70 ? '#059669' : '#DC2626'};">${r.accuracy}%</td>
+                    <td style="padding: 6px 8px; text-align: center;">${r.violations || 0}</td>
+                    <td style="padding: 6px 8px; text-align: center; color: #6B7280;">${r.date || '-'}</td>
+                </tr>
+            `;
+        });
+
+        // Создаем временный чистый DOM-элемент строгого академического стиля
+        const reportEl = document.createElement('div');
+        reportEl.id = 'executive-pdf-container';
+        reportEl.style.width = '1000px';
+        reportEl.style.padding = '30px 40px';
+        reportEl.style.background = '#FFFFFF';
+        reportEl.style.color = '#111827';
+        reportEl.style.fontFamily = 'Arial, "Segoe UI", sans-serif';
+
+        reportEl.innerHTML = `
+            <div style="border-bottom: 3px solid #1E3A8A; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div style="font-size: 38px;">🎓</div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: bold; color: #1E3A8A; text-transform: uppercase; letter-spacing: 0.5px;">Министерство науки и высшего образования РФ</div>
+                        <div style="font-size: 18px; font-weight: 800; color: #0F172A;">ЮЖНЫЙ ФЕДЕРАЛЬНЫЙ УНИВЕРСИТЕТ</div>
+                        <div style="font-size: 13px; color: #4B5563;">${escapeHtml(orgName)} • ${escapeHtml(deptName)}</div>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="display: inline-block; background: #EEF2FF; color: #3730A3; font-weight: bold; font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid #C7D2FE;">
+                        ${isDean ? 'EXECUTIVE SUMMARY (ДЕКАНАТ)' : 'АТТЕСТАЦИОННАЯ ВЕДОМОСТЬ'}
+                    </div>
+                    <div style="font-size: 11px; color: #6B7280; margin-top: 5px;">Дата: ${dateStr}</div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h2 style="font-size: 18px; font-weight: 800; margin: 0 0 5px 0; color: #0F172A; text-align: center; text-transform: uppercase;">
+                    Сводный отчет академической успеваемости в системе GeoAtlas
+                </h2>
+                <div style="font-size: 12px; color: #6B7280; text-align: center;">
+                    Ответственное лицо: <strong>${escapeHtml(teacherName)}</strong> • Режим: <strong>${isDean ? 'Сводка по всем кафедрам' : 'Кафедральная ведомость'}</strong>
+                </div>
+            </div>
+
+            <!-- KPI Cards -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 25px;">
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #64748B;">Всего попыток сдачи</div>
+                    <div style="font-size: 20px; font-weight: 800; color: #0284C7; margin-top: 3px;">${totalTests}</div>
+                </div>
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #64748B;">Контрольных срезов</div>
+                    <div style="font-size: 20px; font-weight: 800; color: #7C3AED; margin-top: 3px;">${examTests}</div>
+                </div>
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #64748B;">Средняя успеваемость</div>
+                    <div style="font-size: 20px; font-weight: 800; color: #059669; margin-top: 3px;">${avgAcc}%</div>
+                </div>
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; text-align: center;">
+                    <div style="font-size: 11px; color: #64748B;">Нарушений Anti-Cheat</div>
+                    <div style="font-size: 20px; font-weight: 800; color: ${totalViolations > 0 ? '#DC2626' : '#10B981'}; margin-top: 3px;">${totalViolations}</div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div style="margin-bottom: 30px;">
+                <div style="font-size: 13px; font-weight: 700; color: #1E293B; margin-bottom: 8px; text-transform: uppercase;">
+                    Ведомость контрольных и проверочных работ
+                </div>
+                <table style="width: 100%; border-collapse: collapse; border: 1px solid #CBD5E1; background: #FFFFFF;">
+                    <thead>
+                        <tr style="background: #F1F5F9; font-size: 11px; color: #475569; text-transform: uppercase; border-bottom: 2px solid #CBD5E1;">
+                            <th style="padding: 8px; text-align: center; width: 30px;">№</th>
+                            <th style="padding: 8px; text-align: left;">Студент</th>
+                            <th style="padding: 8px; text-align: left;">Группа</th>
+                            <th style="padding: 8px; text-align: left;">Тема</th>
+                            <th style="padding: 8px; text-align: center;">Статус</th>
+                            <th style="padding: 8px; text-align: center;">Баллы</th>
+                            <th style="padding: 8px; text-align: center;">Успех</th>
+                            <th style="padding: 8px; text-align: center;">Фокус</th>
+                            <th style="padding: 8px; text-align: center;">Дата</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRowsHtml || '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #9CA3AF;">Нет данных</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Signatures Footer -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 40px; padding-top: 20px; border-top: 2px dashed #E2E8F0;">
+                <div>
+                    <div style="font-size: 11px; color: #64748B;">Электронный идентификатор отчета: SFEDU-EXECUTIVE-${Date.now()}</div>
+                    <div style="font-size: 10px; color: #94A3B8; margin-top: 2px;">Сформировано автоматически интерактивным геоатласом GeoAtlas SaaS</div>
+                </div>
+                <div style="display: flex; gap: 40px;">
+                    <div style="text-align: center;">
+                        <div style="width: 180px; border-bottom: 1px solid #000; height: 30px;"></div>
+                        <div style="font-size: 11px; color: #475569; margin-top: 4px;">Преподаватель (подпись)</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="width: 180px; border-bottom: 1px solid #000; height: 30px;"></div>
+                        <div style="font-size: 11px; color: #475569; margin-top: 4px;">Деканат / М.П.</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Временно добавляем в DOM вне зоны видимости для генерации
+        reportEl.style.position = 'fixed';
+        reportEl.style.left = '-9999px';
+        reportEl.style.top = '0';
+        document.body.appendChild(reportEl);
+
+        const opt = {
+            margin: [8, 8, 8, 8],
+            filename: 'Report_GeoAtlas.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        };
+
+        html2pdf().set(opt).from(reportEl).save().then(() => {
+            document.body.removeChild(reportEl);
+            showToast('✅ Отчет Report_GeoAtlas.pdf успешно скачан!');
+        }).catch(err => {
+            console.error('PDF generation error:', err);
+            document.body.removeChild(reportEl);
+            alert('Ошибка при генерации PDF: ' + err.message);
+        });
+    }
+    window.generateExecutivePDFReport = generateExecutivePDFReport;
