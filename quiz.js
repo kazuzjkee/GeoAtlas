@@ -1162,16 +1162,16 @@ function renderStudyItem() {
 
     if (studyCategory === 'districts') {
         const neighborsHtml = item.neighbors && item.neighbors.length > 0
-            ? item.neighbors.map(n => `<span class="neighbor-tag" onclick="jumpToStudyItem('${n}')">${n}</span>`).join('')
+            ? item.neighbors.map(n => `<span class="neighbor-tag" onclick="jumpToStudyItem('${escapeHtml(n)}')">${escapeHtml(n)}</span>`).join('')
             : '<span style="color: #94A3B8; font-size: 11px;">Нет смежных границ</span>';
 
         const popFormatted = item.population ? `${Number(item.population).toLocaleString('ru-RU')} чел.` : 'Уточняется';
 
         contentEl.innerHTML = `
-            <h3 class="study-title">${item.name}</h3>
-            <div class="info-row"><span>Центр:</span><strong>${item.center || '—'}</strong></div>
-            <div class="info-row"><span>Население:</span><strong>~${popFormatted}</strong></div>
-            <div class="info-row"><span>Площадь:</span><strong>~${item.area} км²</strong></div>
+            <h3 class="study-title">${escapeHtml(item.name)}</h3>
+            <div class="info-row"><span>Центр:</span><strong>${escapeHtml(item.center || '—')}</strong></div>
+            <div class="info-row"><span>Население:</span><strong>~${escapeHtml(popFormatted)}</strong></div>
+            <div class="info-row"><span>Площадь:</span><strong>~${escapeHtml(item.area)} км²</strong></div>
             <div style="margin-top: 8px;">
                 <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит:</span>
                 <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${neighborsHtml}</div>
@@ -1181,18 +1181,18 @@ function renderStudyItem() {
 
     } else if (studyCategory === 'rivers') {
         contentEl.innerHTML = `
-            <h3 class="study-title">Река ${item.name}</h3>
+            <h3 class="study-title">Река ${escapeHtml(item.name)}</h3>
             <div class="info-row"><span>Тип:</span><strong>Водный объект / Водоток</strong></div>
-            <div class="info-row"><span>Протяженность:</span><strong>~${item.length} км</strong></div>
+            <div class="info-row"><span>Протяженность:</span><strong>~${escapeHtml(item.length)} км</strong></div>
             <div class="hint-small" style="margin-top: 8px;">Русло выделено красной линией на карте</div>
         `;
         highlightRiverOnMapByName(item.name);
 
     } else if (studyCategory === 'centers') {
         contentEl.innerHTML = `
-            <h3 class="study-title">${item.name}</h3>
-            <div class="info-row"><span>Статус:</span><strong>${item.status || 'центр'}</strong></div>
-            <div class="info-row"><span>Координаты:</span><strong>${item.lat.toFixed(3)}°, ${item.lon.toFixed(3)}°</strong></div>
+            <h3 class="study-title">${escapeHtml(item.name)}</h3>
+            <div class="info-row"><span>Статус:</span><strong>${escapeHtml(item.status || 'центр')}</strong></div>
+            <div class="info-row"><span>Координаты:</span><strong>${escapeHtml(item.lat.toFixed(3))}°, ${escapeHtml(item.lon.toFixed(3))}°</strong></div>
             <div class="hint-small" style="margin-top: 8px;">Объект отмечен пульсирующим маркером</div>
         `;
         const map = getMapObject();
@@ -2693,12 +2693,12 @@ function renderPuzzleTray() {
                  ondragend="handlePuzzleDragEnd(event)" 
                  onpointerdown="handlePuzzlePointerDown(event, '${p.id}')" 
                  onclick="selectPuzzlePieceById('${p.id}')" 
-                 title="«${p.name}» ${isNeighbor ? '— граничит с ядром, готов к стыковке!' : '— ждет соседних районов'}">
+                 title="«${escapeHtml(p.name)}» ${isNeighbor ? '— граничит с ядром, готов к стыковке!' : '— ждет соседних районов'}">
                 <span class="${badgeClass}">${badgeText}</span>
                 <div class="puzzle-card-svg-wrap">
                     ${svgMarkup}
                 </div>
-                <div class="puzzle-card-caption">${p.name}</div>
+                <div class="puzzle-card-caption">${escapeHtml(p.name)}</div>
             </div>
         `;
     });
@@ -2840,7 +2840,7 @@ function finishPuzzleVictory() {
     if (statsContainer) {
         const studentLine = studentInfo 
             ? `<div style="font-size: 12.5px; color: #1E293B; margin-bottom: 8px; border-bottom: 1px solid #E2E8F0; padding-bottom: 6px;">
-                 Студент: <b>${studentInfo.name}</b> (${studentInfo.group})
+                 Студент: <b>${escapeHtml(studentInfo.name)}</b> (${escapeHtml(studentInfo.group)})
                </div>`
             : `<div style="font-size: 11.5px; color: #D97706; margin-bottom: 8px;">
                  ⚠️ Авторизуйтесь через меню для привязки к ведомости ЮФУ
@@ -4059,7 +4059,7 @@ function showDistrictInfoCard(districtName) {
     window._currentDistrictForChart = district;
 
     const neighborsHtml = district.neighbors && district.neighbors.length > 0 
-        ? district.neighbors.map(n => `<span class="neighbor-tag" onclick="showDistrictInfoCard('${n}')">${n}</span>`).join('')
+        ? district.neighbors.map(n => `<span class="neighbor-tag" onclick="showDistrictInfoCard('${escapeHtml(n)}')">${escapeHtml(n)}</span>`).join('')
         : '<em>Нет смежных границ</em>';
 
     const popFormatted = district.population 
@@ -4072,14 +4072,14 @@ function showDistrictInfoCard(districtName) {
 
     card.innerHTML = `
         <div class="info-card-header">
-            <strong>${district.name}</strong>
+            <strong>${escapeHtml(district.name)}</strong>
             <button onclick="closeInfoCard()" class="close-card-btn">&times;</button>
         </div>
         <div class="info-card-body">
-            <div class="info-row"><span>Центр:</span><strong>${district.center}</strong></div>
-            <div class="info-row"><span>Население:</span><strong>~${popFormatted}</strong></div>
-            <div class="info-row"><span>ВРП:</span><strong>~${grpFormatted}</strong></div>
-            <div class="info-row"><span>Площадь:</span><strong>~${district.area} км²</strong></div>
+            <div class="info-row"><span>Центр:</span><strong>${escapeHtml(district.center)}</strong></div>
+            <div class="info-row"><span>Население:</span><strong>~${escapeHtml(popFormatted)}</strong></div>
+            <div class="info-row"><span>ВРП:</span><strong>~${escapeHtml(grpFormatted)}</strong></div>
+            <div class="info-row"><span>Площадь:</span><strong>~${escapeHtml(district.area)} км²</strong></div>
             <div style="margin-top: 8px;">
                 <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит с:</span>
                 <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${neighborsHtml}</div>
@@ -4309,8 +4309,8 @@ function showResults() {
 
         const studentLine = studentInfo 
             ? `<div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 8px 12px; margin: 8px 0; text-align: left; font-size: 12px;">
-                 <div><b>Студент:</b> ${studentInfo.name}</div>
-                 <div style="color: #64748B;"><b>Группа:</b> ${studentInfo.group} | <b>Email:</b> ${studentInfo.email}</div>
+                 <div><b>Студент:</b> ${escapeHtml(studentInfo.name)}</div>
+                 <div style="color: #64748B;"><b>Группа:</b> ${escapeHtml(studentInfo.group)} | <b>Email:</b> ${escapeHtml(studentInfo.email)}</div>
                </div>`
             : `<div style="color: #D97706; font-size: 12px; margin: 6px 0;">⚠️ Авторизуйтесь через главное меню для привязки к группе ЮФУ.</div>`;
 
@@ -4331,9 +4331,9 @@ function showResults() {
                     <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">
                         Цифровой токен ведомости (ЮФУ)
                     </div>
-                    <div class="exam-token-val" id="exam-token-display">${examToken}</div>
+                    <div class="exam-token-val" id="exam-token-display">${escapeHtml(examToken)}</div>
                     <div>
-                        <button onclick="copyExamToken('${examToken}')" class="token-copy-btn">📋 Скопировать код</button>
+                        <button onclick="copyExamToken('${escapeHtml(examToken)}')" class="token-copy-btn">📋 Скопировать код</button>
                     </div>
                     <div style="font-size: 11px; color: #94A3B8; margin-top: 6px;">
                         Предъявите этот код преподавателю для подтверждения оценки
@@ -4348,7 +4348,7 @@ function showResults() {
         else if (accuracy >= 45) { message = 'Удовлетворительно.'; emoji = '📚'; }
         else { message = 'Попробуйте ещё раз!'; emoji = '💪'; }
 
-        const studentLine = studentInfo ? `<p style="margin: 4px 0; font-size: 13px; color: #0284C7;">Студент: <strong>${studentInfo.name}</strong> (${studentInfo.group})</p>` : '';
+        const studentLine = studentInfo ? `<p style="margin: 4px 0; font-size: 13px; color: #0284C7;">Студент: <strong>${escapeHtml(studentInfo.name)}</strong> (${escapeHtml(studentInfo.group)})</p>` : '';
 
         rc.innerHTML = `
             <div style="font-size: 42px; margin: 10px 0;">${emoji}</div>
@@ -4602,7 +4602,7 @@ function getLbContentHtml() {
 
         let tableHtml = filtersHtml + '<div class="lb-table-wrap"><table class="lb-styled-table"><tr><th>№</th><th>Студент</th><th>Группа</th><th>Тест</th><th>Баллы</th><th>%</th><th>Время</th></tr>';
         data.forEach((r, index) => {
-            tableHtml += `<tr><td>${index+1}</td><td>${r.name}</td><td>${r.group}</td><td>${r.quiz_type}</td><td><b>${r.score}/${r.max_score}</b></td><td>${r.accuracy}%</td><td>${r.time_spent}</td></tr>`;
+            tableHtml += `<tr><td>${index+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.group)}</td><td>${escapeHtml(r.quiz_type)}</td><td><b>${escapeHtml(r.score)}/${escapeHtml(r.max_score)}</b></td><td>${escapeHtml(r.accuracy)}%</td><td>${escapeHtml(r.time_spent)}</td></tr>`;
         });
         tableHtml += '</table></div>';
         return tableHtml;
@@ -4626,7 +4626,7 @@ function getLbContentHtml() {
         if (myResults.length === 0) {
             return filtersHtml + `
             <div style="padding: 25px 10px; text-align: center;">
-                <p style="font-weight: 700; color: #0369A1; font-size: 14px;">Привет, ${student.name} (${student.group})!</p>
+                <p style="font-weight: 700; color: #0369A1; font-size: 14px;">Привет, ${escapeHtml(student.name)} (${escapeHtml(student.group)})!</p>
                 <p style="color: #64748B; font-size: 13px; margin-top: 8px;">У вас пока нет сохраненных результатов в выбранной категории.</p>
             </div>`;
         }
@@ -4636,15 +4636,15 @@ function getLbContentHtml() {
 
         let profileHtml = filtersHtml + `
         <div style="text-align: left; margin-bottom: 12px; background: #F0FDF4; border: 1px solid #BBF7D0; padding: 10px 14px; border-radius: 12px;">
-            <p style="margin: 0; font-size: 12.5px; color: #166534; font-weight: 700;">👤 Студент: ${student.name}</p>
-            <p style="margin: 2px 0 0 0; font-size: 11.5px; color: #15803D;">Группа: ${student.group}</p>
+            <p style="margin: 0; font-size: 12.5px; color: #166534; font-weight: 700;">👤 Студент: ${escapeHtml(student.name)}</p>
+            <p style="margin: 2px 0 0 0; font-size: 11.5px; color: #15803D;">Группа: ${escapeHtml(student.group)}</p>
         </div>
 
         <div style="margin-bottom: 12px; text-align: left;">
             <h4 style="margin: 0 0 5px 0; font-size: 12.5px; color: #1E293B;">⭐ Лучший результат:</h4>
             <div style="background: #FFFBEB; border: 1px solid #FDE68A; padding: 8px 12px; border-radius: 9px; font-size: 11.5px; color: #92400E; display: flex; justify-content: space-between; align-items: center;">
-                <span>Тест: <b>${bestResult.type}</b> | Баллы: <b>${bestResult.score}/${bestResult.maxScore}</b> (${bestResult.accuracy}%)</span>
-                <span>⏱ ${bestResult.time_spent}</span>
+                <span>Тест: <b>${escapeHtml(bestResult.type)}</b> | Баллы: <b>${escapeHtml(bestResult.score)}/${escapeHtml(bestResult.maxScore)}</b> (${escapeHtml(bestResult.accuracy)}%)</span>
+                <span>⏱ ${escapeHtml(bestResult.time_spent)}</span>
             </div>
         </div>
 
@@ -4655,7 +4655,7 @@ function getLbContentHtml() {
                     <tr><th>Дата</th><th>Тест</th><th>Баллы</th><th>%</th><th>Время</th></tr>`;
         
         lastResults.forEach(r => {
-            profileHtml += `<tr><td>${r.date}</td><td>${r.type}</td><td><b>${r.score}/${r.maxScore}</b></td><td>${r.accuracy}%</td><td>${r.time_spent}</td></tr>`;
+            profileHtml += `<tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.type)}</td><td><b>${escapeHtml(r.score)}/${escapeHtml(r.maxScore)}</b></td><td>${escapeHtml(r.accuracy)}%</td><td>${escapeHtml(r.time_spent)}</td></tr>`;
         });
 
         profileHtml += `</table></div></div>`;
@@ -5796,7 +5796,7 @@ function showNetworkNotificationToast(type, message) {
         opacity: 0;
         transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     `;
-    toast.innerHTML = `<span>${message}</span>`;
+    toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
     container.appendChild(toast);
 
     requestAnimationFrame(() => {
@@ -6200,14 +6200,14 @@ var DuelManager = {
             <div style="background: #0B1120; border: 1.5px solid rgba(255, 255, 255, 0.14); border-radius: 24px; max-width: 580px; width: 100%; padding: 28px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85); color: #F8FAFC;">
                 <div style="text-align: center; margin-bottom: 22px;">
                     <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #F59E0B; font-weight: 800;">КОМНАТА ДУЭЛИ СОЗДАНА</div>
-                    <div style="font-size: 36px; font-weight: 900; color: #FFFFFF; letter-spacing: 3px; margin: 6px 0;">${data.room_id}</div>
-                    <div style="font-size: 13px; color: #94A3B8;">Дисциплина: <b>${data.mode === 'center' ? '🎯 Райцентры на скорость' : '🧩 Пазл региона'}</b> • 🌍 ${data.region}</div>
+                    <div style="font-size: 36px; font-weight: 900; color: #FFFFFF; letter-spacing: 3px; margin: 6px 0;">${escapeHtml(data.room_id)}</div>
+                    <div style="font-size: 13px; color: #94A3B8;">Дисциплина: <b>${data.mode === 'center' ? '🎯 Райцентры на скорость' : '🧩 Пазл региона'}</b> • 🌍 ${escapeHtml(data.region)}</div>
                 </div>
 
                 <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
                     <div style="font-size: 12px; color: #CBD5E1; font-weight: 600; margin-bottom: 8px;">Ссылка-приглашение для второго студента:</div>
                     <div style="display: flex; gap: 8px;">
-                        <input type="text" readonly value="${inviteUrl}" style="flex: 1; background: #0F172A; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 8px 12px; color: #93C5FD; font-size: 12px; outline: none;">
+                        <input type="text" readonly value="${escapeHtml(inviteUrl)}" style="flex: 1; background: #0F172A; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 8px 12px; color: #93C5FD; font-size: 12px; outline: none;">
                         <button id="copy-duel-link-btn" style="background: #2563EB; border: none; border-radius: 8px; color: #FFFFFF; padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">Копировать</button>
                     </div>
                 </div>
@@ -6352,7 +6352,7 @@ var DuelManager = {
             <div style="background:#0B1120;border:2px solid #F59E0B;border-radius:20px;padding:32px;text-align:center;max-width:440px;color:#F8FAFC;box-shadow:0 25px 60px rgba(0,0,0,0.85);">
                 <div style="font-size:44px;margin-bottom:10px;">⏳</div>
                 <h2 style="color:#FFFFFF;margin:0 0 6px 0;font-size:20px;">Ожидание соперника</h2>
-                <p style="color:#94A3B8;font-size:13px;margin:0 0 6px 0;">Комната: <strong style="color:#FBBF24;font-family:monospace;">${this.roomId}</strong></p>
+                <p style="color:#94A3B8;font-size:13px;margin:0 0 6px 0;">Комната: <strong style="color:#FBBF24;font-family:monospace;">${escapeHtml(this.roomId)}</strong></p>
                 <p style="color:#64748B;font-size:12px;margin:0 0 20px 0;">Соперник ещё не присоединился. Как только он подключится — игра начнётся автоматически.</p>
                 <button onclick="DuelManager.surrenderDuel()" style="background:#EF4444;color:#FFFFFF;border:none;border-radius:10px;padding:10px 24px;font-size:13.5px;font-weight:700;cursor:pointer;">🏳️ Отказаться от дуэли</button>
             </div>

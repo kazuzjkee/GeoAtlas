@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import zipfile
 import tempfile
@@ -19,9 +19,26 @@ import secrets
 import csv
 import io
 import re
+import collections
+import hashlib
 import db
 
 db.init_db()
+
+_rate_limit_store = collections.defaultdict(list)
+RATE_LIMIT_WINDOW = 60
+RATE_LIMIT_MAX = 3
+
+def check_rate_limit(key: str) -> bool:
+    now = time.time()
+    _rate_limit_store[key] = [t for t in _rate_limit_store[key] if now - t < RATE_LIMIT_WINDOW]
+    if len(_rate_limit_store[key]) >= RATE_LIMIT_MAX:
+        return False
+    _rate_limit_store[key].append(now)
+    return True
+
+def _hash_pw(pw: str) -> str:
+    return hashlib.sha256(pw.encode("utf-8")).hexdigest()
 
 logger = logging.getLogger("geoatlas")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -35,13 +52,38 @@ MAPS_DIR = os.path.join(BASE_DIR, "public", "maps")
 os.makedirs(MAPS_DIR, exist_ok=True)
 app.mount("/public", StaticFiles(directory=os.path.join(BASE_DIR, "public")), name="public")
 
+ALLOWED_ORIGINS = [orig.strip() for orig in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if orig.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+
+@app.middleware("http")
+async def csrf_guard(request: Request, call_next):
+    if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
+        path = request.url.path
+        if path.startswith("/api/") and not path.startswith("/api/auth/") \
+           and not path.startswith("/api/results/") and not path.startswith("/api/duel/"):
+            origin = request.headers.get("origin", "")
+            referer = request.headers.get("referer", "")
+            host = request.headers.get("host", "")
+            if origin and host not in origin:
+                return JSONResponse({"detail": "CSRF protection: origin mismatch"}, status_code=403)
+            if not origin and referer and host not in referer:
+                return JSONResponse({"detail": "CSRF protection: referer mismatch"}, status_code=403)
+    return await call_next(request)
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    return response
 
 AUTH_SESSIONS_FILE = "auth_sessions.json"
 RESULTS_FILE = "quiz_results.json"
@@ -184,16 +226,28 @@ def is_dean_or_admin(teacher: Dict[str, Any]) -> bool:
     )
 
 def load_teachers() -> List[Dict[str, Any]]:
+    data = None
     if os.path.exists(TEACHERS_FILE):
         try:
             with open(TEACHERS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list) and len(data) > 0:
-                    return data
+                loaded = json.load(f)
+                if isinstance(loaded, list) and len(loaded) > 0:
+                    data = loaded
         except Exception:
             pass
-    save_teachers(DEFAULT_TEACHERS)
-    return DEFAULT_TEACHERS
+    if data is None:
+        data = [dict(t) for t in DEFAULT_TEACHERS]
+        save_teachers(data)
+
+    migrated = False
+    for t in data:
+        if "password_hash" not in t and "password" in t:
+            t["password_hash"] = _hash_pw(t["password"])
+            del t["password"]
+            migrated = True
+    if migrated:
+        save_teachers(data)
+    return data
 
 def save_teachers(teachers: List[Dict[str, Any]]) -> None:
     try:
@@ -347,27 +401,37 @@ def save_active_session(session_data: Optional[Dict[str, Any]]) -> None:
 def check_admin(credentials: HTTPBasicCredentials = Depends(security)) -> Dict[str, Any]:
     teachers = load_teachers()
     for t in teachers:
-        if secrets.compare_digest(credentials.username, t.get("username", "")) and \
-           secrets.compare_digest(credentials.password, t.get("password", "")):
+        stored = t.get("password", "")
+        stored_hash = t.get("password_hash", "")
+        candidate_ok = (
+            (stored_hash and secrets.compare_digest(_hash_pw(credentials.password), stored_hash))
+            or (not stored_hash and secrets.compare_digest(credentials.password, stored))
+        )
+        if secrets.compare_digest(credentials.username, t.get("username", "")) and candidate_ok:
             return t
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Неверный логин или пароль преподавателя",
-        headers={"WWW-Authenticate": "Basic"},
-    )
+    raise HTTPException(status_code=401, detail="Неверный логин или пароль", 
+                        headers={"WWW-Authenticate": "Basic"})
 
 def check_admin_optional(credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)) -> Optional[Dict[str, Any]]:
     if not credentials:
         return None
     teachers = load_teachers()
     for t in teachers:
-        if secrets.compare_digest(credentials.username, t.get("username", "")) and \
-           secrets.compare_digest(credentials.password, t.get("password", "")):
+        stored = t.get("password", "")
+        stored_hash = t.get("password_hash", "")
+        candidate_ok = (
+            (stored_hash and secrets.compare_digest(_hash_pw(credentials.password), stored_hash))
+            or (not stored_hash and secrets.compare_digest(credentials.password, stored))
+        )
+        if secrets.compare_digest(credentials.username, t.get("username", "")) and candidate_ok:
             return t
     return None
 
 @app.post("/api/auth/send-code")
-def send_code(req: AuthRequest) -> Dict[str, Any]:
+def send_code(req: AuthRequest, request: Request) -> Dict[str, Any]:
+    client_ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(f"send:{client_ip}") or not check_rate_limit(f"send:{req.email.lower()}"):
+        raise HTTPException(status_code=429, detail="Слишком много запросов. Подождите минуту.")
     email = req.email.strip().lower()
     branding = load_branding()
     allowed_domain = (branding.get("allowed_email_domain") or "").strip().lower()
@@ -392,7 +456,10 @@ def send_code(req: AuthRequest) -> Dict[str, Any]:
     return {"status": "ok", "message": "Код подтверждения отправлен", "dev_code": code}
 
 @app.post("/api/auth/verify-code")
-def verify_code(req: VerifyRequest) -> Dict[str, Any]:
+def verify_code(req: VerifyRequest, request: Request) -> Dict[str, Any]:
+    client_ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(f"verify:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Слишком много попыток ввода кода")
     email = req.email.strip().lower()
     record = db.pop_auth_session(email)
     if not record or time.time() > record.get("expires_at", 0) or record.get("code") != req.code.strip():

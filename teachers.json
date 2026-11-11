@@ -2,64 +2,64 @@
   {
     "teacher_id": "teacher-ivanov",
     "username": "prof_ivanov",
-    "password": "ivanov_pass_2026",
     "full_name": "Проф. Иванов И. И.",
     "organization": "Институт наук о Земле ЮФУ",
     "department": "Кафедра физической географии",
-    "role": "teacher"
+    "role": "teacher",
+    "password_hash": "6f0424d3ac26d28a4326294b3a8d580934f06f603067fb397234caf44952684c"
   },
   {
     "teacher_id": "teacher-petrov",
     "username": "prof_petrov",
-    "password": "petrov_pass_2026",
     "full_name": "Доц. Петров П. П.",
     "organization": "Экономический факультет ЮФУ",
     "department": "Кафедра экономической географии",
-    "role": "teacher"
+    "role": "teacher",
+    "password_hash": "d43801ed6e81b4819cb58151905e8ea24dfe483710c99425c4e63bb3b20d5c3f"
   },
   {
     "teacher_id": "dean-geo",
     "username": "dean_geo",
-    "password": "dean_pass_2026",
     "full_name": "Декан наук о Земле ЮФУ",
     "organization": "Институт наук о Земле ЮФУ",
     "department": "Деканат геолого-географического факультета",
-    "role": "dean"
+    "role": "dean",
+    "password_hash": "26192eefa0331ca09ed90b188972f5c678b0140e3ed1ed0804dbaaa164b5cfaf"
   },
   {
     "teacher_id": "teacher-admin",
     "username": "admin",
-    "password": "admin",
     "full_name": "Главный администратор",
     "organization": "Южный федеральный университет",
     "department": "Центр цифровых образовательных технологий",
-    "role": "dean"
+    "role": "dean",
+    "password_hash": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
   },
   {
     "teacher_id": "teacher-ivanov",
     "username": "prof_geo",
-    "password": "geo_password_2026",
     "full_name": "Проф. Смирнов А. В.",
     "organization": "Институт наук о Земле ЮФУ",
     "department": "Кафедра физической географии",
-    "role": "teacher"
+    "role": "teacher",
+    "password_hash": "1205ca9652c34025de31248c15fbf1506be77c22fb7c8e129321fe4a534f3f08"
   },
   {
     "teacher_id": "teacher-petrov",
     "username": "prof_eco",
-    "password": "eco_password_2026",
     "full_name": "Доц. Кузнецова М. И.",
     "organization": "Экономический факультет ЮФУ",
     "department": "Кафедра экономической географии",
-    "role": "teacher"
+    "role": "teacher",
+    "password_hash": "e285965f8e5c677a00a73b6dfa08c2e99e6cf58520dd95e19c39ba9bcfa3a700"
   },
   {
     "teacher_id": "dean-geo",
     "username": "sfedu_admin",
-    "password": "geodean2026",
     "full_name": "Деканат наук о Земле",
     "organization": "Институт наук о Земле ЮФУ",
     "department": "Деканат",
-    "role": "dean"
+    "role": "dean",
+    "password_hash": "81ca427e9d9e82149815dd15876388c60c11c29a86e1e582636b448de6c11d50"
   }
 ]

@@ -1,3 +1,13 @@
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 let allResults = [];
     let allGroups = [];
     let activeSession = null;
@@ -748,7 +758,7 @@ let allResults = [];
                 violationsStr = (submission.violations > 0)
                     ? `<span style="color:#EF4444; font-weight:700;">⚠️ ${submission.violations} уход(а)</span>`
                     : `<span style="color:#10B981; font-weight:700;">0 нарушений</span>`;
-                tokenStr = submission.exam_token ? `<span class="token-badge">${submission.exam_token}</span>` : '—';
+                tokenStr = submission.exam_token ? `<span class="token-badge">${escapeHtml(submission.exam_token)}</span>` : '—';
             } else if (activeSession.status === 'active') {
                 statusBadge = `<span class="status-badge status-yellow">⏳ В процессе выполнения</span>`;
             } else {
@@ -1614,7 +1624,7 @@ let allResults = [];
                     <td style="padding: 6px 8px; text-align: center; font-weight: bold;">${r.score} / ${r.max_score}</td>
                     <td style="padding: 6px 8px; text-align: center; font-weight: bold; color: ${r.accuracy >= 70 ? '#059669' : '#DC2626'};">${r.accuracy}%</td>
                     <td style="padding: 6px 8px; text-align: center;">${r.violations || 0}</td>
-                    <td style="padding: 6px 8px; text-align: center; color: #6B7280;">${r.date || '-'}</td>
+                    <td style="padding: 6px 8px; text-align: center; color: #6B7280;">${escapeHtml(r.date || '-')}</td>
                 </tr>
             `;
         });

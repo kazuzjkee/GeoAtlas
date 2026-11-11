@@ -4966,13 +4966,13 @@
             if (titleEl) titleEl.textContent = data.name;
             if (metricsEl) {
                 metricsEl.innerHTML = `
-                    <span class="inspector-metric"><strong>Центр:</strong> ${data.center}</span>
+                    <span class="inspector-metric"><strong>Центр:</strong> ${escapeHtml(data.center)}</span>
                     <span class="inspector-sep">•</span>
-                    <span class="inspector-metric"><strong>Площадь:</strong> ${data.area}</span>
+                    <span class="inspector-metric"><strong>Площадь:</strong> ${escapeHtml(data.area)}</span>
                     <span class="inspector-sep">•</span>
-                    <span class="inspector-metric"><strong>Население:</strong> ${data.pop}</span>
+                    <span class="inspector-metric"><strong>Население:</strong> ${escapeHtml(data.pop)}</span>
                     <span class="inspector-sep">•</span>
-                    <span class="inspector-metric"><strong>ВРП:</strong> ${data.grp}</span>
+                    <span class="inspector-metric"><strong>ВРП:</strong> ${escapeHtml(data.grp)}</span>
                 `;
             }
         }
@@ -5112,7 +5112,12 @@
         
         function escapeHtml(text) {
             if (!text) return '';
-            return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         // ========================================================
@@ -5421,7 +5426,7 @@
                         <td style="color: #94A3B8; font-size: 12px;">${escapeHtml(item.time_spent || '—')}</td>
                         <td>
                             <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34D399;">
-                                ${item.violations ? '⚠️ ' + item.violations + ' нар.' : '🛡️ Чисто'}
+                                ${item.violations ? '⚠️ ' + escapeHtml(String(item.violations)) + ' нар.' : '🛡️ Чисто'}
                             </span>
                         </td>
                     </tr>
