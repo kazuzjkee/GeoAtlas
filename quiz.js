@@ -6318,10 +6318,80 @@ var DuelManager = {
         this.myProgress = 0;
         this.oppProgress = 0;
         this.hasFinished = false;
+        this._gameplayStarted = false;
 
         this.injectStyles();
         this.renderLiveHUD();
         this.connectWebSocket();
+    },
+
+    fetchRoomState: async function() {
+        try {
+            const res = await fetch(`/api/duel/state/${this.roomId}?player_id=${this.playerId}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.room) {
+                    this.updateFromRoomState(data.room);
+                    return data.room;
+                }
+            }
+        } catch (e) {}
+        return null;
+    },
+
+    showWaitingOverlay: function() {
+        let el = document.getElementById('duel-waiting-overlay');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'duel-waiting-overlay';
+            el.style.cssText = 'position:fixed;inset:0;background:rgba(3,7,18,0.85);backdrop-filter:blur(8px);z-index:9999998;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+            document.body.appendChild(el);
+        }
+        el.style.display = 'flex';
+        el.innerHTML = `
+            <div style="background:#0B1120;border:2px solid #F59E0B;border-radius:20px;padding:32px;text-align:center;max-width:440px;color:#F8FAFC;box-shadow:0 25px 60px rgba(0,0,0,0.85);">
+                <div style="font-size:44px;margin-bottom:10px;">⏳</div>
+                <h2 style="color:#FFFFFF;margin:0 0 6px 0;font-size:20px;">Ожидание соперника</h2>
+                <p style="color:#94A3B8;font-size:13px;margin:0 0 6px 0;">Комната: <strong style="color:#FBBF24;font-family:monospace;">${this.roomId}</strong></p>
+                <p style="color:#64748B;font-size:12px;margin:0 0 20px 0;">Соперник ещё не присоединился. Как только он подключится — игра начнётся автоматически.</p>
+                <button onclick="DuelManager.surrenderDuel()" style="background:#EF4444;color:#FFFFFF;border:none;border-radius:10px;padding:10px 24px;font-size:13.5px;font-weight:700;cursor:pointer;">🏳️ Отказаться от дуэли</button>
+            </div>
+        `;
+    },
+
+    hideWaitingOverlay: function() {
+        const el = document.getElementById('duel-waiting-overlay');
+        if (el) el.style.display = 'none';
+    },
+
+    surrenderDuel: function() {
+        if (!this.active && !this.roomId) {
+            this.hideWaitingOverlay();
+            return;
+        }
+        const doSurrender = () => {
+            const wasWaiting = !this._gameplayStarted;
+            this.hideWaitingOverlay();
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({ type: 'surrender' }));
+            } else {
+                fetch(`/api/duel/action/${this.roomId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ player_id: this.playerId, action: 'surrender', payload: {} })
+                }).then(r => r.json()).then(data => {
+                    if (data && data.room) this.updateFromRoomState(data.room);
+                }).catch(() => {});
+            }
+            if (wasWaiting) {
+                setTimeout(() => {
+                    window.location.href = '/index.html';
+                }, 400);
+            }
+        };
+        if (confirm('Сдаться и получить техническое поражение?')) {
+            doSurrender();
+        }
     },
 
     connectWebSocket() {
@@ -6329,10 +6399,20 @@ var DuelManager = {
         const url = `${proto}//${location.host}/ws/duel/${this.roomId}/${this.playerId}`;
         try {
             this.ws = new WebSocket(url);
-            this.ws.onopen = () => {
+            this.ws.onopen = async () => {
                 this.isWsConnected = true;
                 if (this.pollTimer) clearInterval(this.pollTimer);
-                this.sendAction({ type: 'ready', ready: true });
+                const state = await this.fetchRoomState();
+                if (state && state.status === 'playing') {
+                    this.hideWaitingOverlay();
+                    if (!this._gameplayStarted) this.startGamePlay(state);
+                } else if (state && state.status === 'finished') {
+                    this.hideWaitingOverlay();
+                    this.onGameOver(state);
+                } else {
+                    this.showWaitingOverlay();
+                    this.sendAction({ type: 'ready', ready: true });
+                }
             };
             this.ws.onmessage = (e) => {
                 try {
@@ -6340,19 +6420,14 @@ var DuelManager = {
                     this.handleSocketMessage(msg);
                 } catch(err) {}
             };
-            this.ws.onerror = () => {
-                this.fallbackToPolling();
-            };
+            this.ws.onerror = () => { this.fallbackToPolling(); };
             this.ws.onclose = () => {
                 this.isWsConnected = false;
-                if (this.active && !this.hasFinished) {
-                    this.fallbackToPolling();
-                }
+                if (this.active && !this.hasFinished) this.fallbackToPolling();
             };
         } catch(e) {
             this.fallbackToPolling();
         }
-
         setTimeout(() => {
             if (!this.isWsConnected && this.active && !this.hasFinished) {
                 this.fallbackToPolling();
@@ -6396,16 +6471,17 @@ var DuelManager = {
 
     handleSocketMessage(msg) {
         if (!msg) return;
-        if (msg.room) {
-            this.updateFromRoomState(msg.room);
-        }
+        if (msg.room) this.updateFromRoomState(msg.room);
         if (msg.type === 'countdown') {
+            this.hideWaitingOverlay();
             this.showCountdownOverlay(msg.seconds);
         } else if (msg.type === 'game_start') {
+            this.hideWaitingOverlay();
             this.startGamePlay(msg.room);
         } else if (msg.type === 'opponent_action') {
             this.onOpponentAction(msg);
         } else if (msg.type === 'game_over') {
+            this.hideWaitingOverlay();
             this.onGameOver(msg.room);
         }
     },
@@ -6432,10 +6508,12 @@ var DuelManager = {
         this.updateHUDValues(myP, oppP);
 
         if (room.status === 'playing' && !this._gameplayStarted) {
+            this.hideWaitingOverlay();
             this.startGamePlay(room);
         }
 
         if (room.status === 'finished' && !this.hasFinished) {
+            this.hideWaitingOverlay();
             this.onGameOver(room);
         }
     },
@@ -6515,6 +6593,7 @@ var DuelManager = {
                 <div class="duel-vs-box">
                     <div class="duel-vs-title">⚔️ ДУЭЛЬ 1V1</div>
                     <div class="duel-vs-badge" id="hud-round-badge">РАУНД 1 / 7</div>
+                    <button onclick="DuelManager.surrenderDuel()" class="duel-surrender-btn" title="Сдаться (техническое поражение)">🏳️ Сдаться</button>
                 </div>
 
                 <!-- СОПЕРНИК -->
@@ -6614,6 +6693,7 @@ var DuelManager = {
     },
 
     onGameOver(room) {
+        this.hideWaitingOverlay();
         if (this.hasFinished) return;
         this.hasFinished = true;
         this.active = false;
@@ -6793,6 +6873,23 @@ var DuelManager = {
                 border-radius: 6px;
                 font-size: 10.5px;
                 font-weight: 800;
+            }
+            .duel-surrender-btn {
+                margin-top: 4px;
+                background: rgba(239, 68, 68, 0.15);
+                border: 1px solid rgba(239, 68, 68, 0.5);
+                color: #FCA5A5;
+                font-size: 10px;
+                font-weight: 700;
+                padding: 2px 8px;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .duel-surrender-btn:hover {
+                background: #EF4444;
+                color: #FFFFFF;
+                border-color: #EF4444;
             }
             .duel-event-banner {
                 margin: 8px auto 0 auto;

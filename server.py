@@ -1926,6 +1926,21 @@ def handle_duel_action(room_id: str, req: DuelActionRequest) -> Dict[str, Any]:
             player.finish_time = time.time()
         room.check_finished()
 
+    elif action == "surrender":
+        player.finished = True
+        player.finish_time = time.time()
+        opp = next((p for pid, p in room.players.items() if pid != player.player_id), None)
+        room.status = "finished"
+        room.end_time = time.time()
+        if opp:
+            room.winner = opp.player_id
+            room.winner_name = opp.name
+            room.winner_reason = f"{player.name} отказался от дуэли. Техническое поражение."
+        else:
+            room.winner = "draw"
+            room.winner_name = "Ничья"
+            room.winner_reason = "Игрок отказался от дуэли, соперник отсутствует."
+
     elif action == "finish":
         player.finished = True
         player.finish_time = time.time()
@@ -2043,6 +2058,23 @@ async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id:
                 await room.broadcast({"type": "player_finished", "player_id": player_id, "room": room.to_dict()})
                 if room.status == "finished":
                     await room.broadcast({"type": "game_over", "room": room.to_dict()})
+
+            elif msg_type == "surrender":
+                player.finished = True
+                player.finish_time = time.time()
+                opp = next((p for pid, p in room.players.items() if pid != player_id), None)
+                room.status = "finished"
+                room.end_time = time.time()
+                if opp:
+                    room.winner = opp.player_id
+                    room.winner_name = opp.name
+                    room.winner_reason = f"{player.name} отказался от дуэли. Техническое поражение."
+                else:
+                    room.winner = "draw"
+                    room.winner_name = "Ничья"
+                    room.winner_reason = "Игрок отказался от дуэли, соперник отсутствует."
+                save_duel_rooms_to_disk()
+                await room.broadcast({"type": "game_over", "room": room.to_dict()})
 
     except WebSocketDisconnect:
         player.ws = None
