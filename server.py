@@ -1759,6 +1759,25 @@ def load_duel_rooms_from_disk() -> None:
     except Exception as e:
         logger.error("Ошибка загрузки duel_rooms.json: %s", e)
 
+def load_room_fresh(room_id: str) -> Optional["DuelRoom"]:
+    """Возвращает комнату из памяти или с диска (для multi-worker / cold start)."""
+    code = room_id.strip().upper()
+    if code in active_duel_rooms:
+        return active_duel_rooms[code]
+    if not os.path.exists(DUEL_ROOMS_FILE):
+        return None
+    try:
+        with open(DUEL_ROOMS_FILE, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        if code in raw and isinstance(raw[code], dict):
+            room = DuelRoom.from_dict(raw[code])
+            active_duel_rooms[room.room_id] = room
+            logger.info("Duel room %s lazy-loaded from disk", code)
+            return room
+    except Exception as e:
+        logger.error("Ошибка lazy-load комнаты %s: %s", code, e)
+    return None
+
 # Первичная загрузка с диска при старте приложения
 load_duel_rooms_from_disk()
 
@@ -1791,6 +1810,7 @@ def create_duel_room(req: DuelCreateRequest) -> Dict[str, Any]:
     )
     room = DuelRoom(room_code, req.mode, req.region, host)
     active_duel_rooms[room_code] = room
+    logger.info("Duel room created: %s (mode=%s, region=%s)", room_code, req.mode, req.region)
     save_duel_rooms_to_disk()
 
     map_url = f"/map/{req.region}?duel={room_code}&player={player_id}&role=host"
@@ -1809,7 +1829,7 @@ def create_duel_room(req: DuelCreateRequest) -> Dict[str, Any]:
 def join_duel_room(req: DuelJoinRequest) -> Dict[str, Any]:
     clean_stale_duel_rooms()
     code = req.room_id.strip().upper()
-    room = active_duel_rooms.get(code)
+    room = load_room_fresh(code)
     if not room:
         raise HTTPException(status_code=404, detail=f"Комната дуэли '{code}' не найдена")
 
@@ -1852,7 +1872,7 @@ def join_duel_room(req: DuelJoinRequest) -> Dict[str, Any]:
 @app.get("/api/duel/state/{room_id}")
 def get_duel_room_state(room_id: str, player_id: Optional[str] = None) -> Dict[str, Any]:
     code = room_id.strip().upper()
-    room = active_duel_rooms.get(code)
+    room = load_room_fresh(code)
     if not room:
         raise HTTPException(status_code=404, detail=f"Комната '{code}' не найдена")
 
@@ -1864,7 +1884,7 @@ def get_duel_room_state(room_id: str, player_id: Optional[str] = None) -> Dict[s
 @app.post("/api/duel/action/{room_id}")
 def handle_duel_action(room_id: str, req: DuelActionRequest) -> Dict[str, Any]:
     code = room_id.strip().upper()
-    room = active_duel_rooms.get(code)
+    room = load_room_fresh(code)
     if not room:
         raise HTTPException(status_code=404, detail=f"Комната '{code}' не найдена")
 
@@ -1918,7 +1938,7 @@ def handle_duel_action(room_id: str, req: DuelActionRequest) -> Dict[str, Any]:
 async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id: str):
     await websocket.accept()
     code = room_id.strip().upper()
-    room = active_duel_rooms.get(code)
+    room = load_room_fresh(code)
 
     if not room or player_id not in room.players:
         await websocket.send_json({"type": "error", "message": "Комната или игрок не найдены"})
