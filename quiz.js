@@ -1351,6 +1351,7 @@ function startSelectedTestMode(mode = 'mixed', options = {}) {
 }
 
 function startExamQuiz(category = 'mixed', count = 15, timeLimitMinutes = 10) {
+    if (typeof _heatmapActive !== 'undefined' && _heatmapActive) exitHeatmapMode();
     isExamMode = true;
     document.body.classList.add('exam-mode');
     ensureExamKioskTopBar({
@@ -1618,6 +1619,7 @@ function generateExamQuestions(category, count) {
 }
 
 function startPuzzleMode() {
+    if (typeof _heatmapActive !== 'undefined' && _heatmapActive) exitHeatmapMode();
     currentSessionMistakes = [];
     currentSessionMistakesDetails = [];
     if (typeof EMBEDDED_PUZZLE_DATA === 'undefined' || !EMBEDDED_PUZZLE_DATA || EMBEDDED_PUZZLE_DATA.length < 2) {
@@ -3017,6 +3019,7 @@ function prepareQuizUI(quizType, title, showHint = true, showBasemap = true) {
 }
 
 function startDistrictQuiz() {
+    if (typeof _heatmapActive !== 'undefined' && _heatmapActive) exitHeatmapMode();
     const districts = getDistrictsData();
     if (!districts || districts.length < 2) {
         alert('Для запуска викторины по силуэтам требуется как минимум 2 территории в атласе.');
@@ -3027,6 +3030,7 @@ function startDistrictQuiz() {
 }
 
 function startNeighborQuiz() {
+    if (typeof _heatmapActive !== 'undefined' && _heatmapActive) exitHeatmapMode();
     const neighbors = getNeighborsData();
     if (!neighbors || neighbors.filter(d => d.neighbors && d.neighbors.length >= 1).length === 0) {
         alert('Недостаточно данных о смежности территорий (соседях) для запуска викторины.');
@@ -3037,6 +3041,7 @@ function startNeighborQuiz() {
 }
 
 function startCenterQuiz() {
+    if (typeof _heatmapActive !== 'undefined' && _heatmapActive) exitHeatmapMode();
     const centers = getCentersData();
     if (!centers || centers.length === 0) {
         alert('Недостаточно данных об административных центрах для запуска викторины.');
@@ -3047,6 +3052,7 @@ function startCenterQuiz() {
 }
 
 function startRiverQuiz() {
+    if (typeof _heatmapActive !== 'undefined' && _heatmapActive) exitHeatmapMode();
     const rivers = getRiversData();
     if (!rivers || rivers.length < 1) {
         alert('В данном регионе нет рек в базе данных гидрографии');
@@ -4136,6 +4142,11 @@ function setupDistrictClickListeners() {
             if (name && (layer.feature.geometry.type.includes('Polygon'))) {
                 layer.off('click');
                 layer.on('click', function(e) {
+                    if (typeof _heatmapActive !== 'undefined' && _heatmapActive) {
+                        const layerName = props.display_name || props.NAME_RU || props.NAME_1 || props.NAME || name;
+                        showHeatmapPopup(layerName, e.latlng);
+                        return;
+                    }
                     if (currentQuiz === null) {
                         showDistrictInfoCard(name);
                     }
@@ -5738,6 +5749,13 @@ function renderQuizDashboardContent(modal, data) {
                 <button onclick="logoutStudent(); closeStudentProfileModal();" class="btn btn-secondary" style="border-color: rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 12.5px; padding: 8px 16px; cursor: pointer; border-radius: 8px; background: rgba(239, 68, 68, 0.1);">
                     🚪 Выйти из аккаунта
                 </button>
+                <button onclick="openWeaknessHeatmapModal()" class="btn btn-secondary" 
+                        style="border-color: rgba(245, 158, 11, 0.5); color: #FBBF24; 
+                               background: rgba(245, 158, 11, 0.1); font-size: 12.5px; 
+                               padding: 8px 16px; cursor: pointer; border-radius: 8px; 
+                               margin: 0 auto;">
+                    🔥 Мои слабые места
+                </button>
                 <button onclick="closeStudentProfileModal()" class="btn btn-primary" style="background: linear-gradient(135deg, var(--primary, #2563EB), var(--primary-dark, #1D4ED8)); color: #FFFFFF !important; font-size: 13px; font-weight: 700; padding: 8px 24px; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.35);">
                     Закрыть
                 </button>
@@ -5753,11 +5771,506 @@ function closeStudentProfileModal() {
     document.body.style.overflow = '';
 }
 
+// ========================================================
+// 🔥 КАРТА СЛАБЫХ МЕСТ (STUDENT MISTAKES HEATMAP)
+// ========================================================
+
+var _heatmapOriginalStyles = [];
+var _heatmapActive = false;
+window._heatmapByObject = {};
+
+async function openWeaknessHeatmapModal() {
+    const student = getCurrentStudentInfo();
+    if (!student || !student.email) {
+        alert('Войдите в аккаунт для просмотра статистики ошибок');
+        return;
+    }
+
+    closeStudentProfileModal();
+
+    let modal = document.getElementById('weakness-heatmap-modal');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.id = 'weakness-heatmap-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.88);backdrop-filter:blur(10px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    document.body.appendChild(modal);
+
+    // Заглушка пока грузится
+    modal.innerHTML = `
+        <div style="background:#0B1120;border:1px solid rgba(255,255,255,0.12);border-radius:24px;max-width:720px;width:100%;padding:32px;color:#F8FAFC;text-align:center;">
+            <div style="font-size:44px;margin-bottom:12px;">🔥</div>
+            <div style="font-size:16px;color:#F8FAFC;">Анализируем ваши ответы...</div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`/api/student/heatmap?email=${encodeURIComponent(student.email)}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        renderWeaknessModal(modal, data, student);
+    } catch (e) {
+        modal.innerHTML = `
+            <div style="background:#0B1120;border:1px solid rgba(239,68,68,0.4);border-radius:24px;max-width:520px;width:100%;padding:32px;color:#F8FAFC;text-align:center;">
+                <div style="font-size:44px;margin-bottom:12px;">⚠️</div>
+                <div style="font-size:16px;font-weight:700;color:#FCA5A5;margin-bottom:6px;">Не удалось загрузить статистику</div>
+                <div style="font-size:13px;color:#94A3B8;margin-bottom:20px;">${escapeHtml(e.message || 'Ошибка сервера')}</div>
+                <button onclick="document.getElementById('weakness-heatmap-modal').remove()" 
+                        style="background:#2563EB;color:#FFF;border:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                    Закрыть
+                </button>
+            </div>
+        `;
+    }
+}
+
+function renderWeaknessModal(modal, data, student) {
+    const totalTests = data.total_tests || 0;
+    const problematic = data.top_problematic || [];
+    const byType = data.by_type || {};
+    const masteredCount = data.mastered_count || 0;
+    const problematicCount = data.problematic_count || 0;
+
+    // Сохраняем для доступа из popup и карты
+    window._heatmapByObject = data.by_object || {};
+
+    // Заголовки типов на русском
+    const typeNames = {
+        district: '🗺️ Районы (силуэты)',
+        river: '🌊 Реки',
+        center: '📍 Центры',
+        neighbor: '🔗 Топология',
+        puzzle: '🧩 Пазл'
+    };
+
+    // Пустое состояние
+    if (totalTests === 0) {
+        modal.innerHTML = `
+            <div style="background:#0B1120;border:1px solid rgba(255,255,255,0.12);border-radius:24px;max-width:520px;width:100%;padding:36px;color:#F8FAFC;text-align:center;">
+                <div style="font-size:56px;margin-bottom:14px;">📭</div>
+                <div style="font-size:18px;font-weight:800;color:#F8FAFC;margin-bottom:6px;">Пока нет данных</div>
+                <div style="font-size:13px;color:#94A3B8;line-height:1.5;margin-bottom:24px;">
+                    Пройдите хотя бы один тест на карте, чтобы увидеть персональную карту слабых мест и рекомендации.
+                </div>
+                <button onclick="document.getElementById('weakness-heatmap-modal').remove()" 
+                        style="background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#FFF;border:none;padding:11px 28px;border-radius:10px;font-size:13.5px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(37,99,235,0.35);">
+                    Понятно
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    // Топ проблемных объектов
+    let topListHtml = '';
+    if (problematic.length > 0) {
+        topListHtml = problematic.map((obj, idx) => {
+            const rank = idx + 1;
+            const rankColors = ['#EF4444', '#F59E0B', '#7C3AED', '#6366F1', '#64748B'];
+            const rankColor = rankColors[Math.min(idx, rankColors.length - 1)];
+            const accColor = obj.accuracy >= 85 ? '#34D399' : obj.accuracy >= 50 ? '#FBBF24' : '#F87171';
+            return `
+                <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:10px 14px;margin-bottom:8px;">
+                    <div style="width:32px;height:32px;border-radius:8px;background:${rankColor}22;border:1px solid ${rankColor};color:${rankColor};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;">
+                        #${rank}
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13.5px;font-weight:700;color:#F8FAFC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(obj.name)}</div>
+                        <div style="font-size:11.5px;color:#94A3B8;margin-top:2px;">
+                            ${typeNames[obj.type] || obj.type} • ошибок: <b style="color:#FCA5A5;">${obj.errors}</b>
+                        </div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="font-size:18px;font-weight:800;color:${accColor};">${obj.accuracy}%</div>
+                        <div style="font-size:10.5px;color:#64748B;">точность</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } else {
+        topListHtml = `
+            <div style="text-align:center;padding:24px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:12px;color:#34D399;font-size:13px;font-weight:600;">
+                🎉 Отлично! Серьёзных пробелов не обнаружено
+            </div>
+        `;
+    }
+
+    // Статистика по типам
+    let typeStatsHtml = '';
+    Object.entries(byType).forEach(([type, stat]) => {
+        const errs = stat.errors || 0;
+        const tests = stat.total_tests || 0;
+        if (tests === 0) return;
+        const errRate = Math.round((errs / Math.max(1, tests * 10)) * 100);
+        const barColor = errRate > 30 ? '#EF4444' : errRate > 15 ? '#F59E0B' : '#10B981';
+        typeStatsHtml += `
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:12px;font-weight:700;color:#CBD5E1;">${typeNames[type] || type}</span>
+                    <span style="font-size:11.5px;color:${barColor};font-weight:700;">${errs} ошибок / ${tests} тестов</span>
+                </div>
+                <div style="width:100%;height:5px;background:rgba(255,255,255,0.08);border-radius:999px;overflow:hidden;">
+                    <div style="width:${Math.min(100, errRate)}%;height:100%;background:${barColor};border-radius:999px;"></div>
+                </div>
+            </div>
+        `;
+    });
+
+    // Кнопка «Показать на карте» — только если мы на карте и есть районы
+    const map = typeof getMapObject === 'function' ? getMapObject() : null;
+    const hasMap = !!map;
+    const hasDistrictErrors = Object.values(data.by_object || {}).some(o => o.type === 'district');
+    
+    let actionButton = '';
+    if (hasMap && hasDistrictErrors) {
+        actionButton = `
+            <button onclick="startHeatmapMode(window._heatmapByObject)" 
+                    style="flex:1;padding:12px;background:linear-gradient(135deg,#EF4444,#F59E0B);border:none;border-radius:10px;color:#FFF;font-size:13.5px;font-weight:800;cursor:pointer;box-shadow:0 4px 16px rgba(239,68,68,0.4);">
+                🗺️ Показать на карте
+            </button>
+        `;
+    } else if (!hasMap) {
+        // На index.html — ссылки на карты
+        actionButton = `
+            <a href="rostov_quiz_map.html" style="flex:1;padding:12px;background:linear-gradient(135deg,#2563EB,#1D4ED8);border:none;border-radius:10px;color:#FFF;font-size:13.5px;font-weight:800;text-align:center;text-decoration:none;display:inline-block;">
+                🌻 Открыть Ростовскую область
+            </a>
+        `;
+    }
+
+    modal.innerHTML = `
+        <div style="background:#0B1120;border:1px solid rgba(255,255,255,0.12);border-radius:24px;max-width:720px;width:100%;padding:28px;box-shadow:0 25px 60px rgba(0,0,0,0.85);color:#F8FAFC;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+                <div style="display:flex;align-items:center;gap:14px;">
+                    <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#EF4444,#F59E0B);display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 0 20px rgba(239,68,68,0.4);">🔥</div>
+                    <div>
+                        <h3 style="margin:0;font-size:20px;font-weight:800;color:#FFFFFF;letter-spacing:-0.3px;">Мои слабые места</h3>
+                        <div style="font-size:12.5px;color:#94A3B8;margin-top:3px;">
+                            ${escapeHtml(student.name)} • ${totalTests} тестов • обновлено ${escapeHtml(data.last_updated || '')}
+                        </div>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('weakness-heatmap-modal').remove()" 
+                        style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94A3B8;font-size:22px;width:34px;height:34px;border-radius:8px;cursor:pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Мини-KPI -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:22px;">
+                <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:12px;text-align:center;">
+                    <div style="font-size:22px;font-weight:800;color:#F87171;">${problematicCount}</div>
+                    <div style="font-size:11px;color:#94A3B8;text-transform:uppercase;margin-top:2px;">Проблемных</div>
+                </div>
+                <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:12px;text-align:center;">
+                    <div style="font-size:22px;font-weight:800;color:#34D399;">${masteredCount}</div>
+                    <div style="font-size:11px;color:#94A3B8;text-transform:uppercase;margin-top:2px;">Освоено</div>
+                </div>
+                <div style="background:rgba(37,99,235,0.1);border:1px solid rgba(37,99,235,0.3);border-radius:12px;padding:12px;text-align:center;">
+                    <div style="font-size:22px;font-weight:800;color:#93C5FD;">${Object.keys(data.by_object || {}).length}</div>
+                    <div style="font-size:11px;color:#94A3B8;text-transform:uppercase;margin-top:2px;">Всего объектов</div>
+                </div>
+            </div>
+
+            <!-- Топ ошибок -->
+            <div style="margin-bottom:20px;">
+                <h4 style="margin:0 0 10px 0;font-size:14px;font-weight:700;color:#F8FAFC;">
+                    🎯 Топ-${problematic.length || 5} сложных объектов
+                </h4>
+                ${topListHtml}
+            </div>
+
+            <!-- Статистика по типам -->
+            ${typeStatsHtml ? `
+            <div style="margin-bottom:20px;">
+                <h4 style="margin:0 0 10px 0;font-size:14px;font-weight:700;color:#F8FAFC;">
+                    📊 По категориям
+                </h4>
+                <div style="display:grid;grid-template-columns:1fr;gap:8px;">
+                    ${typeStatsHtml}
+                </div>
+            </div>
+            ` : ''}
+
+            <!-- Рекомендация -->
+            ${problematic.length > 0 ? `
+            <div style="background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(239,68,68,0.1));border:1px solid rgba(124,58,237,0.35);border-radius:12px;padding:14px;margin-bottom:20px;">
+                <div style="font-size:12.5px;color:#E0E7FF;line-height:1.55;">
+                    <b style="color:#C4B5FD;">💡 Рекомендация:</b><br>
+                    Сфокусируйтесь на изучении: <b>${problematic.slice(0,3).map(p => escapeHtml(p.name)).join(', ')}</b>. 
+                    Откройте режим обучения и пройдите по этим объектам 2-3 раза подряд.
+                </div>
+            </div>
+            ` : ''}
+
+            <!-- Кнопки -->
+            <div style="display:flex;gap:10px;">
+                <button onclick="document.getElementById('weakness-heatmap-modal').remove()" 
+                        style="flex:1;padding:12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#CBD5E1;font-size:13.5px;font-weight:600;cursor:pointer;">
+                    Закрыть
+                </button>
+                ${actionButton}
+            </div>
+        </div>
+    `;
+}
+
+function startHeatmapMode(byObjectJson) {
+    const modal = document.getElementById('weakness-heatmap-modal');
+    if (modal) modal.remove();
+
+    const map = getMapObject();
+    if (!map) {
+        alert('Карта не загружена');
+        return;
+    }
+
+    let byObject = byObjectJson;
+    if (typeof byObject === 'string') {
+        try {
+            byObject = JSON.parse(byObject);
+        } catch (e) {
+            alert('Ошибка данных heatmap');
+            return;
+        }
+    }
+    if (!byObject && window._heatmapByObject) {
+        byObject = window._heatmapByObject;
+    }
+    window._heatmapByObject = byObject;
+
+    if (!byObject || Object.keys(byObject).length === 0) {
+        alert('Нет данных для отображения');
+        return;
+    }
+
+    exitHeatmapMode(); // сброс предыдущего
+
+    _heatmapActive = true;
+    _heatmapOriginalStyles = [];
+
+    // 1. Перекрашиваем районы через map.eachLayer
+    const mapLayers = [];
+    map.eachLayer(layer => {
+        if (layer.feature && layer.feature.properties) {
+            const props = layer.feature.properties;
+            if (props.is_district_layer === 1 || (layer.feature.geometry && layer.feature.geometry.type && layer.feature.geometry.type.includes('Polygon') && (props.display_name || props.NAME_RU || props.NAME_1 || props.NAME))) {
+                mapLayers.push(layer);
+            }
+        }
+    });
+
+    mapLayers.forEach(layer => {
+        const props = layer.feature.properties;
+        const layerName = props.display_name || props.NAME_RU || props.NAME_1 || props.NAME || '';
+        
+        // Сохраняем оригинальный стиль
+        _heatmapOriginalStyles.push({
+            layer: layer,
+            color: (layer.options && layer.options.color) || '#2E8B57',
+            weight: (layer.options && layer.options.weight) || 2,
+            fillColor: (layer.options && layer.options.fillColor) || '#90EE90',
+            fillOpacity: (layer.options && layer.options.fillOpacity) || 0.25,
+            dashArray: (layer.options && layer.options.dashArray) || '5, 5'
+        });
+
+        // Ищем данные по объекту (нормализация имени)
+        let objectData = byObject[layerName];
+        if (!objectData) {
+            const targetNorm = typeof normalizeDistrictName === 'function' ? normalizeDistrictName(layerName) : layerName.toLowerCase();
+            const targetSimple = layerName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+            for (const [key, val] of Object.entries(byObject)) {
+                const keyNorm = typeof normalizeDistrictName === 'function' ? normalizeDistrictName(key) : key.toLowerCase();
+                const keySimple = key.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+                if (keyNorm === targetNorm || keySimple === targetSimple || 
+                    keySimple.includes(targetSimple) || targetSimple.includes(keySimple)) {
+                    objectData = val;
+                    break;
+                }
+            }
+        }
+
+        let color, fillColor, fillOpacity;
+        if (objectData) {
+            const acc = objectData.accuracy || 0;
+            if (acc >= 85) {
+                color = '#10B981'; fillColor = '#6EE7B7'; fillOpacity = 0.7;
+            } else if (acc >= 50) {
+                color = '#F59E0B'; fillColor = '#FCD34D'; fillOpacity = 0.7;
+            } else {
+                color = '#EF4444'; fillColor = '#FCA5A5'; fillOpacity = 0.75;
+            }
+        } else {
+            // Нет данных — серый
+            color = '#94A3B8'; fillColor = '#E2E8F0'; fillOpacity = 0.4;
+        }
+
+        try {
+            layer.setStyle({
+                color: color,
+                weight: 2.5,
+                fillColor: fillColor,
+                fillOpacity: fillOpacity,
+                dashArray: null
+            });
+            if (layer.bringToFront) layer.bringToFront();
+        } catch(e) {}
+    });
+
+    // 2. Показываем легенду
+    renderHeatmapLegend(byObject);
+
+    // 3. Уведомление
+    showHeatmapToast();
+}
+
+function exitHeatmapMode() {
+    if (!_heatmapActive) return;
+    _heatmapActive = false;
+    _heatmapOriginalStyles.forEach(item => {
+        try {
+            item.layer.setStyle({
+                color: item.color,
+                weight: item.weight,
+                fillColor: item.fillColor,
+                fillOpacity: item.fillOpacity,
+                dashArray: item.dashArray
+            });
+        } catch(e) {}
+    });
+    _heatmapOriginalStyles = [];
+    
+    const legend = document.getElementById('heatmap-legend');
+    if (legend) legend.remove();
+    const toast = document.getElementById('heatmap-toast');
+    if (toast) toast.remove();
+}
+
+function renderHeatmapLegend(byObject) {
+    const oldLegend = document.getElementById('heatmap-legend');
+    if (oldLegend) oldLegend.remove();
+
+    const legend = document.createElement('div');
+    legend.id = 'heatmap-legend';
+    legend.style.cssText = 'position:fixed;bottom:24px;left:24px;z-index:10000;background:rgba(11,17,32,0.96);backdrop-filter:blur(12px);border:1.5px solid rgba(255,255,255,0.15);border-radius:16px;padding:16px 20px;color:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:0 12px 35px rgba(0,0,0,0.6);min-width:260px;';
+    
+    legend.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:800;color:#F8FAFC;display:flex;align-items:center;gap:6px;">
+                🔥 Карта слабых мест
+            </div>
+            <button onclick="exitHeatmapMode()" 
+                    style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.5);color:#FCA5A5;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;cursor:pointer;">
+                Выйти
+            </button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;color:#CBD5E1;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:20px;height:14px;background:#6EE7B7;border:2px solid #10B981;border-radius:3px;"></div>
+                <span>Освоено (≥85% точности)</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:20px;height:14px;background:#FCD34D;border:2px solid #F59E0B;border-radius:3px;"></div>
+                <span>В процессе (50–84%)</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:20px;height:14px;background:#FCA5A5;border:2px solid #EF4444;border-radius:3px;"></div>
+                <span>Слабое место (&lt;50%)</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:20px;height:14px;background:#E2E8F0;border:2px solid #94A3B8;border-radius:3px;opacity:0.6;"></div>
+                <span>Не встречался в тестах</span>
+            </div>
+        </div>
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.1);font-size:11px;color:#64748B;line-height:1.4;">
+            Нажмите на район для подробностей. Кнопка «Выйти» вернёт обычный вид.
+        </div>
+    `;
+    
+    document.body.appendChild(legend);
+}
+
+function showHeatmapToast() {
+    const oldToast = document.getElementById('heatmap-toast');
+    if (oldToast) oldToast.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'heatmap-toast';
+    toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:10001;background:linear-gradient(135deg,#EF4444,#F59E0B);color:#FFF;padding:12px 24px;border-radius:12px;font-size:13.5px;font-weight:700;box-shadow:0 8px 24px rgba(239,68,68,0.5);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;animation:fadeInToast 0.3s ease;';
+    toast.textContent = '🔥 Режим анализа ошибок включён';
+    document.body.appendChild(toast);
+    
+    // CSS-анимация если ещё нет
+    if (!document.getElementById('heatmap-animations')) {
+        const style = document.createElement('style');
+        style.id = 'heatmap-animations';
+        style.textContent = '@keyframes fadeInToast { from { opacity:0; transform:translateX(-50%) translateY(-10px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }';
+        document.head.appendChild(style);
+    }
+    
+    setTimeout(() => {
+        if (toast.parentNode) toast.remove();
+    }, 3500);
+}
+
+function showHeatmapPopup(layerName, latlng) {
+    const map = getMapObject();
+    if (!map) return;
+
+    // Ищем данные объекта — берём из последнего рендера
+    const objects = window._heatmapByObject || {};
+    let objData = objects[layerName];
+    if (!objData) {
+        const norm = typeof normalizeDistrictName === 'function' ? normalizeDistrictName(layerName) : layerName.toLowerCase();
+        const simple = layerName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+        for (const [key, val] of Object.entries(objects)) {
+            const kNorm = typeof normalizeDistrictName === 'function' ? normalizeDistrictName(key) : key.toLowerCase();
+            const kSimple = key.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+            if (kNorm === norm || kSimple === simple || kSimple.includes(simple) || simple.includes(kSimple)) {
+                objData = val;
+                break;
+            }
+        }
+    }
+
+    let content = '';
+    if (objData) {
+        const acc = objData.accuracy || 0;
+        const color = acc >= 85 ? '#10B981' : acc >= 50 ? '#F59E0B' : '#EF4444';
+        content = `
+            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-width:180px;">
+                <div style="font-size:13px;font-weight:800;color:#0F172A;margin-bottom:6px;">${escapeHtml(layerName)}</div>
+                <div style="font-size:24px;font-weight:800;color:${color};margin-bottom:2px;">${acc}%</div>
+                <div style="font-size:11px;color:#64748B;">точность</div>
+                <div style="margin-top:8px;padding-top:8px;border-top:1px solid #E2E8F0;font-size:11px;color:#475569;">
+                    Ошибок: <b>${objData.errors || 0}</b> • Попыток: <b>${objData.total_attempts || 0}</b>
+                </div>
+            </div>
+        `;
+    } else {
+        content = `
+            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-width:160px;">
+                <div style="font-size:13px;font-weight:800;color:#0F172A;margin-bottom:4px;">${escapeHtml(layerName)}</div>
+                <div style="font-size:11.5px;color:#64748B;">Не встречался в ваших тестах</div>
+            </div>
+        `;
+    }
+
+    L.popup({ closeButton: true, maxWidth: 220 })
+        .setLatLng(latlng)
+        .setContent(content)
+        .openOn(map);
+}
+
 window.openStudentProfileModal = openStudentProfileModal;
 window.openStudentDashboardModal = openStudentProfileModal;
 window.closeStudentProfileModal = closeStudentProfileModal;
 window.closeStudentDashboardModal = closeStudentProfileModal;
 window.unlockAchievement = unlockAchievement;
+window.openWeaknessHeatmapModal = openWeaknessHeatmapModal;
+window.startHeatmapMode = startHeatmapMode;
+window.exitHeatmapMode = exitHeatmapMode;
+window.showHeatmapPopup = showHeatmapPopup;
 
 // ========================================================
 // 📡 ОФЛАЙН-РЕЖИМ (OFFLINE & GRACEFUL DEGRADATION ENGINE)

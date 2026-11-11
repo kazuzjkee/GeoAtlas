@@ -5773,6 +5773,13 @@
                         <button onclick="logoutStudent(); closeStudentDashboardModal();" class="btn btn-secondary" style="border-color: rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 12.5px; padding: 8px 16px;">
                             🚪 Выйти из аккаунта
                         </button>
+                        <button onclick="openWeaknessHeatmapModal()" class="btn btn-secondary" 
+                                style="border-color: rgba(245, 158, 11, 0.5); color: #FBBF24; 
+                                       background: rgba(245, 158, 11, 0.1); font-size: 12.5px; 
+                                       padding: 8px 16px; cursor: pointer; border-radius: 8px; 
+                                       margin: 0 auto;">
+                            🔥 Мои слабые места
+                        </button>
                         <button onclick="closeStudentDashboardModal()" class="btn btn-secondary" style="font-size: 13px; padding: 8px 22px;">
                             Закрыть
                         </button>
@@ -5794,6 +5801,221 @@
         window.openStudentProfileModal = openStudentDashboardModal;
         window.closeStudentDashboardModal = closeStudentDashboardModal;
         window.closeStudentProfileModal = closeStudentDashboardModal;
+
+        async function openWeaknessHeatmapModal() {
+            const student = getCurrentStudentInfo();
+            if (!student || !student.email) {
+                alert('Войдите в аккаунт для просмотра статистики ошибок');
+                return;
+            }
+
+            closeStudentProfileModal();
+
+            let modal = document.getElementById('weakness-heatmap-modal');
+            if (modal) modal.remove();
+            modal = document.createElement('div');
+            modal.id = 'weakness-heatmap-modal';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.88);backdrop-filter:blur(10px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            document.body.appendChild(modal);
+
+            // Заглушка пока грузится
+            modal.innerHTML = `
+                <div style="background:#0B1120;border:1px solid rgba(255,255,255,0.12);border-radius:24px;max-width:720px;width:100%;padding:32px;color:#F8FAFC;text-align:center;">
+                    <div style="font-size:44px;margin-bottom:12px;">🔥</div>
+                    <div style="font-size:16px;color:#F8FAFC;">Анализируем ваши ответы...</div>
+                </div>
+            `;
+
+            try {
+                const res = await fetch(`/api/student/heatmap?email=${encodeURIComponent(student.email)}`);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                renderWeaknessModal(modal, data, student);
+            } catch (e) {
+                modal.innerHTML = `
+                    <div style="background:#0B1120;border:1px solid rgba(239,68,68,0.4);border-radius:24px;max-width:520px;width:100%;padding:32px;color:#F8FAFC;text-align:center;">
+                        <div style="font-size:44px;margin-bottom:12px;">⚠️</div>
+                        <div style="font-size:16px;font-weight:700;color:#FCA5A5;margin-bottom:6px;">Не удалось загрузить статистику</div>
+                        <div style="font-size:13px;color:#94A3B8;margin-bottom:20px;">${escapeHtml(e.message || 'Ошибка сервера')}</div>
+                        <button onclick="document.getElementById('weakness-heatmap-modal').remove()" 
+                                style="background:#2563EB;color:#FFF;border:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+                            Закрыть
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        function renderWeaknessModal(modal, data, student) {
+            const totalTests = data.total_tests || 0;
+            const problematic = data.top_problematic || [];
+            const byType = data.by_type || {};
+            const masteredCount = data.mastered_count || 0;
+            const problematicCount = data.problematic_count || 0;
+
+            const typeNames = {
+                district: '🗺️ Районы (силуэты)',
+                river: '🌊 Реки',
+                center: '📍 Центры',
+                neighbor: '🔗 Топология',
+                puzzle: '🧩 Пазл'
+            };
+
+            if (totalTests === 0) {
+                modal.innerHTML = `
+                    <div style="background:#0B1120;border:1px solid rgba(255,255,255,0.12);border-radius:24px;max-width:520px;width:100%;padding:36px;color:#F8FAFC;text-align:center;">
+                        <div style="font-size:56px;margin-bottom:14px;">📭</div>
+                        <div style="font-size:18px;font-weight:800;color:#F8FAFC;margin-bottom:6px;">Пока нет данных</div>
+                        <div style="font-size:13px;color:#94A3B8;line-height:1.5;margin-bottom:24px;">
+                            Пройдите хотя бы один тест на карте, чтобы увидеть персональную карту слабых мест и рекомендации.
+                        </div>
+                        <button onclick="document.getElementById('weakness-heatmap-modal').remove()" 
+                                style="background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#FFF;border:none;padding:11px 28px;border-radius:10px;font-size:13.5px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(37,99,235,0.35);">
+                            Понятно
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            let topListHtml = '';
+            if (problematic.length > 0) {
+                topListHtml = problematic.map((obj, idx) => {
+                    const rank = idx + 1;
+                    const rankColors = ['#EF4444', '#F59E0B', '#7C3AED', '#6366F1', '#64748B'];
+                    const rankColor = rankColors[Math.min(idx, rankColors.length - 1)];
+                    const accColor = obj.accuracy >= 85 ? '#34D399' : obj.accuracy >= 50 ? '#FBBF24' : '#F87171';
+                    return `
+                        <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:10px 14px;margin-bottom:8px;">
+                            <div style="width:32px;height:32px;border-radius:8px;background:${rankColor}22;border:1px solid ${rankColor};color:${rankColor};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;">
+                                #${rank}
+                            </div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:13.5px;font-weight:700;color:#F8FAFC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(obj.name)}</div>
+                                <div style="font-size:11.5px;color:#94A3B8;margin-top:2px;">
+                                    ${typeNames[obj.type] || obj.type} • ошибок: <b style="color:#FCA5A5;">${obj.errors}</b>
+                                </div>
+                            </div>
+                            <div style="text-align:right;flex-shrink:0;">
+                                <div style="font-size:18px;font-weight:800;color:${accColor};">${obj.accuracy}%</div>
+                                <div style="font-size:10.5px;color:#64748B;">точность</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                topListHtml = `
+                    <div style="text-align:center;padding:24px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:12px;color:#34D399;font-size:13px;font-weight:600;">
+                        🎉 Отлично! Серьёзных пробелов не обнаружено
+                    </div>
+                `;
+            }
+
+            let typeStatsHtml = '';
+            Object.entries(byType).forEach(([type, stat]) => {
+                const errs = stat.errors || 0;
+                const tests = stat.total_tests || 0;
+                if (tests === 0) return;
+                const errRate = Math.round((errs / Math.max(1, tests * 10)) * 100);
+                const barColor = errRate > 30 ? '#EF4444' : errRate > 15 ? '#F59E0B' : '#10B981';
+                typeStatsHtml += `
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 12px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:12px;font-weight:700;color:#CBD5E1;">${typeNames[type] || type}</span>
+                            <span style="font-size:11.5px;color:${barColor};font-weight:700;">${errs} ошибок / ${tests} тестов</span>
+                        </div>
+                        <div style="width:100%;height:5px;background:rgba(255,255,255,0.08);border-radius:999px;overflow:hidden;">
+                            <div style="width:${Math.min(100, errRate)}%;height:100%;background:${barColor};border-radius:999px;"></div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            const actionButton = `
+                <a href="rostov_quiz_map.html" style="flex:1;padding:12px;background:linear-gradient(135deg,#2563EB,#1D4ED8);border:none;border-radius:10px;color:#FFF;font-size:13.5px;font-weight:800;text-align:center;text-decoration:none;display:inline-block;">
+                    🌻 Открыть Ростовскую область
+                </a>
+            `;
+
+            modal.innerHTML = `
+                <div style="background:#0B1120;border:1px solid rgba(255,255,255,0.12);border-radius:24px;max-width:720px;width:100%;padding:28px;box-shadow:0 25px 60px rgba(0,0,0,0.85);color:#F8FAFC;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+                        <div style="display:flex;align-items:center;gap:14px;">
+                            <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#EF4444,#F59E0B);display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 0 20px rgba(239,68,68,0.4);">🔥</div>
+                            <div>
+                                <h3 style="margin:0;font-size:20px;font-weight:800;color:#FFFFFF;letter-spacing:-0.3px;">Мои слабые места</h3>
+                                <div style="font-size:12.5px;color:#94A3B8;margin-top:3px;">
+                                    ${escapeHtml(student.name)} • ${totalTests} тестов • обновлено ${escapeHtml(data.last_updated || '')}
+                                </div>
+                            </div>
+                        </div>
+                        <button onclick="document.getElementById('weakness-heatmap-modal').remove()" 
+                                style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94A3B8;font-size:22px;width:34px;height:34px;border-radius:8px;cursor:pointer;">
+                            &times;
+                        </button>
+                    </div>
+
+                    <!-- Мини-KPI -->
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:22px;">
+                        <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:12px;text-align:center;">
+                            <div style="font-size:22px;font-weight:800;color:#F87171;">${problematicCount}</div>
+                            <div style="font-size:11px;color:#94A3B8;text-transform:uppercase;margin-top:2px;">Проблемных</div>
+                        </div>
+                        <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:12px;text-align:center;">
+                            <div style="font-size:22px;font-weight:800;color:#34D399;">${masteredCount}</div>
+                            <div style="font-size:11px;color:#94A3B8;text-transform:uppercase;margin-top:2px;">Освоено</div>
+                        </div>
+                        <div style="background:rgba(37,99,235,0.1);border:1px solid rgba(37,99,235,0.3);border-radius:12px;padding:12px;text-align:center;">
+                            <div style="font-size:22px;font-weight:800;color:#93C5FD;">${Object.keys(data.by_object || {}).length}</div>
+                            <div style="font-size:11px;color:#94A3B8;text-transform:uppercase;margin-top:2px;">Всего объектов</div>
+                        </div>
+                    </div>
+
+                    <!-- Топ ошибок -->
+                    <div style="margin-bottom:20px;">
+                        <h4 style="margin:0 0 10px 0;font-size:14px;font-weight:700;color:#F8FAFC;">
+                            🎯 Топ-${problematic.length || 5} сложных объектов
+                        </h4>
+                        ${topListHtml}
+                    </div>
+
+                    <!-- Статистика по типам -->
+                    ${typeStatsHtml ? `
+                    <div style="margin-bottom:20px;">
+                        <h4 style="margin:0 0 10px 0;font-size:14px;font-weight:700;color:#F8FAFC;">
+                            📊 По категориям
+                        </h4>
+                        <div style="display:grid;grid-template-columns:1fr;gap:8px;">
+                            ${typeStatsHtml}
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <!-- Рекомендация -->
+                    ${problematic.length > 0 ? `
+                    <div style="background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(239,68,68,0.1));border:1px solid rgba(124,58,237,0.35);border-radius:12px;padding:14px;margin-bottom:20px;">
+                        <div style="font-size:12.5px;color:#E0E7FF;line-height:1.55;">
+                            <b style="color:#C4B5FD;">💡 Рекомендация:</b><br>
+                            Сфокусируйтесь на изучении: <b>${problematic.slice(0,3).map(p => escapeHtml(p.name)).join(', ')}</b>. 
+                            Откройте режим обучения и пройдите по этим объектам 2-3 раза подряд.
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <!-- Кнопки -->
+                    <div style="display:flex;gap:10px;">
+                        <button onclick="document.getElementById('weakness-heatmap-modal').remove()" 
+                                style="flex:1;padding:12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#CBD5E1;font-size:13.5px;font-weight:600;cursor:pointer;">
+                            Закрыть
+                        </button>
+                        ${actionButton}
+                    </div>
+                </div>
+            `;
+        }
+
+        window.openWeaknessHeatmapModal = openWeaknessHeatmapModal;
 
         function updateStudentHeader() {
             const student = getCurrentStudentInfo();
