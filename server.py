@@ -19,6 +19,9 @@ import secrets
 import csv
 import io
 import re
+import db
+
+db.init_db()
 
 logger = logging.getLogger("geoatlas")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -102,20 +105,10 @@ def save_branding(data: Dict[str, Any]) -> None:
         logger.error("Ошибка сохранения branding.json: %s", e)
 
 def load_auth_sessions() -> Dict[str, Any]:
-    if os.path.exists(AUTH_SESSIONS_FILE):
-        try:
-            with open(AUTH_SESSIONS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
     return {}
 
 def save_auth_sessions(sessions: Dict[str, Any]) -> None:
-    try:
-        with open(AUTH_SESSIONS_FILE, "w", encoding="utf-8") as f:
-            json.dump(sessions, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.error("Ошибка сохранения auth_sessions: %s", e)
+    pass
 
 DEFAULT_TEACHERS = [
     {
@@ -210,27 +203,10 @@ def save_teachers(teachers: List[Dict[str, Any]]) -> None:
         logger.error("Ошибка сохранения teachers: %s", e)
 
 def load_sessions_history() -> List[Dict[str, Any]]:
-    if os.path.exists(SESSIONS_HISTORY_FILE):
-        try:
-            with open(SESSIONS_HISTORY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    return db.load_sessions_history()
 
 def record_session_history(session_data: Dict[str, Any]) -> None:
-    history = load_sessions_history()
-    sess_id = session_data.get("sessionId") or session_data.get("session_id")
-    idx = next((i for i, s in enumerate(history) if (s.get("sessionId") or s.get("session_id")) == sess_id), -1)
-    if idx >= 0:
-        history[idx] = session_data
-    else:
-        history.append(session_data)
-    try:
-        with open(SESSIONS_HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.error("Ошибка сохранения sessions_history: %s", e)
+    db.record_session_history(session_data)
 
 DEFAULT_GROUPS = [
     {
@@ -338,70 +314,22 @@ class LaunchSessionRequest(BaseModel):
     teacher_id: str = "teacher-ivanov"
 
 def load_results() -> List[Dict[str, Any]]:
-    if os.path.exists(RESULTS_FILE):
-        try:
-            with open(RESULTS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    for r in data:
-                        if not r.get("teacher_id"):
-                            r["teacher_id"] = "teacher-petrov" if "эконом" in str(r.get("group", "")).lower() else "teacher-ivanov"
-                    return data
-        except Exception:
-            return []
-    return []
+    return db.load_results()
 
 def save_result_to_file(result_data: Dict[str, Any]) -> Dict[str, Any]:
-    results = load_results()
-    sub_id = str(result_data.get("submission_id") or "").strip()
-    is_exam = bool(result_data.get("is_exam", False))
-    exam_token = str(result_data.get("exam_token") or "").strip()
-    user_email = str(result_data.get("email") or "").strip().lower()
-
-    duplicate_idx = -1
-    for idx, r in enumerate(results):
-        r_sub_id = str(r.get("submission_id") or "").strip()
-        if sub_id and r_sub_id and sub_id == r_sub_id:
-            duplicate_idx = idx
-            break
-        if is_exam and exam_token and r.get("is_exam") and str(r.get("exam_token") or "").strip() == exam_token:
-            if user_email and str(r.get("email") or "").strip().lower() == user_email:
-                duplicate_idx = idx
-                break
-
-    if duplicate_idx >= 0:
-        existing = results[duplicate_idx]
-        if (result_data.get("score", 0) > existing.get("score", 0)) or \
-           (result_data.get("accuracy", 0) > existing.get("accuracy", 0)):
-            results[duplicate_idx] = result_data
-            with open(RESULTS_FILE, "w", encoding="utf-8") as f:
-                json.dump(results, f, ensure_ascii=False, indent=2)
-            return {"status": "ok", "deduplicated": True, "updated": True}
-        return {"status": "ok", "deduplicated": True, "updated": False}
-
-    results.append(result_data)
-    with open(RESULTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-    return {"status": "ok", "deduplicated": False}
+    return db.save_result(result_data)
 
 def load_groups() -> List[Dict[str, Any]]:
-    if os.path.exists(GROUPS_FILE):
-        try:
-            with open(GROUPS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list) and len(data) > 0:
-                    for g in data:
-                        if not g.get("teacher_id"):
-                            g["teacher_id"] = "teacher-petrov" if "эконом" in str(g.get("name", "")).lower() else "teacher-ivanov"
-                    return data
-        except Exception:
-            pass
-    save_groups_to_file(DEFAULT_GROUPS)
-    return DEFAULT_GROUPS
+    groups = db.load_groups()
+    if not groups:
+        for g in DEFAULT_GROUPS:
+            db.save_group(g)
+        groups = db.load_groups()
+    return groups
 
 def save_groups_to_file(groups_data: List[Dict[str, Any]]) -> None:
-    with open(GROUPS_FILE, "w", encoding="utf-8") as f:
-        json.dump(groups_data, f, ensure_ascii=False, indent=2)
+    for g in groups_data:
+        db.save_group(g)
 
 def load_active_session() -> Optional[Dict[str, Any]]:
     if os.path.exists(ACTIVE_SESSION_FILE):
@@ -453,28 +381,24 @@ def send_code(req: AuthRequest) -> Dict[str, Any]:
             )
     
     code = f"{random.randint(100000, 999999)}"
-    sessions = load_auth_sessions()
-    sessions[email] = {
+    db.save_auth_session(email, {
         "code": code,
         "expires_at": time.time() + 600,
         "name": req.full_name.strip(),
         "group": req.group_num.strip()
-    }
-    save_auth_sessions(sessions)
+    })
+    db.cleanup_expired_auth()
     logger.info("Авторизация: сгенерирован код подтверждения для %s", email)
     return {"status": "ok", "message": "Код подтверждения отправлен", "dev_code": code}
 
 @app.post("/api/auth/verify-code")
 def verify_code(req: VerifyRequest) -> Dict[str, Any]:
     email = req.email.strip().lower()
-    sessions = load_auth_sessions()
-    record = sessions.get(email)
+    record = db.pop_auth_session(email)
     if not record or time.time() > record.get("expires_at", 0) or record.get("code") != req.code.strip():
         raise HTTPException(status_code=400, detail="Неверный или просроченный код")
     
     user_data = {"email": email, "name": record.get("name", ""), "group": record.get("group", "")}
-    sessions.pop(email, None)
-    save_auth_sessions(sessions)
     return {"status": "ok", "user": user_data}
 
 def process_quiz_result(res: ResultSubmit) -> Dict[str, Any]:
@@ -566,13 +490,11 @@ def save_or_update_group(group: GroupModel, teacher: Dict[str, Any] = Depends(ch
     if idx >= 0:
         if not is_dean_or_admin(teacher) and groups[idx].get("teacher_id", "teacher-ivanov") != teacher.get("teacher_id"):
             raise HTTPException(status_code=403, detail="У вас нет прав на редактирование группы другого преподавателя")
-        groups[idx] = group_dict
-    else:
-        groups.append(group_dict)
-    save_groups_to_file(groups)
+    db.save_group(group_dict)
+    all_groups = load_groups()
     if is_dean_or_admin(teacher):
-        return {"status": "ok", "groups": groups}
-    return {"status": "ok", "groups": [g for g in groups if g.get("teacher_id", "teacher-ivanov") == teacher.get("teacher_id")]}
+        return {"status": "ok", "groups": all_groups}
+    return {"status": "ok", "groups": [g for g in all_groups if g.get("teacher_id", "teacher-ivanov") == teacher.get("teacher_id")]}
 
 @app.delete("/api/admin/groups/{group_id}")
 def delete_group(group_id: str, teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[str, Any]:
@@ -582,11 +504,11 @@ def delete_group(group_id: str, teacher: Dict[str, Any] = Depends(check_admin)) 
         raise HTTPException(status_code=404, detail="Группа не найдена")
     if not is_dean_or_admin(teacher) and target.get("teacher_id", "teacher-ivanov") != teacher.get("teacher_id"):
         raise HTTPException(status_code=403, detail="У вас нет прав на удаление группы другого преподавателя")
-    groups = [g for g in groups if g.get("id") != group_id]
-    save_groups_to_file(groups)
+    db.delete_group(group_id)
+    all_groups = load_groups()
     if is_dean_or_admin(teacher):
-        return {"status": "ok", "groups": groups}
-    return {"status": "ok", "groups": [g for g in groups if g.get("teacher_id", "teacher-ivanov") == teacher.get("teacher_id")]}
+        return {"status": "ok", "groups": all_groups}
+    return {"status": "ok", "groups": [g for g in all_groups if g.get("teacher_id", "teacher-ivanov") == teacher.get("teacher_id")]}
 
 @app.get("/api/admin/students")
 def get_all_students(teacher: Dict[str, Any] = Depends(check_admin)) -> List[Dict[str, Any]]:
@@ -1783,6 +1705,8 @@ load_duel_rooms_from_disk()
 
 @app.on_event("startup")
 def on_app_startup():
+    db.init_db()
+    db.migrate_legacy_json(BASE_DIR)
     load_duel_rooms_from_disk()
 
 def clean_stale_duel_rooms():
