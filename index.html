@@ -5220,15 +5220,15 @@
         // 3.2 ЛИЧНЫЙ КАБИНЕТ СТУДЕНТА (STUDENT DASHBOARD)
         // ========================================================
         const GEOATLAS_ACHIEVEMENTS = [
-            { id: 'sniper', icon: '🏅', title: 'Снайпер', desc: '3 раза подряд указать центр с погрешностью менее 15 км' },
-            { id: 'cartographer', icon: '🧩', title: 'Картограф', desc: 'Собрать пазл региона с точностью 100%' },
-            { id: 'speedrunner', icon: '⚡', title: 'Спидранер', desc: 'Сдать любой тест быстрее половины отведенного времени при точности > 80%' },
-            { id: 'hydrologist', icon: '🌊', title: 'Гидролог', desc: 'Ответить на 100% вопросов в викторине по рекам' },
-            { id: 'geo_erudite', icon: '🧠', title: 'Гео-Эрудит', desc: 'Набрать максимальный балл в «Комплексном экзамене»' },
-            { id: 'steel_nerves', icon: '🛡️', title: 'Стальные нервы', desc: 'Сдать экзамен на 100% без единого срабатывания Anti-Cheat' },
-            { id: 'kuban_expert', icon: '🌻', title: 'Знаток Кубани', desc: 'Пройти тестирование по Краснодарскому краю с результатом > 80%' },
-            { id: 'don_master', icon: '🌾', title: 'Хозяин Дона', desc: 'Сдать тестирование по Ростовской области на высший балл' },
-            { id: 'duel_master', icon: '⚔️', title: 'Гроза дуэлей', desc: 'Одержать победу в PvP-дуэли 1 на 1 против другого студента' }
+            { id: 'first_steps', aliasIds: ['kuban_expert'], icon: '🌱', title: 'Первые шаги', desc: 'Успешно завершить свое первое тестирование с результатом от 80%' },
+            { id: 'geo_erudite', aliasIds: ['erudite'], icon: '🧠', title: 'Краевед-отличник', desc: 'Набрать максимальный балл в комплексном контрольном срезе' },
+            { id: 'sniper', icon: '🎯', title: 'Снайпер по райцентрам', desc: '3 раза подряд указать центр района с погрешностью менее 15 км' },
+            { id: 'hydrologist', icon: '🌊', title: 'Мастер топонимики', desc: 'Безошибочно определить все водные артерии и ключевые объекты гидрографии' },
+            { id: 'speedrunner', icon: '⚡', title: 'Быстрый ум', desc: 'Сдать любой тест быстрее половины отведенного времени при точности > 80%' },
+            { id: 'steel_nerves', icon: '🛡️', title: 'Неудержимый', desc: 'Сдать экзамен на 100% без единого срабатывания системы Anti-Cheat' },
+            { id: 'don_master', icon: '🏆', title: 'Абсолютный триумф', desc: 'Сдать тестирование по Ростовской области или полигону РФ на 100% баллов' },
+            { id: 'cartographer', icon: '🧩', title: 'Картографический гроссмейстер', desc: 'Собрать пазл региона с точностью 100% без штрафов' },
+            { id: 'duel_master', icon: '⚔️', title: 'Гладиатор дуэлей', desc: 'Одержать победу в PvP-дуэли 1 на 1 против другого студента' }
         ];
 
         function getUnlockedAchievements() {
@@ -5323,8 +5323,8 @@
             // Карточки достижений
             let achCardsHtml = '';
             GEOATLAS_ACHIEVEMENTS.forEach(ach => {
-                const isUnlocked = !!unlocked[ach.id];
-                const unlockInfo = unlocked[ach.id] || {};
+                const isUnlocked = !!unlocked[ach.id] || (ach.aliasIds && ach.aliasIds.some(aid => !!unlocked[aid]));
+                const unlockInfo = unlocked[ach.id] || (ach.aliasIds && ach.aliasIds.map(aid => unlocked[aid]).find(Boolean)) || {};
                 const cardClass = isUnlocked ? 'dash-ach-card dash-ach-unlocked' : 'dash-ach-card dash-ach-locked';
                 const badgeHtml = isUnlocked
                     ? `<span style="background: rgba(245, 158, 11, 0.2); color: #FBBF24; border: 1px solid #F59E0B; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 700;">Разблокировано • ${escapeHtml(unlockInfo.unlockedAt || 'OK')}</span>`

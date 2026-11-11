@@ -2202,7 +2202,7 @@ window.serverMapZoom = {self.zoom};
             border: 1px solid #CBD5E1 !important;
             border-radius: 10px !important;
             padding: 8px 14px !important;
-            display: inline-flex !important;
+            display: inline-flex;
             align-items: center !important;
             justify-content: center !important;
             gap: 6px !important;
@@ -2213,6 +2213,10 @@ window.serverMapZoom = {self.zoom};
             cursor: pointer !important;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
             transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }}
+        #auth-top-btn.hidden,
+        .hidden {{
+            display: none !important;
         }}
         #top-nav-panel a,
         #top-nav-panel a:hover,

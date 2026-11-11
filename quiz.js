@@ -1,6 +1,6 @@
-const _root = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this);
+var _root = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this);
 
-const QUESTION_TIME_LIMIT = 20;
+var QUESTION_TIME_LIMIT = 20;
 
 class ExamProctorClass {
     #violations = 0;
@@ -177,9 +177,9 @@ class PuzzleEngineClass {
     }
 }
 
-const ExamProctor = new ExamProctorClass();
-const QuizManager = new QuizManagerClass();
-const PuzzleEngine = new PuzzleEngineClass();
+var ExamProctor = _root.ExamProctor || new ExamProctorClass();
+var QuizManager = _root.QuizManager || new QuizManagerClass();
+var PuzzleEngine = _root.PuzzleEngine || new PuzzleEngineClass();
 
 _root.ExamProctor = ExamProctor;
 _root.QuizManager = QuizManager;
@@ -254,7 +254,7 @@ Object.defineProperty(_root, 'puzzleHintsUsed', { get() { return PuzzleEngine.hi
 Object.defineProperty(_root, 'puzzleToken', { get() { return PuzzleEngine.token; }, set(v) { PuzzleEngine.token = v; }, configurable: true });
 Object.defineProperty(_root, 'puzzleSavedLayerStyles', { get() { return PuzzleEngine.savedLayerStyles; }, set(v) { PuzzleEngine.savedLayerStyles = v; }, configurable: true });
 
-const PUZZLE_PALETTE = [
+var PUZZLE_PALETTE = [
     '#38BDF8', '#34D399', '#F472B6', '#A78BFA',
     '#FBBF24', '#60A5FA', '#4ADE80', '#FB7185',
     '#818CF8', '#F59E0B', '#2DD4BF', '#C084FC',
@@ -1057,6 +1057,24 @@ function handleTimeout() {
     if (currentQuestion >= quizData.length) return;
     const question = quizData[currentQuestion];
     showFeedback('Время вышло!', 'error');
+
+    const problematicName = question.correctAnswer || question.districtName || question.riverName || question.name;
+    if (problematicName) {
+        currentSessionMistakes.push(problematicName);
+    }
+    if (Array.isArray(currentSessionMistakesDetails)) {
+        currentSessionMistakesDetails.push({
+            type: question.type || 'district',
+            targetName: problematicName,
+            correctAnswer: question.correctAnswer || question.districtName || question.riverName || question.name,
+            studentAnswer: 'Время вышло (без ответа)',
+            questionText: question.text || question.prompt || '',
+            questionIndex: currentQuestion + 1,
+            districtName: question.districtName || question.correctAnswer || question.name,
+            correctLat: question.lat,
+            correctLon: question.lon
+        });
+    }
 
     if (question.type === 'district' || question.type === 'neighbor' || question.type === 'river') {
         document.querySelectorAll('.quiz-option').forEach(opt => {
@@ -3541,6 +3559,13 @@ function handleMapClick(lat, lon, question) {
         }
     }
 
+    if (distance > 15) {
+        const centerName = question.correctAnswer || question.name;
+        if (centerName && !currentSessionMistakes.includes(centerName)) {
+            currentSessionMistakes.push(centerName);
+        }
+    }
+
     if (distance > 15 && Array.isArray(currentSessionMistakesDetails)) {
         const centerName = question.correctAnswer || question.name;
         currentSessionMistakesDetails.push({
@@ -4335,11 +4360,58 @@ function showResults() {
     }
 
     // Кнопка разбора ошибок
-    const mistakesCount = (window.currentSessionMistakesDetails && window.currentSessionMistakesDetails.length) || (currentSessionMistakes && currentSessionMistakes.length) || 0;
-    const reviewBtnHtml = mistakesCount > 0 ? `
+    let detailsCount = (window.currentSessionMistakesDetails && window.currentSessionMistakesDetails.length) || 0;
+    let listCount = (currentSessionMistakes && currentSessionMistakes.length) || 0;
+    const pointsMissed = Math.max(0, (maxPossibleScore || 0) - (score || 0));
+
+    // Если есть расхождение баллов или список ошибок, но details пуст — генерируем details
+    if (detailsCount === 0 && (listCount > 0 || pointsMissed > 0)) {
+        window.currentSessionMistakesDetails = [];
+        if (listCount > 0) {
+            currentSessionMistakes.forEach((name, i) => {
+                window.currentSessionMistakesDetails.push({
+                    type: 'district',
+                    targetName: name,
+                    correctAnswer: name,
+                    studentAnswer: 'Неверный выбор',
+                    questionText: `Определить территорию: ${name}`,
+                    questionIndex: i + 1,
+                    districtName: name
+                });
+            });
+        } else if (Array.isArray(quizData) && quizData.length > 0) {
+            quizData.forEach((q, i) => {
+                const name = q.correctAnswer || q.districtName || q.riverName || q.name;
+                if (name) {
+                    window.currentSessionMistakesDetails.push({
+                        type: q.type || 'district',
+                        targetName: name,
+                        correctAnswer: name,
+                        studentAnswer: 'Ошибочный ответ',
+                        questionText: q.text || q.prompt || '',
+                        questionIndex: i + 1,
+                        districtName: q.districtName || q.correctAnswer || q.name,
+                        correctLat: q.lat,
+                        correctLon: q.lon
+                    });
+                }
+            });
+        }
+        detailsCount = window.currentSessionMistakesDetails.length;
+    }
+
+    const mistakesCount = Math.max(
+        (window.currentSessionMistakesDetails && window.currentSessionMistakesDetails.length) || 0,
+        (currentSessionMistakes && currentSessionMistakes.length) || 0,
+        pointsMissed > 0 ? pointsMissed : 0
+    );
+
+    const hasMistakes = mistakesCount > 0 || score < maxPossibleScore;
+
+    const reviewBtnHtml = hasMistakes ? `
         <div style="margin-top: 14px;">
-            <button id="btn-review-mistakes" onclick="startReviewMistakesMode()" class="btn btn-warning btn-block" style="font-weight: 700; background: linear-gradient(135deg, #F59E0B, #D97706); color: white; border: none; padding: 11px 16px; border-radius: 12px; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; font-size: 13.5px;">
-                <span>🔍</span> <span>Разобрать ошибки (${mistakesCount})</span>
+            <button id="btn-review-mistakes" onclick="startReviewMistakesMode()" class="btn btn-secondary btn-review-mistakes btn-block" style="font-weight: 700; background: linear-gradient(135deg, #F59E0B, #D97706); color: white !important; border: none; padding: 11px 16px; border-radius: 12px; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; font-size: 13.5px;">
+                <span>🔍</span> <span>Разобрать ошибки${mistakesCount > 0 ? ` (${mistakesCount})` : ''}</span>
             </button>
         </div>
     ` : `
@@ -4351,9 +4423,9 @@ function showResults() {
 
     const staticReviewBtn = document.getElementById('btn-review-mistakes-action');
     if (staticReviewBtn) {
-        if (mistakesCount > 0) {
+        if (hasMistakes) {
             staticReviewBtn.style.display = 'block';
-            staticReviewBtn.innerHTML = `<span>🔍</span> <span>Разобрать ошибки (${mistakesCount})</span>`;
+            staticReviewBtn.innerHTML = `<span>🔍</span> <span>Разобрать ошибки${mistakesCount > 0 ? ` (${mistakesCount})` : ''}</span>`;
         } else {
             staticReviewBtn.style.display = 'none';
         }
@@ -4407,6 +4479,24 @@ function startReviewMistakesMode() {
             studentAnswer: 'Ошибочный ответ',
             questionIndex: i + 1
         }));
+        window.currentSessionMistakesDetails = mistakes;
+    }
+
+    if (mistakes.length === 0 && Array.isArray(quizData) && quizData.length > 0) {
+        mistakes = quizData.map((q, i) => {
+            const name = q.correctAnswer || q.districtName || q.riverName || q.name;
+            return {
+                type: q.type || 'district',
+                targetName: name,
+                correctAnswer: name,
+                studentAnswer: 'Неверный ответ',
+                questionText: q.text || q.prompt || '',
+                questionIndex: i + 1,
+                districtName: q.districtName || q.correctAnswer || q.name,
+                correctLat: q.lat,
+                correctLon: q.lon
+            };
+        });
         window.currentSessionMistakesDetails = mistakes;
     }
 
@@ -4569,6 +4659,14 @@ function renderReviewMistake(index) {
 
     if (!map) return;
 
+    if (item.type === 'center' && (!item.correctLat || !item.correctLon) && typeof EMBEDDED_CENTERS !== 'undefined') {
+        const found = EMBEDDED_CENTERS.find(c => c.name === item.correctAnswer || c.name === item.targetName);
+        if (found) {
+            item.correctLat = found.lat;
+            item.correctLon = found.lon;
+        }
+    }
+
     // ВИЗУАЛИЗАЦИЯ НА КАРТЕ
     if (item.type === 'center' && item.correctLat && item.correctLon && item.studentLat && item.studentLon) {
         // Точка клика студента (Красный маркер)
@@ -4607,6 +4705,18 @@ function renderReviewMistake(index) {
             [item.correctLat, item.correctLon]
         ]);
         map.fitBounds(bounds, { padding: [100, 100], maxZoom: 10, animate: true });
+    }
+    else if (item.type === 'center' && item.correctLat && item.correctLon) {
+        const correctMarker = L.circleMarker([item.correctLat, item.correctLon], {
+            radius: 10,
+            color: '#047857',
+            fillColor: '#10B981',
+            fillOpacity: 0.95,
+            weight: 3
+        }).addTo(map);
+        correctMarker.bindTooltip(`📍 Истинный центр: ${escapeHtml(item.correctAnswer)} (время вышло)`, { permanent: true, direction: 'top' });
+        _reviewMarkers.push(correctMarker);
+        map.setView([item.correctLat, item.correctLon], 10, { animate: true });
     }
     else if (item.type === 'river') {
         const riverLayer = findRiverLayerByName(item.correctAnswer);
@@ -4890,7 +5000,7 @@ function renderLeaderboardModal() {
                 ${getLbContentHtml()}
             </div>
 
-            <button onclick="closeLeaderboardModal()" class="btn btn-secondary" style="margin-top: 16px; padding: 9px 24px; font-weight: 700; border-radius: 8px; cursor: pointer;">Закрыть</button>
+            <button type="button" onclick="closeLeaderboardModal()" class="btn btn-primary" style="margin-top: 18px; padding: 10px 32px; background: linear-gradient(135deg, var(--primary, #2563EB), var(--primary-dark, #1D4ED8)); color: #FFFFFF !important; font-size: 13.5px; font-weight: 700; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 14px rgba(37,99,235,0.35); transition: all 0.2s ease;" onmouseover="this.style.transform='translateY(-1.5px)'; this.style.boxShadow='0 6px 18px rgba(37,99,235,0.45)';" onmouseout="this.style.transform='none'; this.style.boxShadow='0 4px 14px rgba(37,99,235,0.35)';">Закрыть</button>
         </div>
     </div>
     `;
@@ -5076,16 +5186,44 @@ function updateStudentHeader() {
     const profileBox = document.getElementById('student-profile-badge');
 
     if (student) {
-        if (authBtn) authBtn.style.display = 'none';
+        if (authBtn) {
+            authBtn.style.setProperty('display', 'none', 'important');
+            authBtn.classList.add('hidden');
+        }
         if (profileBox) {
-            profileBox.style.display = 'flex'; profileBox.style.cursor = 'pointer'; profileBox.onclick = openStudentProfileModal;
-            document.getElementById('student-badge-name').textContent = student.name;
-            document.getElementById('student-badge-group').textContent = `${student.group}`;
+            profileBox.style.setProperty('display', 'flex', 'important');
+            profileBox.classList.remove('hidden');
+            profileBox.style.cursor = 'pointer';
+            profileBox.onclick = openStudentProfileModal;
+            const nameEl = document.getElementById('student-badge-name');
+            const groupEl = document.getElementById('student-badge-group');
+            if (nameEl) nameEl.textContent = student.name || 'Студент';
+            if (groupEl) groupEl.textContent = `${student.group || ''}`;
         }
     } else {
-        if (authBtn) authBtn.style.display = 'flex';
-        if (profileBox) profileBox.style.display = 'none';
+        if (authBtn) {
+            authBtn.style.setProperty('display', 'inline-flex', 'important');
+            authBtn.classList.remove('hidden');
+        }
+        if (profileBox) {
+            profileBox.style.setProperty('display', 'none', 'important');
+            profileBox.classList.add('hidden');
+        }
     }
+}
+window.updateStudentHeader = updateStudentHeader;
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        if (typeof document.addEventListener === 'function') {
+            document.addEventListener('DOMContentLoaded', updateStudentHeader);
+        }
+    } else {
+        updateStudentHeader();
+    }
+}
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('load', updateStudentHeader);
 }
 
 function injectExamProctorStyles() {
@@ -5644,59 +5782,61 @@ async function checkAndApplySyncExamSession() {
 // ==========================================
 // 🏆 РАСШИРЕННАЯ ГЕЙМИФИКАЦИЯ: ДОСТИЖЕНИЯ
 // ==========================================
-const GEOATLAS_ACHIEVEMENTS = [
+var GEOATLAS_ACHIEVEMENTS = [
+    {
+        id: 'first_steps',
+        aliasIds: ['kuban_expert'],
+        icon: '🌱',
+        title: 'Первые шаги',
+        desc: 'Успешно завершить свое первое тестирование с результатом от 80%'
+    },
+    {
+        id: 'geo_erudite',
+        aliasIds: ['erudite'],
+        icon: '🧠',
+        title: 'Краевед-отличник',
+        desc: 'Набрать максимальный балл в комплексном контрольном срезе'
+    },
     {
         id: 'sniper',
-        icon: '🏅',
-        title: 'Снайпер',
-        desc: '3 раза подряд указать центр с погрешностью менее 15 км'
-    },
-    {
-        id: 'cartographer',
-        icon: '🧩',
-        title: 'Картограф',
-        desc: 'Собрать пазл региона с точностью 100%'
-    },
-    {
-        id: 'speedrunner',
-        icon: '⚡',
-        title: 'Спидранер',
-        desc: 'Сдать любой тест быстрее половины отведенного времени при точности > 80%'
+        icon: '🎯',
+        title: 'Снайпер по райцентрам',
+        desc: '3 раза подряд указать центр района с погрешностью менее 15 км'
     },
     {
         id: 'hydrologist',
         icon: '🌊',
-        title: 'Гидролог',
-        desc: 'Ответить на 100% вопросов в викторине по рекам'
+        title: 'Мастер топонимики',
+        desc: 'Безошибочно определить все водные артерии и ключевые объекты гидрографии'
     },
     {
-        id: 'geo_erudite',
-        icon: '🧠',
-        title: 'Гео-Эрудит',
-        desc: 'Набрать максимальный балл в «Комплексном экзамене»'
+        id: 'speedrunner',
+        icon: '⚡',
+        title: 'Быстрый ум',
+        desc: 'Сдать любой тест быстрее половины отведенного времени при точности > 80%'
     },
     {
         id: 'steel_nerves',
         icon: '🛡️',
-        title: 'Стальные нервы',
-        desc: 'Сдать экзамен на 100% без единого срабатывания Anti-Cheat'
-    },
-    {
-        id: 'kuban_expert',
-        icon: '🌻',
-        title: 'Знаток Кубани',
-        desc: 'Пройти тестирование по Краснодарскому краю с результатом > 80%'
+        title: 'Неудержимый',
+        desc: 'Сдать экзамен на 100% без единого срабатывания системы Anti-Cheat'
     },
     {
         id: 'don_master',
-        icon: '🌾',
-        title: 'Хозяин Дона',
-        desc: 'Сдать тестирование по Ростовской области на высший балл'
+        icon: '🏆',
+        title: 'Абсолютный триумф',
+        desc: 'Сдать тестирование по Ростовской области или полигону РФ на 100% баллов'
+    },
+    {
+        id: 'cartographer',
+        icon: '🧩',
+        title: 'Картографический гроссмейстер',
+        desc: 'Собрать пазл региона с точностью 100% без штрафов'
     },
     {
         id: 'duel_master',
         icon: '⚔️',
-        title: 'Гроза дуэлей',
+        title: 'Гладиатор дуэлей',
         desc: 'Одержать победу в PvP-дуэли 1 на 1 против другого студента'
     }
 ];
@@ -5711,17 +5851,22 @@ function getUnlockedAchievements() {
 }
 
 function unlockAchievement(achievementId) {
-    const ach = GEOATLAS_ACHIEVEMENTS.find(a => a.id === achievementId);
+    const ach = GEOATLAS_ACHIEVEMENTS.find(a => a.id === achievementId || (a.aliasIds && a.aliasIds.includes(achievementId)));
     if (!ach) return;
 
     const current = getUnlockedAchievements();
-    if (current[achievementId]) return;
+    if (current[ach.id] || (ach.aliasIds && ach.aliasIds.some(aid => current[aid]))) return;
 
     const dateStr = new Date().toLocaleDateString('ru-RU');
-    current[achievementId] = {
+    current[ach.id] = {
         unlockedAt: dateStr,
         timestamp: Date.now()
     };
+    if (ach.aliasIds) {
+        ach.aliasIds.forEach(aid => {
+            current[aid] = current[ach.id];
+        });
+    }
     try {
         localStorage.setItem('geoatlas_achievements', JSON.stringify(current));
     } catch(e) {}
@@ -5862,8 +6007,8 @@ function renderQuizDashboardContent(modal, data) {
 
     let achCardsHtml = '';
     GEOATLAS_ACHIEVEMENTS.forEach(ach => {
-        const isUnlocked = !!unlocked[ach.id];
-        const unlockInfo = unlocked[ach.id] || {};
+        const isUnlocked = !!unlocked[ach.id] || (ach.aliasIds && ach.aliasIds.some(aid => !!unlocked[aid]));
+        const unlockInfo = unlocked[ach.id] || (ach.aliasIds && ach.aliasIds.map(aid => unlocked[aid]).find(Boolean)) || {};
         const cardStyle = isUnlocked
             ? 'background: linear-gradient(145deg, rgba(245, 158, 11, 0.16), rgba(30, 41, 59, 0.9)); border: 1.5px solid #F59E0B; box-shadow: 0 0 16px rgba(245, 158, 11, 0.22); opacity: 1;'
             : 'background: rgba(15, 23, 42, 0.6); border: 1px dashed rgba(255, 255, 255, 0.18); opacity: 0.45; filter: grayscale(1);';
@@ -6039,8 +6184,13 @@ function renderQuizDashboardContent(modal, data) {
                 </div>
             </div>
 
-            <div style="display: flex; justify-content: flex-end; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 14px;">
-                <button onclick="closeStudentProfileModal()" class="btn btn-secondary" style="padding: 7px 20px; border-radius: 8px; cursor: pointer;">Закрыть</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 16px; margin-top: 20px;">
+                <button onclick="logoutStudent(); closeStudentProfileModal();" class="btn btn-secondary" style="border-color: rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 12.5px; padding: 8px 16px; cursor: pointer; border-radius: 8px; background: rgba(239, 68, 68, 0.1);">
+                    🚪 Выйти из аккаунта
+                </button>
+                <button onclick="closeStudentProfileModal()" class="btn btn-primary" style="background: linear-gradient(135deg, var(--primary, #2563EB), var(--primary-dark, #1D4ED8)); color: #FFFFFF !important; font-size: 13px; font-weight: 700; padding: 8px 24px; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.35);">
+                    Закрыть
+                </button>
             </div>
         </div>
     `;
@@ -6277,7 +6427,7 @@ if (typeof window !== 'undefined') {
 // ⚔️ DUEL MULTIPLAYER (1 ON 1 PvP SYSTEM)
 // ========================================================
 
-const DuelManager = {
+var DuelManager = {
     active: false,
     ws: null,
     pollTimer: null,

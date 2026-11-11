@@ -1213,11 +1213,16 @@ window.GEOATLAS_BRANDING = {json.dumps(branding, ensure_ascii=False)};
     else:
         html = f"{full_injected}\n{html}"
 
+    # Очистка устаревшего встроенного quiz.js из старых файлов Folium, чтобы /quiz.js был единственным источником правды
+    html = re.sub(r'(window\.serverMapZoom\s*=\s*[\d\.]+;)([\s\S]*?)(</script>)', r'\1\n\3', html, count=1)
+
     if "/quiz.js" not in html:
         if "</body>" in html:
             html = html.replace("</body>", '<script src="/quiz.js"></script>\n</body>', 1)
         elif "</html>" in html:
             html = html.replace("</html>", '<script src="/quiz.js"></script>\n</html>', 1)
+        else:
+            html = f'{html}\n<script src="/quiz.js"></script>'
 
     return HTMLResponse(content=html, media_type="text/html")
 
