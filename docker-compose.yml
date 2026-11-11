@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  geoatlas:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    volumes:
+      - ./public/maps:/app/public/maps

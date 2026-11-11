@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.git/
+.github/
+public/maps/*.html
+Py_Geo/
+*.json.bak
+node_modules/
+.venv/
+venv/
