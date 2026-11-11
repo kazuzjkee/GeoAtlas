@@ -3713,6 +3713,9 @@
             </nav>
             
             <div class="nav-actions">
+                <button type="button" onclick="openDuelModal()" class="btn btn-secondary nav-btn duel-nav-btn" title="Мультиплеер 1 на 1 в реальном времени" style="border-color: #F59E0B; color: #F59E0B;">
+                    <span>⚔️ Дуэль 1 на 1</span>
+                </button>
                 <button type="button" onclick="window.open('/admin', '_blank')" class="btn btn-secondary nav-btn" title="Личный кабинет педагога и аналитика успеваемости">
                     <span>👨‍🏫 Кабинет</span>
                 </button>
@@ -5308,7 +5311,8 @@
             { id: 'geo_erudite', icon: '🧠', title: 'Гео-Эрудит', desc: 'Набрать максимальный балл в «Комплексном экзамене»' },
             { id: 'steel_nerves', icon: '🛡️', title: 'Стальные нервы', desc: 'Сдать экзамен на 100% без единого срабатывания Anti-Cheat' },
             { id: 'kuban_expert', icon: '🌻', title: 'Знаток Кубани', desc: 'Пройти тестирование по Краснодарскому краю с результатом > 80%' },
-            { id: 'don_master', icon: '🌾', title: 'Хозяин Дона', desc: 'Сдать тестирование по Ростовской области на высший балл' }
+            { id: 'don_master', icon: '🌾', title: 'Хозяин Дона', desc: 'Сдать тестирование по Ростовской области на высший балл' },
+            { id: 'duel_master', icon: '⚔️', title: 'Гроза дуэлей', desc: 'Одержать победу в PvP-дуэли 1 на 1 против другого студента' }
         ];
 
         function getUnlockedAchievements() {
@@ -6535,6 +6539,200 @@
             activeExamPollInterval = setInterval(checkActiveExamSession, 3000);
         }
 
+        // ========================================================
+        // ⚔️ DUEL LOBBY & OFFLINE ENGINE (INDEX)
+        // ========================================================
+        function openDuelModal(prefillCode = '') {
+            let modal = document.getElementById('index-duel-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'index-duel-modal';
+                modal.style.cssText = 'position: fixed; inset: 0; background: rgba(3, 7, 18, 0.88); backdrop-filter: blur(10px); z-index: 999999; display: flex; align-items: center; justify-content: center; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;';
+                document.body.appendChild(modal);
+            }
+            modal.style.display = 'flex';
+            renderIndexDuelModal(modal, prefillCode);
+        }
+
+        function closeDuelModal() {
+            const modal = document.getElementById('index-duel-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function renderIndexDuelModal(modal, prefillCode = '') {
+            const student = getCurrentStudentInfo() || { name: 'Студент', group: 'Группа' };
+            modal.innerHTML = `
+                <div style="background: #0B1120; border: 1.5px solid rgba(255, 255, 255, 0.14); border-radius: 24px; max-width: 580px; width: 100%; padding: 28px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85); color: #F8FAFC;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 14px;">
+                            <div style="width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #EF4444, #F59E0B); display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);">⚔️</div>
+                            <div>
+                                <h3 style="margin: 0; font-size: 21px; font-weight: 800; color: #FFFFFF; letter-spacing: -0.3px;">PvP-Дуэль 1 на 1</h3>
+                                <div style="font-size: 12.5px; color: #94A3B8; margin-top: 3px;">Битва географов в реальном времени</div>
+                            </div>
+                        </div>
+                        <button onclick="closeDuelModal()" style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); color: #94A3B8; font-size: 22px; width: 34px; height: 34px; border-radius: 8px; cursor: pointer;">&times;</button>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; margin-bottom: 22px; background: rgba(255, 255, 255, 0.04); padding: 4px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                        <button id="idx-duel-tab-create" style="flex: 1; padding: 10px; border-radius: 9px; font-size: 13.5px; font-weight: 700; cursor: pointer; border: none; background: #2563EB; color: #FFFFFF;">👑 Создать дуэль</button>
+                        <button id="idx-duel-tab-join" style="flex: 1; padding: 10px; border-radius: 9px; font-size: 13.5px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: #94A3B8;">🔗 Войти по коду</button>
+                    </div>
+
+                    <div id="idx-duel-content-create">
+                        <div style="margin-bottom: 16px;">
+                            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #CBD5E1; margin-bottom: 8px;">Дисциплина дуэли:</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <label style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.03); border: 1.5px solid #2563EB; border-radius: 12px; padding: 12px; cursor: pointer;">
+                                    <input type="radio" name="idx-duel-mode" value="center" checked style="accent-color: #2563EB;">
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 700; color: #FFFFFF;">🎯 Райцентры</div>
+                                        <div style="font-size: 11px; color: #94A3B8;">Скорость и точность клика (7 раундов)</div>
+                                    </div>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.03); border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 12px; cursor: pointer;">
+                                    <input type="radio" name="idx-duel-mode" value="puzzle" style="accent-color: #2563EB;">
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 700; color: #FFFFFF;">🧩 Сборка пазла</div>
+                                        <div style="font-size: 11px; color: #94A3B8;">Кто быстрее соберет регион</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #CBD5E1; margin-bottom: 8px;">Регион карты:</label>
+                            <select id="idx-duel-region-select" style="width: 100%; background: #0F172A; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 11px 14px; color: #FFFFFF; font-size: 13.5px; outline: none;">
+                                <option value="rostov" selected>🌾 Ростовская область</option>
+                                <option value="krasnodar">🌻 Краснодарский край (Кубань)</option>
+                                <option value="russia">🇷🇺 Российская Федерация (Субъекты)</option>
+                            </select>
+                        </div>
+
+                        <button id="idx-btn-create-duel" style="width: 100%; padding: 13px; background: linear-gradient(135deg, #2563EB, #1D4ED8); border: none; border-radius: 12px; color: #FFFFFF; font-size: 14.5px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);">
+                            🚀 Создать комнату дуэли
+                        </button>
+                    </div>
+
+                    <div id="idx-duel-content-join" style="display: none;">
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #CBD5E1; margin-bottom: 8px;">Код комнаты (от соперника):</label>
+                            <input type="text" id="idx-duel-code-input" value="${escapeHtml(prefillCode)}" placeholder="Например: DUEL-4821" style="width: 100%; background: #0F172A; border: 1.5px solid rgba(255, 255, 255, 0.2); border-radius: 12px; padding: 13px 16px; color: #FFFFFF; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; outline: none; box-sizing: border-box;">
+                        </div>
+                        <button id="idx-btn-join-duel" style="width: 100%; padding: 13px; background: linear-gradient(135deg, #10B981, #059669); border: none; border-radius: 12px; color: #FFFFFF; font-size: 14.5px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);">
+                            ⚔️ Присоединиться к битве
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            const tabCreate = document.getElementById('idx-duel-tab-create');
+            const tabJoin = document.getElementById('idx-duel-tab-join');
+            const contentCreate = document.getElementById('idx-duel-content-create');
+            const contentJoin = document.getElementById('idx-duel-content-join');
+
+            tabCreate.onclick = () => {
+                tabCreate.style.background = '#2563EB'; tabCreate.style.color = '#FFFFFF';
+                tabJoin.style.background = 'transparent'; tabJoin.style.color = '#94A3B8';
+                contentCreate.style.display = 'block'; contentJoin.style.display = 'none';
+            };
+            tabJoin.onclick = () => {
+                tabJoin.style.background = '#2563EB'; tabJoin.style.color = '#FFFFFF';
+                tabCreate.style.background = 'transparent'; tabCreate.style.color = '#94A3B8';
+                contentCreate.style.display = 'none'; contentJoin.style.display = 'block';
+            };
+
+            if (prefillCode) tabJoin.click();
+
+            document.getElementById('idx-btn-create-duel').onclick = async () => {
+                const btn = document.getElementById('idx-btn-create-duel');
+                btn.disabled = true;
+                btn.textContent = '⏳ Создаем комнату...';
+                try {
+                    const mode = document.querySelector('input[name="idx-duel-mode"]:checked').value;
+                    const region = document.getElementById('idx-duel-region-select').value;
+                    const res = await fetch('/api/duel/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            mode: mode,
+                            region: region,
+                            host_name: student.name || 'Студент',
+                            host_group: student.group || '-',
+                            host_email: student.email || 'student@sfedu.ru'
+                        })
+                    });
+                    if (!res.ok) throw new Error('Ошибка создания');
+                    const data = await res.json();
+                    window.location.href = data.map_url;
+                } catch(e) {
+                    alert(e.message || 'Ошибка');
+                    btn.disabled = false;
+                    btn.textContent = '🚀 Создать комнату дуэли';
+                }
+            };
+
+            document.getElementById('idx-btn-join-duel').onclick = async () => {
+                const code = document.getElementById('idx-duel-code-input').value.trim().toUpperCase();
+                if (!code) {
+                    alert('Введите код дуэли');
+                    return;
+                }
+                const btn = document.getElementById('idx-btn-join-duel');
+                btn.disabled = true;
+                btn.textContent = '⏳ Подключаемся...';
+                try {
+                    const res = await fetch('/api/duel/join', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            room_id: code,
+                            player_name: student.name || 'Соперник',
+                            player_group: student.group || '-',
+                            player_email: student.email || 'student@sfedu.ru'
+                        })
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.detail || 'Не удалось войти');
+                    }
+                    const data = await res.json();
+                    window.location.href = data.map_url;
+                } catch(e) {
+                    alert(e.message || 'Ошибка подключения');
+                    btn.disabled = false;
+                    btn.textContent = '⚔️ Присоединиться к битве';
+                }
+            };
+        }
+
+        window.openDuelModal = openDuelModal;
+        window.closeDuelModal = closeDuelModal;
+
+        async function syncIndexOfflineQueue() {
+            try {
+                const raw = localStorage.getItem('geoatlas_pending_results_queue');
+                if (!raw) return;
+                const queue = JSON.parse(raw);
+                if (!Array.isArray(queue) || queue.length === 0) return;
+                const res = await fetch('/api/results/sync-batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: queue })
+                });
+                if (res.ok) {
+                    localStorage.setItem('geoatlas_pending_results_queue', JSON.stringify([]));
+                }
+            } catch(e) {}
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+        }
+        window.addEventListener('online', syncIndexOfflineQueue);
+
         // Инициализация компонентов при загрузке страницы
         window.addEventListener('DOMContentLoaded', () => {
             initBranding();
@@ -6549,6 +6747,13 @@
             setupSlidePresentationController();
             setTimeout(animateCounters, 200);
             initActiveExamBannerMonitor();
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const duelParam = urlParams.get('duel');
+            if (duelParam) {
+                openDuelModal(duelParam);
+            }
+            syncIndexOfflineQueue();
         });
         window.addEventListener('load', () => {
             if (!heroMap) initHeroMap();

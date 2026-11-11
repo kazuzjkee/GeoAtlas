@@ -1417,6 +1417,9 @@ window.serverMapZoom = {self.zoom};
             <button class="btn btn-secondary nav-top-btn reset-map-btn" onclick="resetMapView()" title="Показать всю карту">
                 <span>🌍 Вся карта</span>
             </button>
+            <button class="btn btn-secondary nav-top-btn duel-top-btn" onclick="openDuelModal()" title="Мультиплеер 1 на 1 в реальном времени" style="border-color: #F59E0B; color: #F59E0B;">
+                <span>⚔️ Дуэль</span>
+            </button>
             <button class="btn btn-secondary nav-top-btn admin-btn" onclick="window.open('/admin', '_blank')" title="Панель преподавателя">
                 <span>👨‍🏫 Кабинет</span>
             </button>

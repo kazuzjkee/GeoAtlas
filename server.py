@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import zipfile
 import tempfile
 import shutil
+import asyncio
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional, Union
@@ -289,6 +290,29 @@ class ResultSubmit(BaseModel):
     session_id: str = ""
     mistakes_log: list = []
     teacher_id: str = "teacher-ivanov"
+    submission_id: str = ""
+    client_timestamp: Optional[int] = None
+
+class SyncBatchRequest(BaseModel):
+    items: List[ResultSubmit]
+
+class DuelCreateRequest(BaseModel):
+    mode: str = "center"  # "center" or "puzzle"
+    region: str = "rostov"  # "rostov", "krasnodar", "russia"
+    host_name: str = "Студент"
+    host_group: str = ""
+    host_email: str = ""
+
+class DuelJoinRequest(BaseModel):
+    room_id: str
+    player_name: str = "Студент"
+    player_group: str = ""
+    player_email: str = ""
+
+class DuelActionRequest(BaseModel):
+    player_id: str
+    action: str
+    payload: Dict[str, Any] = {}
 
 class StudentItem(BaseModel):
     name: str
@@ -327,11 +351,38 @@ def load_results() -> List[Dict[str, Any]]:
             return []
     return []
 
-def save_result_to_file(result_data: Dict[str, Any]) -> None:
+def save_result_to_file(result_data: Dict[str, Any]) -> Dict[str, Any]:
     results = load_results()
+    sub_id = str(result_data.get("submission_id") or "").strip()
+    is_exam = bool(result_data.get("is_exam", False))
+    exam_token = str(result_data.get("exam_token") or "").strip()
+    user_email = str(result_data.get("email") or "").strip().lower()
+
+    duplicate_idx = -1
+    for idx, r in enumerate(results):
+        r_sub_id = str(r.get("submission_id") or "").strip()
+        if sub_id and r_sub_id and sub_id == r_sub_id:
+            duplicate_idx = idx
+            break
+        if is_exam and exam_token and r.get("is_exam") and str(r.get("exam_token") or "").strip() == exam_token:
+            if user_email and str(r.get("email") or "").strip().lower() == user_email:
+                duplicate_idx = idx
+                break
+
+    if duplicate_idx >= 0:
+        existing = results[duplicate_idx]
+        if (result_data.get("score", 0) > existing.get("score", 0)) or \
+           (result_data.get("accuracy", 0) > existing.get("accuracy", 0)):
+            results[duplicate_idx] = result_data
+            with open(RESULTS_FILE, "w", encoding="utf-8") as f:
+                json.dump(results, f, ensure_ascii=False, indent=2)
+            return {"status": "ok", "deduplicated": True, "updated": True}
+        return {"status": "ok", "deduplicated": True, "updated": False}
+
     results.append(result_data)
     with open(RESULTS_FILE, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
+    return {"status": "ok", "deduplicated": False}
 
 def load_groups() -> List[Dict[str, Any]]:
     if os.path.exists(GROUPS_FILE):
@@ -426,8 +477,7 @@ def verify_code(req: VerifyRequest) -> Dict[str, Any]:
     save_auth_sessions(sessions)
     return {"status": "ok", "user": user_data}
 
-@app.post("/api/results/save")
-def save_quiz_result(res: ResultSubmit) -> Dict[str, str]:
+def process_quiz_result(res: ResultSubmit) -> Dict[str, Any]:
     assigned_teacher_id = res.teacher_id or "teacher-geo-01"
 
     if res.session_id:
@@ -464,10 +514,33 @@ def save_quiz_result(res: ResultSubmit) -> Dict[str, str]:
         "exam_status": res.exam_status,
         "session_id": res.session_id,
         "mistakes_log": res.mistakes_log,
-        "teacher_id": assigned_teacher_id
+        "teacher_id": assigned_teacher_id,
+        "submission_id": res.submission_id or f"sub_{int(time.time()*1000)}_{secrets.token_hex(4)}",
+        "client_timestamp": res.client_timestamp or int(time.time()*1000)
     }
-    save_result_to_file(data)
-    return {"status": "ok"}
+    return save_result_to_file(data)
+
+@app.post("/api/results/save")
+def save_quiz_result(res: ResultSubmit) -> Dict[str, Any]:
+    outcome = process_quiz_result(res)
+    return {"status": "ok", "deduplicated": outcome.get("deduplicated", False)}
+
+@app.post("/api/results/sync-batch")
+def sync_batch_results(req: SyncBatchRequest) -> Dict[str, Any]:
+    synced = 0
+    duplicates = 0
+    for item in req.items:
+        outcome = process_quiz_result(item)
+        if outcome.get("deduplicated"):
+            duplicates += 1
+        else:
+            synced += 1
+    return {
+        "status": "ok",
+        "synced_count": synced,
+        "duplicates_count": duplicates,
+        "total": len(req.items)
+    }
 
 @app.get("/api/results/leaderboard")
 def get_leaderboard() -> List[Dict[str, Any]]:
@@ -1381,6 +1454,465 @@ def get_quiz_js():
     if os.path.exists("quiz.js"):
         return FileResponse("quiz.js", media_type="application/javascript")
     raise HTTPException(status_code=404, detail="quiz.js не найден")
+
+@app.get("/sw.js", response_model=None)
+def get_service_worker():
+    sw_file = os.path.join(BASE_DIR, "sw.js")
+    if os.path.exists(sw_file):
+        return FileResponse(
+            sw_file,
+            media_type="application/javascript",
+            headers={
+                "Service-Worker-Allowed": "/",
+                "Cache-Control": "no-cache"
+            }
+        )
+    raise HTTPException(status_code=404, detail="sw.js не найден")
+
+# ========================================================
+# ⚔️ DUEL MULTIPLAYER 1V1 (WEBSOCKETS & REST POLLING)
+# ========================================================
+
+class DuelPlayer:
+    def __init__(self, player_id: str, name: str, group: str = "", email: str = "", is_host: bool = False):
+        self.player_id = player_id
+        self.name = name or "Игрок"
+        self.group = group or "-"
+        self.email = email or ""
+        self.is_host = is_host
+        self.ready = False
+        self.score = 0
+        self.progress = 0
+        self.total = 7
+        self.mistakes = 0
+        self.finished = False
+        self.finish_time: Optional[float] = None
+        self.ws: Optional[WebSocket] = None
+        self.last_ping = time.time()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "player_id": self.player_id,
+            "name": self.name,
+            "group": self.group,
+            "email": self.email,
+            "is_host": self.is_host,
+            "ready": self.ready,
+            "score": self.score,
+            "progress": self.progress,
+            "total": self.total,
+            "mistakes": self.mistakes,
+            "finished": self.finished,
+            "finish_time": self.finish_time,
+            "online": (self.ws is not None) or (time.time() - self.last_ping < 15)
+        }
+
+class DuelRoom:
+    def __init__(self, room_id: str, mode: str, region: str, host: DuelPlayer):
+        self.room_id = room_id.upper()
+        self.mode = mode if mode in ["center", "puzzle"] else "center"
+        self.region = region or "rostov"
+        self.created_at = time.time()
+        self.status = "waiting"  # "waiting", "ready", "countdown", "playing", "finished"
+        self.players: Dict[str, DuelPlayer] = {host.player_id: host}
+        self.questions: List[Dict[str, Any]] = []
+        self.winner: Optional[str] = None
+        self.winner_reason: str = ""
+        self.winner_name: str = ""
+        self.start_time: Optional[float] = None
+        self.end_time: Optional[float] = None
+        self.countdown: int = 3
+
+        if self.mode == "center":
+            self.generate_center_questions()
+        else:
+            self.init_puzzle_config()
+
+    def generate_center_questions(self):
+        reg_data = get_region_data(self.region) or {}
+        centers = reg_data.get("EMBEDDED_CENTERS", [])
+        if not centers:
+            centers = [
+                {"name": "Ростов-на-Дону", "lat": 47.222, "lon": 39.718},
+                {"name": "Таганрог", "lat": 47.217, "lon": 38.917},
+                {"name": "Шахты", "lat": 47.708, "lon": 40.216},
+                {"name": "Новочеркасск", "lat": 47.422, "lon": 40.093},
+                {"name": "Батайск", "lat": 47.139, "lon": 39.751},
+                {"name": "Волгодонск", "lat": 47.514, "lon": 42.153},
+                {"name": "Азов", "lat": 47.112, "lon": 39.424}
+            ]
+        sample_size = min(7, len(centers))
+        selected = random.sample(centers, sample_size)
+        self.questions = [
+            {
+                "index": i,
+                "name": c.get("name", ""),
+                "lat": float(c.get("lat", 0.0)),
+                "lon": float(c.get("lon", 0.0)),
+                "status": c.get("status", "райцентр")
+            }
+            for i, c in enumerate(selected)
+        ]
+        for p in self.players.values():
+            p.total = len(self.questions)
+
+    def init_puzzle_config(self):
+        reg_data = get_region_data(self.region) or {}
+        puz = reg_data.get("EMBEDDED_PUZZLE_DATA", [])
+        count = len(puz) if puz else 25
+        for p in self.players.values():
+            p.total = count
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "room_id": self.room_id,
+            "mode": self.mode,
+            "region": self.region,
+            "status": self.status,
+            "created_at": self.created_at,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "questions": self.questions if self.mode == "center" else [],
+            "players": [p.to_dict() for p in self.players.values()],
+            "winner": self.winner,
+            "winner_name": self.winner_name,
+            "winner_reason": self.winner_reason,
+            "countdown": self.countdown
+        }
+
+    async def broadcast(self, message: Dict[str, Any]):
+        for p in list(self.players.values()):
+            if p.ws:
+                try:
+                    await p.ws.send_json(message)
+                except Exception:
+                    p.ws = None
+
+    def check_finished(self):
+        if self.status == "finished":
+            return
+
+        players_list = list(self.players.values())
+        if len(players_list) < 2:
+            return
+
+        p1, p2 = players_list[0], players_list[1]
+
+        if self.mode == "center":
+            if p1.finished and p2.finished:
+                self.status = "finished"
+                self.end_time = time.time()
+                if p1.score > p2.score:
+                    self.winner = p1.player_id
+                    self.winner_name = p1.name
+                    self.winner_reason = f"{p1.name} победил(а) по баллам ({p1.score} : {p2.score})!"
+                elif p2.score > p1.score:
+                    self.winner = p2.player_id
+                    self.winner_name = p2.name
+                    self.winner_reason = f"{p2.name} победил(а) по баллам ({p2.score} : {p1.score})!"
+                else:
+                    t1 = (p1.finish_time or 999999) - (self.start_time or 0)
+                    t2 = (p2.finish_time or 999999) - (self.start_time or 0)
+                    if t1 < t2:
+                        self.winner = p1.player_id
+                        self.winner_name = p1.name
+                        self.winner_reason = f"При равных баллах ({p1.score}) {p1.name} оказался(лась) быстрее!"
+                    elif t2 < t1:
+                        self.winner = p2.player_id
+                        self.winner_name = p2.name
+                        self.winner_reason = f"При равных баллах ({p2.score}) {p2.name} оказался(лась) быстрее!"
+                    else:
+                        self.winner = "draw"
+                        self.winner_name = "Ничья"
+                        self.winner_reason = f"Боевая ничья! ({p1.score} : {p2.score})"
+
+        elif self.mode == "puzzle":
+            if p1.finished or p2.finished or (p1.progress >= p1.total) or (p2.progress >= p2.total):
+                self.status = "finished"
+                self.end_time = time.time()
+                if p1.progress > p2.progress:
+                    self.winner = p1.player_id
+                    self.winner_name = p1.name
+                    self.winner_reason = f"{p1.name} собрал(а) больше районов ({p1.progress}/{p1.total})!"
+                elif p2.progress > p1.progress:
+                    self.winner = p2.player_id
+                    self.winner_name = p2.name
+                    self.winner_reason = f"{p2.name} собрал(а) больше районов ({p2.progress}/{p2.total})!"
+                else:
+                    if p1.mistakes < p2.mistakes:
+                        self.winner = p1.player_id
+                        self.winner_name = p1.name
+                        self.winner_reason = f"{p1.name} допустил(а) меньше ошибок ({p1.mistakes} vs {p2.mistakes})!"
+                    elif p2.mistakes < p1.mistakes:
+                        self.winner = p2.player_id
+                        self.winner_name = p2.name
+                        self.winner_reason = f"{p2.name} допустил(а) меньше ошибок ({p2.mistakes} vs {p1.mistakes})!"
+                    else:
+                        self.winner = "draw"
+                        self.winner_name = "Ничья"
+                        self.winner_reason = "Боевая ничья!"
+
+active_duel_rooms: Dict[str, DuelRoom] = {}
+
+def clean_stale_duel_rooms():
+    now = time.time()
+    stale = [rid for rid, r in active_duel_rooms.items() if now - r.created_at > 7200]
+    for rid in stale:
+        active_duel_rooms.pop(rid, None)
+
+@app.post("/api/duel/create")
+def create_duel_room(req: DuelCreateRequest) -> Dict[str, Any]:
+    clean_stale_duel_rooms()
+    room_code = f"DUEL-{random.randint(1000, 9999)}"
+    while room_code in active_duel_rooms:
+        room_code = f"DUEL-{random.randint(1000, 9999)}"
+
+    player_id = f"p_{secrets.token_hex(4)}"
+    host = DuelPlayer(
+        player_id=player_id,
+        name=req.host_name,
+        group=req.host_group,
+        email=req.host_email,
+        is_host=True
+    )
+    room = DuelRoom(room_code, req.mode, req.region, host)
+    active_duel_rooms[room_code] = room
+
+    map_url = f"/map/{req.region}?duel={room_code}&player={player_id}&role=host"
+    return {
+        "status": "ok",
+        "room_id": room_code,
+        "player_id": player_id,
+        "role": "host",
+        "mode": room.mode,
+        "region": room.region,
+        "map_url": map_url,
+        "room": room.to_dict()
+    }
+
+@app.post("/api/duel/join")
+def join_duel_room(req: DuelJoinRequest) -> Dict[str, Any]:
+    clean_stale_duel_rooms()
+    code = req.room_id.strip().upper()
+    room = active_duel_rooms.get(code)
+    if not room:
+        raise HTTPException(status_code=404, detail=f"Комната дуэли '{code}' не найдена")
+
+    if room.status == "finished":
+        raise HTTPException(status_code=400, detail="Эта дуэль уже завершена")
+
+    existing_player = next((p for p in room.players.values() if p.name == req.player_name and p.email == req.player_email), None)
+    if existing_player:
+        player_id = existing_player.player_id
+        role = "host" if existing_player.is_host else "join"
+    else:
+        if len(room.players) >= 2:
+            raise HTTPException(status_code=400, detail="В этой комнате уже находятся два игрока")
+        player_id = f"p_{secrets.token_hex(4)}"
+        join_player = DuelPlayer(
+            player_id=player_id,
+            name=req.player_name,
+            group=req.player_group,
+            email=req.player_email,
+            is_host=False
+        )
+        room.players[player_id] = join_player
+        role = "join"
+        if len(room.players) == 2 and room.status == "waiting":
+            room.status = "ready"
+
+    map_url = f"/map/{room.region}?duel={code}&player={player_id}&role={role}"
+    return {
+        "status": "ok",
+        "room_id": code,
+        "player_id": player_id,
+        "role": role,
+        "mode": room.mode,
+        "region": room.region,
+        "map_url": map_url,
+        "room": room.to_dict()
+    }
+
+@app.get("/api/duel/state/{room_id}")
+def get_duel_room_state(room_id: str, player_id: Optional[str] = None) -> Dict[str, Any]:
+    code = room_id.strip().upper()
+    room = active_duel_rooms.get(code)
+    if not room:
+        raise HTTPException(status_code=404, detail=f"Комната '{code}' не найдена")
+
+    if player_id and player_id in room.players:
+        room.players[player_id].last_ping = time.time()
+
+    return {"status": "ok", "room": room.to_dict()}
+
+@app.post("/api/duel/action/{room_id}")
+def handle_duel_action(room_id: str, req: DuelActionRequest) -> Dict[str, Any]:
+    code = room_id.strip().upper()
+    room = active_duel_rooms.get(code)
+    if not room:
+        raise HTTPException(status_code=404, detail=f"Комната '{code}' не найдена")
+
+    player = room.players.get(req.player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Игрок не найден в комнате")
+
+    player.last_ping = time.time()
+    action = req.action
+    payload = req.payload or {}
+
+    if action == "ready":
+        player.ready = bool(payload.get("ready", True))
+        if len(room.players) == 2 and all(p.ready for p in room.players.values()):
+            room.status = "playing"
+            room.start_time = time.time()
+
+    elif action == "start":
+        room.status = "playing"
+        room.start_time = time.time()
+
+    elif action == "answer_center":
+        pts = int(payload.get("points", 0))
+        dist = float(payload.get("distance", 999))
+        player.score += pts
+        player.progress = int(payload.get("question_index", player.progress)) + 1
+        if dist > 80:
+            player.mistakes += 1
+        if player.progress >= player.total:
+            player.finished = True
+            player.finish_time = time.time()
+        room.check_finished()
+
+    elif action == "place_piece":
+        player.progress = int(payload.get("placed_count", player.progress + 1))
+        player.mistakes = int(payload.get("mistakes", player.mistakes))
+        if player.progress >= player.total:
+            player.finished = True
+            player.finish_time = time.time()
+        room.check_finished()
+
+    elif action == "finish":
+        player.finished = True
+        player.finish_time = time.time()
+        room.check_finished()
+
+    return {"status": "ok", "room": room.to_dict()}
+
+@app.websocket("/ws/duel/{room_id}/{player_id}")
+async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id: str):
+    await websocket.accept()
+    code = room_id.strip().upper()
+    room = active_duel_rooms.get(code)
+
+    if not room or player_id not in room.players:
+        await websocket.send_json({"type": "error", "message": "Комната или игрок не найдены"})
+        await websocket.close()
+        return
+
+    player = room.players[player_id]
+    player.ws = websocket
+    player.last_ping = time.time()
+
+    await room.broadcast({
+        "type": "player_connected",
+        "player_id": player_id,
+        "player_name": player.name,
+        "room": room.to_dict()
+    })
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            msg_type = data.get("type", "")
+            player.last_ping = time.time()
+
+            if msg_type == "ping":
+                await websocket.send_json({"type": "pong", "time": time.time()})
+
+            elif msg_type == "ready":
+                player.ready = bool(data.get("ready", True))
+                await room.broadcast({"type": "player_ready_changed", "player_id": player_id, "ready": player.ready, "room": room.to_dict()})
+
+                if len(room.players) == 2 and all(p.ready for p in room.players.values()):
+                    room.status = "countdown"
+                    await room.broadcast({"type": "countdown", "seconds": 3, "room": room.to_dict()})
+                    await asyncio.sleep(1)
+                    await room.broadcast({"type": "countdown", "seconds": 2, "room": room.to_dict()})
+                    await asyncio.sleep(1)
+                    await room.broadcast({"type": "countdown", "seconds": 1, "room": room.to_dict()})
+                    await asyncio.sleep(1)
+                    room.status = "playing"
+                    room.start_time = time.time()
+                    await room.broadcast({"type": "game_start", "room": room.to_dict()})
+
+            elif msg_type == "answer_center":
+                pts = int(data.get("points", 0))
+                dist = float(data.get("distance", 999))
+                q_idx = int(data.get("question_index", player.progress))
+                player.score += pts
+                player.progress = q_idx + 1
+                if dist > 80:
+                    player.mistakes += 1
+                if player.progress >= player.total:
+                    player.finished = True
+                    player.finish_time = time.time()
+                room.check_finished()
+
+                await room.broadcast({
+                    "type": "opponent_action",
+                    "player_id": player_id,
+                    "action": "answer_center",
+                    "points": pts,
+                    "distance": dist,
+                    "score": player.score,
+                    "progress": player.progress,
+                    "target_name": data.get("target_name", ""),
+                    "room": room.to_dict()
+                })
+
+                if room.status == "finished":
+                    await room.broadcast({"type": "game_over", "room": room.to_dict()})
+
+            elif msg_type == "place_piece":
+                p_count = int(data.get("placed_count", player.progress + 1))
+                mistakes = int(data.get("mistakes", player.mistakes))
+                player.progress = p_count
+                player.mistakes = mistakes
+                if player.progress >= player.total:
+                    player.finished = True
+                    player.finish_time = time.time()
+                room.check_finished()
+
+                await room.broadcast({
+                    "type": "opponent_action",
+                    "player_id": player_id,
+                    "action": "place_piece",
+                    "district_name": data.get("district_name", ""),
+                    "placed_count": player.progress,
+                    "mistakes": player.mistakes,
+                    "room": room.to_dict()
+                })
+
+                if room.status == "finished":
+                    await room.broadcast({"type": "game_over", "room": room.to_dict()})
+
+            elif msg_type == "finish":
+                player.finished = True
+                player.finish_time = time.time()
+                room.check_finished()
+                await room.broadcast({"type": "player_finished", "player_id": player_id, "room": room.to_dict()})
+                if room.status == "finished":
+                    await room.broadcast({"type": "game_over", "room": room.to_dict()})
+
+    except WebSocketDisconnect:
+        player.ws = None
+        await room.broadcast({
+            "type": "player_disconnected",
+            "player_id": player_id,
+            "player_name": player.name,
+            "room": room.to_dict()
+        })
+    except Exception as e:
+        player.ws = None
 
 @app.get("/{slug}", response_model=None)
 def get_slug_route(slug: str):

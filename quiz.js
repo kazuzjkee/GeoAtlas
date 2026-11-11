@@ -1765,6 +1765,10 @@ function placeDistrictOnMap(district, isAnchor = false) {
 
     puzzlePlacedDistricts.add(district.id);
     const placedCount = puzzlePlacedDistricts.size;
+
+    if (typeof DuelManager !== 'undefined' && DuelManager.active && !isAnchor) {
+        DuelManager.submitPuzzlePiece(placedCount, puzzleMistakes, district.name);
+    }
     const pieceColor = isAnchor ? '#2563EB' : getPuzzlePieceColor(placedCount);
 
     try {
@@ -3183,6 +3187,9 @@ function showQuestion() {
 
     clearMarkers();
     resetActiveHighlight(currentQuiz === 'river');
+    if (typeof saveActiveQuizDraft === 'function') {
+        saveActiveQuizDraft();
+    }
 
     const oldFeedback = document.getElementById('feedback');
     if (oldFeedback) oldFeedback.remove();
@@ -3552,6 +3559,14 @@ function handleMapClick(lat, lon, question) {
     }
 
     score += pointsAwarded;
+
+    if (typeof DuelManager !== 'undefined' && DuelManager.active) {
+        DuelManager.submitCenterAnswer(currentQuestion, pointsAwarded, distance, question.correctAnswer || question.name);
+    }
+    if (typeof saveActiveQuizDraft === 'function') {
+        saveActiveQuizDraft();
+    }
+
     clearMarkers();
 
     const map = getMapObject();
@@ -4724,6 +4739,9 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
 
     const storageKey = getResultsStorageKey();
     const results = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('rostovQuizResults') || '[]');
+    const submissionId = 'sub_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+    const clientTimestamp = Date.now();
+
     results.push({
         date: new Date().toLocaleString(),
         student: student ? student.name : 'Анонимно',
@@ -4738,7 +4756,9 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         violations: violations,
         exam_status: displayStatus,
         session_id: currentSyncSessionId || '',
-        mistakes_log: currentSessionMistakes || []
+        mistakes_log: currentSessionMistakes || [],
+        submission_id: submissionId,
+        client_timestamp: clientTimestamp
     });
     localStorage.setItem(storageKey, JSON.stringify(results));
     localStorage.setItem('rostovQuizResults', JSON.stringify(results));
@@ -4764,14 +4784,45 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         exam_status: displayStatus,
         session_id: currentSyncSessionId || '',
         mistakes_log: currentSessionMistakes || [],
-        teacher_id: currentSyncTeacherId || (student && student.teacher_id) || 'teacher-geo-01'
+        teacher_id: currentSyncTeacherId || (student && student.teacher_id) || 'teacher-geo-01',
+        submission_id: submissionId,
+        client_timestamp: clientTimestamp
     };
 
-    fetch('/api/results/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submitPayload)
-    }).catch(e => {});
+    // Сохраняем в офлайн-очередь гарантированной доставки
+    if (typeof enqueuePendingResult === 'function') {
+        enqueuePendingResult(submitPayload);
+    }
+    if (typeof clearActiveQuizDraft === 'function') {
+        clearActiveQuizDraft();
+    }
+
+    // Проверяем сетевой статус
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (typeof showNetworkNotificationToast === 'function') {
+            showNetworkNotificationToast('offline', '⚠️ Нет сети: результаты сохранены локально и будут отправлены при подключении');
+        }
+    } else {
+        fetch('/api/results/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(submitPayload)
+        }).then(res => {
+            if (res.ok) {
+                if (typeof dequeuePendingResult === 'function') {
+                    dequeuePendingResult(submissionId);
+                }
+            } else {
+                if (typeof showNetworkNotificationToast === 'function') {
+                    showNetworkNotificationToast('warning', '⚠️ Сервер временно недоступен: результат сохранен локально');
+                }
+            }
+        }).catch(e => {
+            if (typeof showNetworkNotificationToast === 'function') {
+                showNetworkNotificationToast('offline', '⚠️ Ошибка связи: результат сохранен в очереди и синхронизируется автоматически');
+            }
+        });
+    }
 
     // --- ТРИГГЕРЫ ДОСТИЖЕНИЙ ---
     // ⚡ «Спидранер»: сдать быстрее половины отведенного времени при точности > 80%
@@ -5641,6 +5692,12 @@ const GEOATLAS_ACHIEVEMENTS = [
         icon: '🌾',
         title: 'Хозяин Дона',
         desc: 'Сдать тестирование по Ростовской области на высший балл'
+    },
+    {
+        id: 'duel_master',
+        icon: '⚔️',
+        title: 'Гроза дуэлей',
+        desc: 'Одержать победу в PvP-дуэли 1 на 1 против другого студента'
     }
 ];
 
@@ -5990,3 +6047,1076 @@ window.openStudentDashboardModal = openStudentProfileModal;
 window.closeStudentProfileModal = closeStudentProfileModal;
 window.closeStudentDashboardModal = closeStudentProfileModal;
 window.unlockAchievement = unlockAchievement;
+
+// ========================================================
+// 📡 ОФЛАЙН-РЕЖИМ (OFFLINE & GRACEFUL DEGRADATION ENGINE)
+// ========================================================
+
+function showNetworkNotificationToast(type, message) {
+    let container = document.getElementById('geoatlas-network-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'geoatlas-network-toast-container';
+        container.style.cssText = 'position: fixed; top: 24px; left: 50%; transform: translateX(-50%); z-index: 9999999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; width: max-content; max-width: 90vw;';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    const bg = type === 'offline' 
+        ? 'linear-gradient(135deg, #7F1D1D, #991B1B)' 
+        : (type === 'warning' ? 'linear-gradient(135deg, #78350F, #92400E)' : 'linear-gradient(135deg, #064E3B, #047857)');
+    const border = type === 'offline' ? '#EF4444' : (type === 'warning' ? '#F59E0B' : '#10B981');
+    const color = type === 'offline' ? '#FECACA' : (type === 'warning' ? '#FEF3C7' : '#D1FAE5');
+
+    toast.style.cssText = `
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 20px;
+        border-radius: 12px;
+        background: ${bg};
+        border: 1.5px solid ${border};
+        color: ${color};
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 15px ${border}40;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13.5px;
+        font-weight: 600;
+        transform: translateY(-20px);
+        opacity: 0;
+        transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    `;
+    toast.innerHTML = `<span>${message}</span>`;
+    container.appendChild(toast);
+
+    requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    });
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-20px)';
+        setTimeout(() => toast.remove(), 400);
+    }, 4500);
+}
+
+function getPendingResultsQueue() {
+    try {
+        const raw = localStorage.getItem('geoatlas_pending_results_queue');
+        return raw ? JSON.parse(raw) : [];
+    } catch(e) {
+        return [];
+    }
+}
+
+function enqueuePendingResult(payload) {
+    try {
+        const q = getPendingResultsQueue();
+        if (!q.some(item => item.submission_id === payload.submission_id)) {
+            q.push(payload);
+            localStorage.setItem('geoatlas_pending_results_queue', JSON.stringify(q));
+        }
+    } catch(e) {}
+}
+
+function dequeuePendingResult(submissionId) {
+    try {
+        let q = getPendingResultsQueue();
+        q = q.filter(item => item.submission_id !== submissionId);
+        localStorage.setItem('geoatlas_pending_results_queue', JSON.stringify(q));
+    } catch(e) {}
+}
+
+async function syncPendingResultsQueue() {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    const q = getPendingResultsQueue();
+    if (!q || q.length === 0) return;
+
+    try {
+        const res = await fetch('/api/results/sync-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: q })
+        });
+        if (res.ok) {
+            localStorage.setItem('geoatlas_pending_results_queue', JSON.stringify([]));
+            showNetworkNotificationToast('online', `✅ Синхронизировано результатов из офлайна: ${q.length}`);
+        }
+    } catch(e) {}
+}
+
+function saveActiveQuizDraft() {
+    try {
+        if (!currentQuiz || currentQuiz === 'study' || typeof isExamMode === 'undefined') return;
+        const draft = {
+            quizType: currentQuiz,
+            isExam: isExamMode,
+            examCategory: typeof examCategory !== 'undefined' ? examCategory : '',
+            score: score,
+            mistakes: mistakes,
+            total: typeof total !== 'undefined' ? total : 0,
+            currentQuestion: typeof currentQuestion !== 'undefined' ? currentQuestion : 0,
+            quizDataLength: (quizData && Array.isArray(quizData)) ? quizData.length : 0,
+            mistakes_log: currentSessionMistakes || [],
+            sessionId: typeof currentSyncSessionId !== 'undefined' ? currentSyncSessionId : '',
+            timestamp: Date.now()
+        };
+        localStorage.setItem('geoatlas_active_quiz_draft', JSON.stringify(draft));
+    } catch(e) {}
+}
+
+function clearActiveQuizDraft() {
+    try {
+        localStorage.removeItem('geoatlas_active_quiz_draft');
+        const promptEl = document.getElementById('geoatlas-restore-draft-prompt');
+        if (promptEl) promptEl.remove();
+    } catch(e) {}
+}
+
+function checkActiveQuizDraft() {
+    try {
+        const raw = localStorage.getItem('geoatlas_active_quiz_draft');
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        // Draft valid for 2 hours and was in progress
+        if (Date.now() - draft.timestamp < 7200000 && draft.currentQuestion > 0 && draft.currentQuestion < draft.quizDataLength) {
+            showDraftRestorePrompt(draft);
+        } else {
+            clearActiveQuizDraft();
+        }
+    } catch(e) {}
+}
+
+function showDraftRestorePrompt(draft) {
+    if (document.getElementById('geoatlas-restore-draft-prompt')) return;
+    const prompt = document.createElement('div');
+    prompt.id = 'geoatlas-restore-draft-prompt';
+    prompt.style.cssText = `
+        position: fixed;
+        bottom: 25px;
+        left: 25px;
+        z-index: 999999;
+        background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
+        border: 2px solid #3B82F6;
+        border-radius: 16px;
+        padding: 18px 22px;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 20px rgba(59, 130, 246, 0.4);
+        color: #F8FAFC;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        max-width: 380px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    `;
+    prompt.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="font-size: 26px;">💾</div>
+            <div>
+                <div style="font-size: 14.5px; font-weight: 700; color: #93C5FD;">Найден сохраненный прогресс!</div>
+                <div style="font-size: 12px; color: #94A3B8; margin-top: 2px;">
+                    Тест: <b>${escapeHtml(draft.quizType)}</b> (вопрос ${draft.currentQuestion + 1} из ${draft.quizDataLength}, набрано: ${draft.score} б.)
+                </div>
+            </div>
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button id="discard-draft-btn" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); color: #94A3B8; padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;">Сбросить</button>
+            <button id="restore-draft-btn" style="background: #2563EB; border: none; color: #FFFFFF; padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;">Восстановить</button>
+        </div>
+    `;
+    document.body.appendChild(prompt);
+
+    document.getElementById('discard-draft-btn').onclick = () => {
+        clearActiveQuizDraft();
+    };
+
+    document.getElementById('restore-draft-btn').onclick = () => {
+        prompt.remove();
+        score = draft.score || 0;
+        mistakes = draft.mistakes || 0;
+        currentQuestion = draft.currentQuestion || 0;
+        currentSessionMistakes = draft.mistakes_log || [];
+        showQuestion();
+        showNetworkNotificationToast('online', '🔄 Прогресс успешно восстановлен!');
+    };
+}
+
+// Сетевые слушатели и Service Worker
+if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => {
+        showNetworkNotificationToast('online', '🌐 Связь с сервером восстановлена! Синхронизируем данные...');
+        syncPendingResultsQueue();
+    });
+    window.addEventListener('offline', () => {
+        showNetworkNotificationToast('offline', '📡 Автономный режим: соединение с сетью потеряно. Все ответы сохраняются локально.');
+    });
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+    }
+
+    // Периодическая фоновая синхронизация
+    setInterval(syncPendingResultsQueue, 30000);
+    // Проверка черновика при загрузке
+    setTimeout(checkActiveQuizDraft, 1200);
+}
+
+// ========================================================
+// ⚔️ DUEL MULTIPLAYER (1 ON 1 PvP SYSTEM)
+// ========================================================
+
+const DuelManager = {
+    active: false,
+    ws: null,
+    pollTimer: null,
+    roomId: null,
+    playerId: null,
+    role: null, // 'host' or 'join'
+    mode: 'center', // 'center' or 'puzzle'
+    region: 'rostov',
+    roomState: null,
+    myScore: 0,
+    oppScore: 0,
+    myProgress: 0,
+    oppProgress: 0,
+    total: 7,
+    isWsConnected: false,
+    hasFinished: false,
+
+    initFromUrl() {
+        if (typeof window === 'undefined') return;
+        const params = new URLSearchParams(window.location.search);
+        const duelCode = params.get('duel');
+        const pId = params.get('player');
+        const rRole = params.get('role');
+        if (duelCode) {
+            if (pId && rRole) {
+                this.startDuelSession(duelCode, pId, rRole);
+            } else {
+                this.openModal(duelCode);
+            }
+        }
+    },
+
+    openModal(prefillCode = '') {
+        this.injectStyles();
+        let modal = document.getElementById('geoatlas-duel-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'geoatlas-duel-modal';
+            modal.style.cssText = 'position: fixed; inset: 0; background: rgba(3, 7, 18, 0.88); backdrop-filter: blur(10px); z-index: 999999; display: flex; align-items: center; justify-content: center; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;';
+            document.body.appendChild(modal);
+        }
+        modal.style.display = 'flex';
+        this.renderModalLobby(modal, prefillCode);
+    },
+
+    closeModal() {
+        const modal = document.getElementById('geoatlas-duel-modal');
+        if (modal) modal.style.display = 'none';
+    },
+
+    renderModalLobby(modal, prefillCode = '') {
+        const student = getCurrentStudentInfo() || { name: 'Студент', group: 'Группа' };
+        modal.innerHTML = `
+            <div style="background: #0B1120; border: 1.5px solid rgba(255, 255, 255, 0.14); border-radius: 24px; max-width: 580px; width: 100%; padding: 28px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85); color: #F8FAFC;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #EF4444, #F59E0B); display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);">⚔️</div>
+                        <div>
+                            <h3 style="margin: 0; font-size: 21px; font-weight: 800; color: #FFFFFF; letter-spacing: -0.3px;">PvP-Дуэль 1 на 1</h3>
+                            <div style="font-size: 12.5px; color: #94A3B8; margin-top: 3px;">Битва географов в реальном времени</div>
+                        </div>
+                    </div>
+                    <button onclick="DuelManager.closeModal()" style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); color: #94A3B8; font-size: 22px; width: 34px; height: 34px; border-radius: 8px; cursor: pointer;">&times;</button>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-bottom: 22px; background: rgba(255, 255, 255, 0.04); padding: 4px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                    <button id="duel-tab-create" style="flex: 1; padding: 10px; border-radius: 9px; font-size: 13.5px; font-weight: 700; cursor: pointer; border: none; background: #2563EB; color: #FFFFFF; transition: all 0.2s;">👑 Создать дуэль</button>
+                    <button id="duel-tab-join" style="flex: 1; padding: 10px; border-radius: 9px; font-size: 13.5px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: #94A3B8; transition: all 0.2s;">🔗 Войти по коду</button>
+                </div>
+
+                <!-- БЛОК СОЗДАНИЯ -->
+                <div id="duel-content-create">
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 12.5px; font-weight: 700; color: #CBD5E1; margin-bottom: 8px;">Дисциплина дуэли:</label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <label style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.03); border: 1.5px solid #2563EB; border-radius: 12px; padding: 12px; cursor: pointer;">
+                                <input type="radio" name="duel-mode" value="center" checked style="accent-color: #2563EB;">
+                                <div>
+                                    <div style="font-size: 13px; font-weight: 700; color: #FFFFFF;">🎯 Райцентры</div>
+                                    <div style="font-size: 11px; color: #94A3B8;">Скорость и точность клика (7 раундов)</div>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.03); border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 12px; cursor: pointer;">
+                                <input type="radio" name="duel-mode" value="puzzle" style="accent-color: #2563EB;">
+                                <div>
+                                    <div style="font-size: 13px; font-weight: 700; color: #FFFFFF;">🧩 Сборка пазла</div>
+                                    <div style="font-size: 11px; color: #94A3B8;">Кто быстрее соберет контур региона</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; font-size: 12.5px; font-weight: 700; color: #CBD5E1; margin-bottom: 8px;">Регион карты:</label>
+                        <select id="duel-region-select" style="width: 100%; background: #0F172A; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 11px 14px; color: #FFFFFF; font-size: 13.5px; outline: none;">
+                            <option value="rostov" selected>🌾 Ростовская область</option>
+                            <option value="krasnodar">🌻 Краснодарский край (Кубань)</option>
+                            <option value="russia">🇷🇺 Российская Федерация (Субъекты)</option>
+                        </select>
+                    </div>
+
+                    <div id="duel-create-action-area">
+                        <button id="btn-create-duel-room" style="width: 100%; padding: 13px; background: linear-gradient(135deg, #2563EB, #1D4ED8); border: none; border-radius: 12px; color: #FFFFFF; font-size: 14.5px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);">
+                            🚀 Создать комнату дуэли
+                        </button>
+                    </div>
+                </div>
+
+                <!-- БЛОК ВХОДА ПО КОДУ -->
+                <div id="duel-content-join" style="display: none;">
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; font-size: 12.5px; font-weight: 700; color: #CBD5E1; margin-bottom: 8px;">Код комнаты (от соперника):</label>
+                        <input type="text" id="duel-join-code-input" value="${escapeHtml(prefillCode)}" placeholder="Например: DUEL-4821" style="width: 100%; background: #0F172A; border: 1.5px solid rgba(255, 255, 255, 0.2); border-radius: 12px; padding: 13px 16px; color: #FFFFFF; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; outline: none; box-sizing: border-box;">
+                    </div>
+                    <button id="btn-join-duel-room" style="width: 100%; padding: 13px; background: linear-gradient(135deg, #10B981, #059669); border: none; border-radius: 12px; color: #FFFFFF; font-size: 14.5px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);">
+                        ⚔️ Присоединиться к битве
+                    </button>
+                </div>
+            </div>
+        `;
+
+        const tabCreate = document.getElementById('duel-tab-create');
+        const tabJoin = document.getElementById('duel-tab-join');
+        const contentCreate = document.getElementById('duel-content-create');
+        const contentJoin = document.getElementById('duel-content-join');
+
+        tabCreate.onclick = () => {
+            tabCreate.style.background = '#2563EB'; tabCreate.style.color = '#FFFFFF';
+            tabJoin.style.background = 'transparent'; tabJoin.style.color = '#94A3B8';
+            contentCreate.style.display = 'block'; contentJoin.style.display = 'none';
+        };
+
+        tabJoin.onclick = () => {
+            tabJoin.style.background = '#2563EB'; tabJoin.style.color = '#FFFFFF';
+            tabCreate.style.background = 'transparent'; tabCreate.style.color = '#94A3B8';
+            contentCreate.style.display = 'none'; contentJoin.style.display = 'block';
+        };
+
+        if (prefillCode) {
+            tabJoin.click();
+        }
+
+        document.getElementById('btn-create-duel-room').onclick = async () => {
+            const btn = document.getElementById('btn-create-duel-room');
+            btn.disabled = true;
+            btn.textContent = '⏳ Создаем комнату...';
+            try {
+                const mode = document.querySelector('input[name="duel-mode"]:checked').value;
+                const region = document.getElementById('duel-region-select').value;
+                const res = await this.createRoom(mode, region);
+                this.renderRoomWaitingScreen(modal, res, 'host');
+            } catch(e) {
+                alert(e.message || 'Ошибка создания комнаты');
+                btn.disabled = false;
+                btn.textContent = '🚀 Создать комнату дуэли';
+            }
+        };
+
+        document.getElementById('btn-join-duel-room').onclick = async () => {
+            const codeInput = document.getElementById('duel-join-code-input');
+            const code = codeInput.value.trim().toUpperCase();
+            if (!code) {
+                alert('Пожалуйста, введите код комнаты (например DUEL-1234)');
+                return;
+            }
+            const btn = document.getElementById('btn-join-duel-room');
+            btn.disabled = true;
+            btn.textContent = '⏳ Подключаемся...';
+            try {
+                const res = await this.joinRoom(code);
+                this.renderRoomWaitingScreen(modal, res, 'join');
+            } catch(e) {
+                alert(e.message || 'Ошибка входа в комнату');
+                btn.disabled = false;
+                btn.textContent = '⚔️ Присоединиться к битве';
+            }
+        };
+    },
+
+    async createRoom(mode, region) {
+        const student = getCurrentStudentInfo() || {};
+        const res = await fetch('/api/duel/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mode: mode || 'center',
+                region: region || 'rostov',
+                host_name: student.name || 'Студент',
+                host_group: student.group || '-',
+                host_email: student.email || 'student@sfedu.ru'
+            })
+        });
+        if (!res.ok) throw new Error('Ошибка создания комнаты');
+        return await res.json();
+    },
+
+    async joinRoom(roomCode) {
+        const student = getCurrentStudentInfo() || {};
+        const res = await fetch('/api/duel/join', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                room_id: roomCode.trim().toUpperCase(),
+                player_name: student.name || 'Студент',
+                player_group: student.group || '-',
+                player_email: student.email || 'student@sfedu.ru'
+            })
+        });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.detail || 'Комната не найдена или заполнена');
+        }
+        return await res.json();
+    },
+
+    renderRoomWaitingScreen(modal, data, role) {
+        const room = data.room || {};
+        const inviteUrl = `${window.location.origin}/map/${data.region}?duel=${data.room_id}`;
+        modal.innerHTML = `
+            <div style="background: #0B1120; border: 1.5px solid rgba(255, 255, 255, 0.14); border-radius: 24px; max-width: 580px; width: 100%; padding: 28px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85); color: #F8FAFC;">
+                <div style="text-align: center; margin-bottom: 22px;">
+                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #F59E0B; font-weight: 800;">КОМНАТА ДУЭЛИ СОЗДАНА</div>
+                    <div style="font-size: 36px; font-weight: 900; color: #FFFFFF; letter-spacing: 3px; margin: 6px 0;">${data.room_id}</div>
+                    <div style="font-size: 13px; color: #94A3B8;">Дисциплина: <b>${data.mode === 'center' ? '🎯 Райцентры на скорость' : '🧩 Пазл региона'}</b> • 🌍 ${data.region}</div>
+                </div>
+
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
+                    <div style="font-size: 12px; color: #CBD5E1; font-weight: 600; margin-bottom: 8px;">Ссылка-приглашение для второго студента:</div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" readonly value="${inviteUrl}" style="flex: 1; background: #0F172A; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 8px 12px; color: #93C5FD; font-size: 12px; outline: none;">
+                        <button id="copy-duel-link-btn" style="background: #2563EB; border: none; border-radius: 8px; color: #FFFFFF; padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">Копировать</button>
+                    </div>
+                </div>
+
+                <!-- СПИСОК УЧАСТНИКОВ -->
+                <div style="margin-bottom: 24px;">
+                    <div style="font-size: 12.5px; font-weight: 700; color: #CBD5E1; margin-bottom: 10px;">Участники дуэли:</div>
+                    <div id="duel-lobby-players-list" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 10px 14px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span>👑</span>
+                                <span style="font-size: 13.5px; font-weight: 700; color: #FFFFFF;">${escapeHtml(room.players?.[0]?.name || 'Игрок 1')}</span>
+                            </div>
+                            <span style="font-size: 11px; color: #34D399; font-weight: 700;">ГОТОВ ✅</span>
+                        </div>
+                        <div id="duel-opp-slot" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 10px 14px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span>⏳</span>
+                                <span style="font-size: 13px; color: #94A3B8;">Ожидание второго игрока...</span>
+                            </div>
+                            <span style="font-size: 11px; color: #F59E0B; font-weight: 600;">ЖДЕМ ПОДКЛЮЧЕНИЯ</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="DuelManager.closeModal()" style="flex: 1; padding: 12px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; color: #CBD5E1; font-size: 13.5px; font-weight: 600; cursor: pointer;">Выйти</button>
+                    <button id="btn-start-duel-now" style="flex: 2; padding: 12px; background: linear-gradient(135deg, #EF4444, #F59E0B); border: none; border-radius: 12px; color: #FFFFFF; font-size: 14.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);">
+                        ⚔️ Начать дуэль!
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('copy-duel-link-btn').onclick = () => {
+            navigator.clipboard.writeText(inviteUrl);
+            document.getElementById('copy-duel-link-btn').textContent = 'Скопировано! ✓';
+            setTimeout(() => {
+                const el = document.getElementById('copy-duel-link-btn');
+                if (el) el.textContent = 'Копировать';
+            }, 2000);
+        };
+
+        const startBtn = document.getElementById('btn-start-duel-now');
+        startBtn.onclick = () => {
+            this.launchDuelOnMap(data);
+        };
+
+        // Начинаем опрашивать состояние комнаты
+        const lobbyPollInterval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/duel/state/${data.room_id}`);
+                if (!res.ok) return;
+                const state = await res.json();
+                const currentRoom = state.room || {};
+                const players = currentRoom.players || [];
+                if (players.length >= 2) {
+                    const opp = players[1];
+                    const oppSlot = document.getElementById('duel-opp-slot');
+                    if (oppSlot) {
+                        oppSlot.style.background = 'rgba(16, 185, 129, 0.08)';
+                        oppSlot.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                        oppSlot.innerHTML = `
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span>⚔️</span>
+                                <span style="font-size: 13.5px; font-weight: 700; color: #FFFFFF;">${escapeHtml(opp.name)} (${escapeHtml(opp.group || '')})</span>
+                            </div>
+                            <span style="font-size: 11px; color: #34D399; font-weight: 700;">ПОДКЛЮЧЕН! 🚀</span>
+                        `;
+                    }
+                    startBtn.textContent = '⚔️ В бой! Начать дуэль';
+                    startBtn.style.animation = 'pulse 1s infinite alternate';
+                }
+                if (currentRoom.status === 'playing') {
+                    clearInterval(lobbyPollInterval);
+                    this.launchDuelOnMap(data);
+                }
+            } catch(e) {}
+        }, 1200);
+
+        // Сохраняем ссылку на интервал
+        this._lobbyPollInterval = lobbyPollInterval;
+    },
+
+    launchDuelOnMap(data) {
+        if (this._lobbyPollInterval) clearInterval(this._lobbyPollInterval);
+        this.closeModal();
+
+        const currentMapUrl = window.location.pathname;
+        const targetRegion = data.region || 'rostov';
+
+        // Если мы уже находимся на карте этого региона
+        if (currentMapUrl.includes(targetRegion) || (typeof window.currentRegionKey !== 'undefined' && window.currentRegionKey === targetRegion)) {
+            this.startDuelSession(data.room_id, data.player_id, data.role);
+        } else {
+            // Переходим на страницу карты
+            window.location.href = data.map_url || `/map/${targetRegion}?duel=${data.room_id}&player=${data.player_id}&role=${data.role}`;
+        }
+    },
+
+    startDuelSession(roomId, playerId, role) {
+        this.active = true;
+        this.roomId = roomId.toUpperCase();
+        this.playerId = playerId;
+        this.role = role;
+        this.myScore = 0;
+        this.oppScore = 0;
+        this.myProgress = 0;
+        this.oppProgress = 0;
+        this.hasFinished = false;
+
+        this.injectStyles();
+        this.renderLiveHUD();
+        this.connectWebSocket();
+    },
+
+    connectWebSocket() {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const url = `${proto}//${location.host}/ws/duel/${this.roomId}/${this.playerId}`;
+        try {
+            this.ws = new WebSocket(url);
+            this.ws.onopen = () => {
+                this.isWsConnected = true;
+                if (this.pollTimer) clearInterval(this.pollTimer);
+                this.sendAction({ type: 'ready', ready: true });
+            };
+            this.ws.onmessage = (e) => {
+                try {
+                    const msg = JSON.parse(e.data);
+                    this.handleSocketMessage(msg);
+                } catch(err) {}
+            };
+            this.ws.onerror = () => {
+                this.fallbackToPolling();
+            };
+            this.ws.onclose = () => {
+                this.isWsConnected = false;
+                if (this.active && !this.hasFinished) {
+                    this.fallbackToPolling();
+                }
+            };
+        } catch(e) {
+            this.fallbackToPolling();
+        }
+
+        setTimeout(() => {
+            if (!this.isWsConnected && this.active && !this.hasFinished) {
+                this.fallbackToPolling();
+            }
+        }, 2200);
+    },
+
+    fallbackToPolling() {
+        if (this.pollTimer) return;
+        this.pollTimer = setInterval(async () => {
+            if (!this.active || this.hasFinished) return;
+            try {
+                const res = await fetch(`/api/duel/state/${this.roomId}?player_id=${this.playerId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.room) {
+                        this.updateFromRoomState(data.room);
+                    }
+                }
+            } catch(e) {}
+        }, 1000);
+    },
+
+    sendAction(actionData) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(actionData));
+        } else {
+            fetch(`/api/duel/action/${this.roomId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    player_id: this.playerId,
+                    action: actionData.type || 'action',
+                    payload: actionData
+                })
+            }).then(r => r.json()).then(data => {
+                if (data && data.room) this.updateFromRoomState(data.room);
+            }).catch(() => {});
+        }
+    },
+
+    handleSocketMessage(msg) {
+        if (!msg) return;
+        if (msg.room) {
+            this.updateFromRoomState(msg.room);
+        }
+        if (msg.type === 'countdown') {
+            this.showCountdownOverlay(msg.seconds);
+        } else if (msg.type === 'game_start') {
+            this.startGamePlay(msg.room);
+        } else if (msg.type === 'opponent_action') {
+            this.onOpponentAction(msg);
+        } else if (msg.type === 'game_over') {
+            this.onGameOver(msg.room);
+        }
+    },
+
+    updateFromRoomState(room) {
+        this.roomState = room;
+        this.mode = room.mode;
+        this.region = room.region;
+
+        const players = room.players || [];
+        const myP = players.find(p => p.player_id === this.playerId);
+        const oppP = players.find(p => p.player_id !== this.playerId);
+
+        if (myP) {
+            this.myScore = myP.score;
+            this.myProgress = myP.progress;
+            this.total = myP.total || 7;
+        }
+        if (oppP) {
+            this.oppScore = oppP.score;
+            this.oppProgress = oppP.progress;
+        }
+
+        this.updateHUDValues(myP, oppP);
+
+        if (room.status === 'playing' && !this._gameplayStarted) {
+            this.startGamePlay(room);
+        }
+
+        if (room.status === 'finished' && !this.hasFinished) {
+            this.onGameOver(room);
+        }
+    },
+
+    startGamePlay(room) {
+        this._gameplayStarted = true;
+        this.removeCountdownOverlay();
+
+        if (this.mode === 'center') {
+            if (room.questions && room.questions.length > 0) {
+                // Инициализируем идентичные вопросы для обоих студентов
+                quizData = room.questions.map(q => ({
+                    type: 'center',
+                    correctAnswer: q.name,
+                    correctLat: q.lat,
+                    correctLon: q.lon,
+                    hint: `Статус: ${q.status || 'райцентр'}`,
+                    centerName: q.name
+                }));
+                totalQuestions = quizData.length;
+                currentQuestion = 0;
+                score = 0;
+                mistakes = 0;
+                prepareQuizUI('center', '🎯 Дуэль: Найти райцентр', true, false);
+                showQuestion();
+            } else {
+                startCenterQuiz();
+            }
+        } else if (this.mode === 'puzzle') {
+            startPuzzleMode();
+        }
+    },
+
+    showCountdownOverlay(seconds) {
+        let el = document.getElementById('duel-countdown-overlay');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'duel-countdown-overlay';
+            el.style.cssText = 'position: fixed; inset: 0; background: rgba(3, 7, 18, 0.85); backdrop-filter: blur(8px); z-index: 9999999; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; pointer-events: none;';
+            document.body.appendChild(el);
+        }
+        el.innerHTML = `
+            <div style="font-size: 16px; font-weight: 800; color: #F59E0B; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px;">⚔️ Битва начинается через:</div>
+            <div style="font-size: 110px; font-weight: 900; color: #FFFFFF; text-shadow: 0 0 35px rgba(245, 158, 11, 0.8);">${seconds}</div>
+        `;
+    },
+
+    removeCountdownOverlay() {
+        const el = document.getElementById('duel-countdown-overlay');
+        if (el) el.remove();
+    },
+
+    renderLiveHUD() {
+        let hud = document.getElementById('geoatlas-duel-live-hud');
+        if (!hud) {
+            hud = document.createElement('div');
+            hud.id = 'geoatlas-duel-live-hud';
+            document.body.appendChild(hud);
+        }
+        const student = getCurrentStudentInfo() || { name: 'Вы' };
+        hud.innerHTML = `
+            <div class="duel-hud-container">
+                <!-- ВЫ -->
+                <div class="duel-player-box my-box">
+                    <div class="duel-box-header">
+                        <span class="duel-crown">👑</span>
+                        <span class="duel-name">${escapeHtml(student.name || 'Вы')}</span>
+                        <span class="duel-score" id="hud-my-score">0 б.</span>
+                    </div>
+                    <div class="duel-bar-track">
+                        <div class="duel-bar-fill my-fill" id="hud-my-bar" style="width: 0%"></div>
+                    </div>
+                    <div class="duel-sub-info" id="hud-my-sub">Прогресс: 0 / 7</div>
+                </div>
+
+                <!-- ЦЕНТР VS -->
+                <div class="duel-vs-box">
+                    <div class="duel-vs-title">⚔️ ДУЭЛЬ 1V1</div>
+                    <div class="duel-vs-badge" id="hud-round-badge">РАУНД 1 / 7</div>
+                </div>
+
+                <!-- СОПЕРНИК -->
+                <div class="duel-player-box opp-box">
+                    <div class="duel-box-header">
+                        <span class="duel-score opp-score" id="hud-opp-score">0 б.</span>
+                        <span class="duel-name" id="hud-opp-name">Соперник</span>
+                        <span class="duel-crown">⚔️</span>
+                    </div>
+                    <div class="duel-bar-track">
+                        <div class="duel-bar-fill opp-fill" id="hud-opp-bar" style="width: 0%"></div>
+                    </div>
+                    <div class="duel-sub-info" id="hud-opp-sub">Ожидание хода...</div>
+                </div>
+            </div>
+            <div id="duel-live-event-banner" class="duel-event-banner"></div>
+        `;
+    },
+
+    updateHUDValues(myP, oppP) {
+        const myScoreEl = document.getElementById('hud-my-score');
+        const myBarEl = document.getElementById('hud-my-bar');
+        const mySubEl = document.getElementById('hud-my-sub');
+
+        const oppScoreEl = document.getElementById('hud-opp-score');
+        const oppNameEl = document.getElementById('hud-opp-name');
+        const oppBarEl = document.getElementById('hud-opp-bar');
+        const oppSubEl = document.getElementById('hud-opp-sub');
+        const roundBadgeEl = document.getElementById('hud-round-badge');
+
+        const totalItems = this.total || 7;
+
+        if (myP && myScoreEl && myBarEl && mySubEl) {
+            myScoreEl.textContent = `${myP.score} б.`;
+            const pct = Math.min(100, Math.round((myP.progress / totalItems) * 100));
+            myBarEl.style.width = `${pct}%`;
+            mySubEl.textContent = `Прогресс: ${myP.progress} / ${totalItems}`;
+        }
+
+        if (oppP && oppScoreEl && oppBarEl && oppSubEl && oppNameEl) {
+            oppNameEl.textContent = oppP.name || 'Соперник';
+            oppScoreEl.textContent = `${oppP.score} б.`;
+            const pct = Math.min(100, Math.round((oppP.progress / totalItems) * 100));
+            oppBarEl.style.width = `${pct}%`;
+            oppSubEl.textContent = `Прогресс: ${oppP.progress} / ${totalItems}`;
+        }
+
+        if (roundBadgeEl) {
+            if (this.mode === 'center') {
+                const currentRound = Math.min(totalItems, (myP?.progress || 0) + 1);
+                roundBadgeEl.textContent = `РАУНД ${currentRound} / ${totalItems}`;
+            } else {
+                roundBadgeEl.textContent = `ГОНКА ПАЗЛА`;
+            }
+        }
+    },
+
+    submitCenterAnswer(questionIndex, points, distance, targetName) {
+        if (!this.active) return;
+        this.sendAction({
+            type: 'answer_center',
+            question_index: questionIndex,
+            points: points,
+            distance: distance,
+            target_name: targetName
+        });
+    },
+
+    submitPuzzlePiece(placedCount, mistakes, districtName) {
+        if (!this.active) return;
+        this.sendAction({
+            type: 'place_piece',
+            placed_count: placedCount,
+            mistakes: mistakes,
+            district_name: districtName
+        });
+    },
+
+    onOpponentAction(msg) {
+        const banner = document.getElementById('duel-live-event-banner');
+        if (!banner) return;
+
+        let text = '';
+        if (msg.action === 'answer_center') {
+            text = `⚡ Соперник: ${msg.target_name} (+${msg.points} б., ${Math.round(msg.distance)} км)`;
+        } else if (msg.action === 'place_piece') {
+            text = `🧩 Соперник собрал район «${msg.district_name}» (${msg.placed_count} всего)`;
+        }
+
+        banner.textContent = text;
+        banner.style.opacity = '1';
+        banner.style.transform = 'translateY(0)';
+        setTimeout(() => {
+            banner.style.opacity = '0';
+            banner.style.transform = 'translateY(-10px)';
+        }, 2500);
+    },
+
+    onGameOver(room) {
+        if (this.hasFinished) return;
+        this.hasFinished = true;
+        this.active = false;
+        if (this.pollTimer) clearInterval(this.pollTimer);
+
+        const players = room.players || [];
+        const myP = players.find(p => p.player_id === this.playerId) || { score: 0 };
+        const oppP = players.find(p => p.player_id !== this.playerId) || { score: 0, name: 'Соперник' };
+
+        const isWinner = room.winner === this.playerId;
+        const isDraw = room.winner === 'draw';
+
+        if (isWinner) {
+            unlockAchievement('duel_master');
+            // Бонус к очкам за победу
+            try {
+                const curBonus = parseInt(localStorage.getItem('geoatlas_duel_bonus_xp') || '0');
+                localStorage.setItem('geoatlas_duel_bonus_xp', String(curBonus + 50));
+            } catch(e) {}
+        }
+
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position: fixed; inset: 0; background: rgba(3, 7, 18, 0.92); backdrop-filter: blur(12px); z-index: 99999999; display: flex; align-items: center; justify-content: center; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;';
+        
+        const headerTitle = isWinner ? '🏆 ПОБЕДА В ДУЭЛИ!' : (isDraw ? '🤝 БОЕВАЯ НИЧЬЯ!' : '⚔️ ПОБЕДА СОПЕРНИКА');
+        const headerColor = isWinner ? '#F59E0B' : (isDraw ? '#38BDF8' : '#F87171');
+        const headerGlow = isWinner ? '0 0 30px rgba(245, 158, 11, 0.6)' : 'none';
+
+        modal.innerHTML = `
+            <div style="background: #0B1120; border: 2px solid ${headerColor}; border-radius: 24px; max-width: 540px; width: 100%; padding: 32px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), ${headerGlow}; color: #F8FAFC; text-align: center;">
+                <div style="font-size: 56px; margin-bottom: 8px;">${isWinner ? '👑' : (isDraw ? '🤝' : '⚔️')}</div>
+                <h2 style="font-size: 28px; font-weight: 900; color: ${headerColor}; margin: 0 0 8px 0; letter-spacing: -0.5px;">${headerTitle}</h2>
+                <div style="font-size: 13.5px; color: #94A3B8; margin-bottom: 24px;">${escapeHtml(room.winner_reason || '')}</div>
+
+                ${isWinner ? `
+                    <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(30, 41, 59, 0.8)); border: 1.5px solid #F59E0B; border-radius: 14px; padding: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 14px; text-align: left;">
+                        <div style="font-size: 32px;">⚔️</div>
+                        <div>
+                            <div style="font-size: 11px; text-transform: uppercase; color: #FBBF24; font-weight: 800;">Ачивка разблокирована</div>
+                            <div style="font-size: 15px; font-weight: 700; color: #FFFFFF;">Гроза дуэлей (+50 XP)</div>
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- СРАВНЕНИЕ РЕЗУЛЬТАТОВ -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 26px;">
+                    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 16px;">
+                        <div style="font-size: 12px; color: #94A3B8;">Вы (${escapeHtml(myP.name || 'Вы')})</div>
+                        <div style="font-size: 32px; font-weight: 900; color: #34D399; margin: 4px 0;">${myP.score}</div>
+                        <div style="font-size: 11.5px; color: #64748B;">прогресс: ${myP.progress}/${this.total}</div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 16px;">
+                        <div style="font-size: 12px; color: #94A3B8;">Соперник (${escapeHtml(oppP.name || 'Соперник')})</div>
+                        <div style="font-size: 32px; font-weight: 900; color: #F87171; margin: 4px 0;">${oppP.score}</div>
+                        <div style="font-size: 11.5px; color: #64748B;">прогресс: ${oppP.progress}/${this.total}</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button id="duel-rematch-btn" style="flex: 1; padding: 12px; background: #2563EB; border: none; border-radius: 12px; color: #FFFFFF; font-size: 14px; font-weight: 700; cursor: pointer;">⚔️ Новая дуэль</button>
+                    <button id="duel-exit-btn" style="flex: 1; padding: 12px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; color: #CBD5E1; font-size: 14px; font-weight: 600; cursor: pointer;">В меню атласа</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('duel-rematch-btn').onclick = () => {
+            modal.remove();
+            const hud = document.getElementById('geoatlas-duel-live-hud');
+            if (hud) hud.remove();
+            this.openModal();
+        };
+
+        document.getElementById('duel-exit-btn').onclick = () => {
+            modal.remove();
+            const hud = document.getElementById('geoatlas-duel-live-hud');
+            if (hud) hud.remove();
+            if (typeof resetQuiz === 'function') resetQuiz();
+            window.location.href = '/index.html';
+        };
+    },
+
+    injectStyles() {
+        if (document.getElementById('geoatlas-duel-styles')) return;
+        const style = document.createElement('style');
+        style.id = 'geoatlas-duel-styles';
+        style.textContent = `
+            #geoatlas-duel-live-hud {
+                position: fixed;
+                top: 15px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 99999;
+                width: 90%;
+                max-width: 920px;
+                pointer-events: none;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            }
+            .duel-hud-container {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                background: rgba(11, 17, 32, 0.92);
+                border: 1.5px solid rgba(255, 255, 255, 0.14);
+                backdrop-filter: blur(12px);
+                border-radius: 18px;
+                padding: 10px 18px;
+                box-shadow: 0 12px 35px rgba(0, 0, 0, 0.65);
+                pointer-events: auto;
+            }
+            .duel-player-box {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            .duel-box-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-size: 13.5px;
+                font-weight: 700;
+                color: #FFFFFF;
+            }
+            .duel-score {
+                background: rgba(37, 99, 235, 0.2);
+                border: 1px solid #2563EB;
+                color: #93C5FD;
+                padding: 2px 8px;
+                border-radius: 6px;
+                font-size: 11.5px;
+            }
+            .opp-score {
+                background: rgba(239, 68, 68, 0.2);
+                border-color: #EF4444;
+                color: #FCA5A5;
+            }
+            .duel-bar-track {
+                width: 100%;
+                height: 8px;
+                background: rgba(255, 255, 255, 0.08);
+                border-radius: 999px;
+                overflow: hidden;
+            }
+            .duel-bar-fill {
+                height: 100%;
+                transition: width 0.4s ease;
+            }
+            .my-fill {
+                background: linear-gradient(90deg, #2563EB, #10B981);
+            }
+            .opp-fill {
+                background: linear-gradient(90deg, #EF4444, #F59E0B);
+            }
+            .duel-sub-info {
+                font-size: 11px;
+                color: #94A3B8;
+            }
+            .duel-vs-box {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 3px;
+                flex-shrink: 0;
+            }
+            .duel-vs-title {
+                font-size: 10.5px;
+                font-weight: 900;
+                letter-spacing: 1px;
+                color: #F59E0B;
+            }
+            .duel-vs-badge {
+                background: rgba(245, 158, 11, 0.15);
+                border: 1px solid #F59E0B;
+                color: #FBBF24;
+                padding: 2px 8px;
+                border-radius: 6px;
+                font-size: 10.5px;
+                font-weight: 800;
+            }
+            .duel-event-banner {
+                margin: 8px auto 0 auto;
+                width: max-content;
+                max-width: 420px;
+                padding: 6px 14px;
+                background: rgba(15, 23, 42, 0.94);
+                border: 1px solid #38BDF8;
+                border-radius: 999px;
+                color: #E0F2FE;
+                font-size: 12px;
+                font-weight: 600;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+                text-align: center;
+                opacity: 0;
+                transform: translateY(-10px);
+                transition: all 0.3s ease;
+                pointer-events: none;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+};
+
+window.DuelManager = DuelManager;
+window.openDuelModal = (code) => DuelManager.openModal(code);
+window.closeDuelModal = () => DuelManager.closeModal();
+window.syncPendingResultsQueue = syncPendingResultsQueue;
+window.checkActiveQuizDraft = checkActiveQuizDraft;
+window.saveActiveQuizDraft = saveActiveQuizDraft;
+window.clearActiveQuizDraft = clearActiveQuizDraft;
+
+// Автопроверка параметров URL для дуэли
+if (typeof window !== 'undefined') {
+    window.addEventListener('load', () => {
+        DuelManager.initFromUrl();
+    });
+}
