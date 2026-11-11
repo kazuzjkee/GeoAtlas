@@ -2253,30 +2253,32 @@ window.serverMapZoom = {self.zoom};
             background: rgba(255, 255, 255, 0.96);
             backdrop-filter: blur(8px);
             border: 1px solid #CBD5E1;
-            border-radius: 10px;
-            padding: 4px 10px 4px 6px;
+            border-radius: 12px;
+            padding: 4px 12px 4px 8px;
             display: flex;
             align-items: center;
-            gap: 8px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-            max-width: 280px !important;
+            gap: 9px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            max-width: 380px !important;
+            min-width: 0;
             flex-shrink: 0;
         }}
         .badge-avatar {{
-            width: 26px;
-            height: 26px;
+            width: 28px;
+            height: 28px;
             background: #EFF6FF;
             border: 1px solid #BFDBFE;
-            border-radius: 6px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 13px;
+            font-size: 14px;
             flex-shrink: 0;
         }}
         .badge-info {{
             display: flex;
             flex-direction: column;
+            justify-content: center;
             overflow: hidden;
             min-width: 0;
             text-align: left;
@@ -2285,11 +2287,11 @@ window.serverMapZoom = {self.zoom};
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 170px;
+            max-width: 260px;
             display: block;
         }}
-        .badge-name {{ font-size: 11.5px; font-weight: 700; color: #1E293B; line-height: 1.2; }}
-        .badge-group {{ font-size: 10px; color: #64748B; }}
+        .badge-name {{ font-size: 12.5px; font-weight: 700; color: #1E293B; line-height: 1.25; }}
+        .badge-group {{ font-size: 11px; color: #2563EB; font-weight: 600; font-family: 'JetBrains Mono', monospace; line-height: 1.2; margin-top: 1px; }}
         .badge-logout {{
             background: none;
             border: none;

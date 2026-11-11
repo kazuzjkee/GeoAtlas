@@ -284,30 +284,111 @@
             letter-spacing: 0.4px;
         }
 
-        .nav-menu {
+        .nav-center-block {
             display: flex;
             align-items: center;
-            gap: 20px;
-            list-style: none;
-            margin: 0;
-            padding: 0;
+            gap: 10px;
         }
 
-        .nav-link {
+        .nav-quick-link {
             text-decoration: none;
             font-size: 13px;
             font-weight: 600;
             color: var(--text-muted);
-            transition: color 0.15s ease;
+            padding: 6px 12px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+            background: transparent;
         }
-        .nav-link:hover {
+        .nav-quick-link:hover {
             color: var(--primary);
+            background: var(--surface-subtle);
+        }
+
+        .nav-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .nav-dropdown-trigger {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 6px 13px;
+            background: var(--surface-subtle);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .nav-dropdown-trigger:hover {
+            background: #EFF6FF;
+            border-color: #BFDBFE;
+            color: var(--primary);
+        }
+        .dropdown-chevron {
+            font-size: 11px;
+            color: var(--text-muted);
+            transition: transform 0.2s ease;
+        }
+
+        .nav-dropdown-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 260px;
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+            padding: 6px;
+            z-index: 1000;
+        }
+        .nav-dropdown-menu.show {
+            display: block;
+        }
+
+        .nav-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background 0.15s ease;
+        }
+        .nav-dropdown-item:hover {
+            background: #F1F5F9;
+        }
+        .drop-item-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .drop-item-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-main);
+            line-height: 1.2;
+        }
+        .drop-item-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
         }
 
         .nav-actions {
             display: flex;
             align-items: center;
             gap: 10px;
+            flex-shrink: 0;
         }
 
         .nav-btn {
@@ -318,26 +399,33 @@
         .student-badge {
             background: #FFFFFF;
             border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 4px 10px 4px 6px;
+            border-radius: 12px;
+            padding: 4px 12px 4px 8px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 9px;
             box-shadow: var(--shadow-xs);
-            max-width: 280px !important;
+            max-width: 380px !important;
+            min-width: 0;
             flex-shrink: 0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .student-badge:hover {
+            border-color: #93C5FD;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
         }
 
         .badge-avatar {
-            width: 26px;
-            height: 26px;
+            width: 28px;
+            height: 28px;
             background: var(--surface-subtle);
             border: 1px solid #BFDBFE;
-            border-radius: 6px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 13px;
+            font-size: 14px;
             flex-shrink: 0;
             color: var(--text-main);
         }
@@ -345,6 +433,7 @@
         .badge-info {
             display: flex;
             flex-direction: column;
+            justify-content: center;
             overflow: hidden;
             min-width: 0;
             text-align: left;
@@ -354,35 +443,45 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 170px;
+            max-width: 260px;
             display: block;
         }
 
         .badge-name {
-            font-size: 12px;
+            font-size: 12.5px;
             font-weight: 700;
             color: var(--text-main);
-            line-height: 1.2;
+            line-height: 1.25;
         }
 
         .badge-group {
-            font-size: 10.5px;
-            color: var(--text-muted);
+            font-size: 11px;
+            color: #2563EB;
             font-weight: 600;
             font-family: 'JetBrains Mono', monospace;
+            line-height: 1.2;
+            margin-top: 1px;
         }
 
         .badge-logout {
-            background: none;
+            background: #F1F5F9;
             border: none;
-            font-size: 16px;
-            color: var(--text-light);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 13px;
+            color: var(--text-muted);
             cursor: pointer;
-            margin-left: 2px;
-            line-height: 1;
-            padding: 2px 4px;
-            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
             transition: all 0.15s ease;
+            margin-left: 2px;
+        }
+        .badge-logout:hover {
+            background: #FEE2E2;
+            color: #EF4444;
         }
         .badge-logout:hover {
             color: #DC2626;
@@ -3279,14 +3378,54 @@
                 </div>
             </a>
 
-            <nav>
-                <ul class="nav-menu">
-                    <li><a href="#hero-section" class="nav-link">О комплексе</a></li>
-                    <li><a href="#sandbox-section" class="nav-link">Песочница</a></li>
-                    <li><a href="#features-bento" class="nav-link">Возможности</a></li>
-                    <li><a href="#architecture-section" class="nav-link">Стек ГЭК</a></li>
-                    <li><a href="#regions-section" class="nav-link">Карты</a></li>
-                </ul>
+            <nav class="nav-center-block">
+                <a href="#regions-section" class="nav-quick-link" title="Перейти к интерактивным картам регионов">
+                    <span>🗺️</span> <span>Карты регионов</span>
+                </a>
+                <div class="nav-dropdown" id="navSectionsDropdown">
+                    <button type="button" class="nav-dropdown-trigger" onclick="toggleNavSections(event)" aria-expanded="false" title="Все разделы комплекса">
+                        <span class="dropdown-trigger-icon">☰</span>
+                        <span>Разделы</span>
+                        <span class="dropdown-chevron">▾</span>
+                    </button>
+                    <div class="nav-dropdown-menu" id="navSectionsMenu">
+                        <a href="#hero-section" class="nav-dropdown-item" onclick="closeNavSections()">
+                            <span class="drop-item-icon">🏢</span>
+                            <div class="drop-item-text">
+                                <div class="drop-item-title">О комплексе</div>
+                                <div class="drop-item-desc">Назначение и цели GeoAtlas</div>
+                            </div>
+                        </a>
+                        <a href="#sandbox-section" class="nav-dropdown-item" onclick="closeNavSections()">
+                            <span class="drop-item-icon">🎮</span>
+                            <div class="drop-item-text">
+                                <div class="drop-item-title">Песочница</div>
+                                <div class="drop-item-desc">Интерактивный полигон ЮФУ</div>
+                            </div>
+                        </a>
+                        <a href="#features-bento" class="nav-dropdown-item" onclick="closeNavSections()">
+                            <span class="drop-item-icon">⚡</span>
+                            <div class="drop-item-text">
+                                <div class="drop-item-title">Возможности</div>
+                                <div class="drop-item-desc">Режимы контроля и тесты</div>
+                            </div>
+                        </a>
+                        <a href="#architecture-section" class="nav-dropdown-item" onclick="closeNavSections()">
+                            <span class="drop-item-icon">🛡️</span>
+                            <div class="drop-item-text">
+                                <div class="drop-item-title">Стек ГЭК ЮФУ</div>
+                                <div class="drop-item-desc">Anti-Cheat и академический контур</div>
+                            </div>
+                        </a>
+                        <a href="#regions-section" class="nav-dropdown-item" onclick="closeNavSections()">
+                            <span class="drop-item-icon">🗺️</span>
+                            <div class="drop-item-text">
+                                <div class="drop-item-title">Каталог карт</div>
+                                <div class="drop-item-desc">Ростовская обл., Кубань, РФ</div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
             </nav>
             
             <div class="nav-actions">
@@ -4885,6 +5024,31 @@
         window.openStudentProfileModal = openStudentProfileModal;
         window.closeStudentProfileModal = closeStudentProfileModal;
 
+        function toggleNavSections(e) {
+            if (e) e.stopPropagation();
+            const menu = document.getElementById('navSectionsMenu');
+            const trigger = e ? e.currentTarget : null;
+            if (!menu) return;
+            const isShown = menu.classList.contains('show');
+            menu.classList.toggle('show', !isShown);
+            if (trigger) trigger.setAttribute('aria-expanded', !isShown);
+        }
+
+        function closeNavSections() {
+            const menu = document.getElementById('navSectionsMenu');
+            if (menu) menu.classList.remove('show');
+        }
+
+        window.toggleNavSections = toggleNavSections;
+        window.closeNavSections = closeNavSections;
+
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('navSectionsDropdown');
+            if (dropdown && !dropdown.contains(e.target)) {
+                closeNavSections();
+            }
+        });
+
         function updateStudentHeader() {
             const student = getCurrentStudentInfo();
             const authBtn = document.getElementById('auth-top-btn');
@@ -4896,8 +5060,14 @@
                     profileBadge.style.display = 'flex';
                     const nameEl = document.getElementById('student-badge-name');
                     const groupEl = document.getElementById('student-badge-group');
-                    if (nameEl) nameEl.textContent = student.name;
-                    if (groupEl) groupEl.textContent = student.group;
+                    if (nameEl) {
+                        nameEl.textContent = student.name;
+                        nameEl.title = student.name;
+                    }
+                    if (groupEl) {
+                        groupEl.textContent = student.group;
+                        groupEl.title = student.group;
+                    }
                 }
             } else {
                 if (authBtn) authBtn.style.display = 'inline-flex';

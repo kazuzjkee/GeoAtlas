@@ -1510,3 +1510,52 @@ let allResults = [];
         });
     }
     window.generateExecutivePDFReport = generateExecutivePDFReport;
+
+    // ==========================================
+    // 📑 УПРАВЛЕНИЕ ВКЛАДКАМИ АДМИН-ПАНЕЛИ (TABS)
+    // ==========================================
+    function switchAdminTab(tabId) {
+        const validTabs = ['tab-testing', 'tab-journal', 'tab-overview', 'tab-maps'];
+        if (!validTabs.includes(tabId)) tabId = 'tab-testing';
+
+        document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+            const isActive = btn.dataset.tab === tabId;
+            btn.classList.toggle('active', isActive);
+            btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        document.querySelectorAll('.admin-tab-pane').forEach(pane => {
+            pane.style.display = (pane.id === tabId) ? 'block' : 'none';
+        });
+
+        try {
+            localStorage.setItem('admin_active_tab', tabId);
+        } catch (e) {}
+
+        if (tabId === 'tab-maps') {
+            if (typeof loadMapsList === 'function') loadMapsList();
+        }
+    }
+    window.switchAdminTab = switchAdminTab;
+
+    function initAdminTabs() {
+        const validTabs = ['tab-testing', 'tab-journal', 'tab-overview', 'tab-maps'];
+        const hash = (window.location.hash || '').replace('#', '').trim();
+        let targetTab = 'tab-testing';
+
+        if (validTabs.includes(`tab-${hash}`)) {
+            targetTab = `tab-${hash}`;
+        } else if (validTabs.includes(hash)) {
+            targetTab = hash;
+        } else {
+            try {
+                const saved = localStorage.getItem('admin_active_tab');
+                if (saved && validTabs.includes(saved)) {
+                    targetTab = saved;
+                }
+            } catch (e) {}
+        }
+
+        switchAdminTab(targetTab);
+    }
+    window.addEventListener('DOMContentLoaded', initAdminTabs);
