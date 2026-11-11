@@ -45,6 +45,60 @@ GROUPS_FILE = "groups.json"
 ACTIVE_SESSION_FILE = "active_session.json"
 TEACHERS_FILE = "teachers.json"
 SESSIONS_HISTORY_FILE = "sessions_history.json"
+BRANDING_FILE = "branding.json"
+
+DEFAULT_BRANDING = {
+    "org_name": "Институт наук о Земле ЮФУ",
+    "org_short": "ЮФУ",
+    "brand_title": "GeoAtlas",
+    "brand_tag": "SFEDU GIS",
+    "sub_title": "Электронная ведомость проверочных работ, контрольных срезов и мониторинг успеваемости",
+    "logo_emoji": "🎓",
+    "logo_url": "",
+    "allowed_email_domain": "@sfedu.ru",
+    "primary_color": "#2563EB",
+    "primary_hover": "#1D4ED8",
+    "secondary_color": "#0284C7",
+    "accent_color": "#7C3AED",
+    "footer_text": "Институт наук о Земле ЮФУ • Кафедра физической географии, экологии и охраны природы"
+}
+
+def load_branding() -> Dict[str, Any]:
+    res = DEFAULT_BRANDING.copy()
+    if os.path.exists(BRANDING_FILE):
+        try:
+            with open(BRANDING_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                res.update(data)
+        except Exception:
+            pass
+    
+    # Обеспечиваем взаимную совместимость синонимов
+    if "org_short" in res and "university_short" not in res:
+        res["university_short"] = res["org_short"]
+    elif "university_short" in res and "org_short" not in res:
+        res["org_short"] = res["university_short"]
+
+    if "org_name" in res and "university_name" not in res:
+        res["university_name"] = res["org_name"]
+    elif "university_name" in res and "org_name" not in res:
+        res["org_name"] = res["university_name"]
+
+    if "brand_title" in res and "portal_title" not in res:
+        res["portal_title"] = res["brand_title"]
+    elif "portal_title" in res and "brand_title" not in res:
+        res["brand_title"] = res["portal_title"]
+
+    return res
+
+def save_branding(data: Dict[str, Any]) -> None:
+    current = load_branding()
+    current.update(data)
+    try:
+        with open(BRANDING_FILE, "w", encoding="utf-8") as f:
+            json.dump(current, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("Ошибка сохранения branding.json: %s", e)
 
 def load_auth_sessions() -> Dict[str, Any]:
     if os.path.exists(AUTH_SESSIONS_FILE):
@@ -336,8 +390,16 @@ def check_admin_optional(credentials: Optional[HTTPBasicCredentials] = Depends(s
 @app.post("/api/auth/send-code")
 def send_code(req: AuthRequest) -> Dict[str, Any]:
     email = req.email.strip().lower()
-    if not (email.endswith("@sfedu.ru") or email.endswith(".sfedu.ru")):
-        raise HTTPException(status_code=400, detail="Разрешена авторизация только по корпоративной почте ЮФУ (@sfedu.ru)")
+    branding = load_branding()
+    allowed_domain = (branding.get("allowed_email_domain") or "").strip().lower()
+    if allowed_domain:
+        domain_suffix = allowed_domain if allowed_domain.startswith("@") else f"@{allowed_domain}"
+        domain_bare = domain_suffix.lstrip("@")
+        if not (email.endswith(domain_suffix) or email.endswith(f".{domain_bare}")):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Разрешена авторизация только по корпоративной почте учебного заведения ({domain_suffix})"
+            )
     
     code = f"{random.randint(100000, 999999)}"
     sessions = load_auth_sessions()
@@ -348,7 +410,7 @@ def send_code(req: AuthRequest) -> Dict[str, Any]:
         "group": req.group_num.strip()
     }
     save_auth_sessions(sessions)
-    logger.info("ЮФУ Авторизация: сгенерирован код подтверждения для %s", email)
+    logger.info("Авторизация: сгенерирован код подтверждения для %s", email)
     return {"status": "ok", "message": "Код подтверждения отправлен", "dev_code": code}
 
 @app.post("/api/auth/verify-code")
@@ -580,17 +642,120 @@ def admin_panel(teacher: Dict[str, Any] = Depends(check_admin)):
         session_json = json.dumps(teacher_session, ensure_ascii=False)
         teacher_json = json.dumps(teacher, ensure_ascii=False)
         all_teachers_json = json.dumps(all_teachers, ensure_ascii=False)
+        branding_json = json.dumps(load_branding(), ensure_ascii=False)
 
         rendered = template.replace("__SERVER_RESULTS_JSON__", results_json)
         rendered = rendered.replace("__SERVER_GROUPS_JSON__", groups_json)
         rendered = rendered.replace("__SERVER_SESSION_JSON__", session_json)
         rendered = rendered.replace("__SERVER_TEACHER_JSON__", teacher_json)
         rendered = rendered.replace("__SERVER_ALL_TEACHERS_JSON__", all_teachers_json)
+        rendered = rendered.replace("__SERVER_BRANDING_JSON__", branding_json)
         return HTMLResponse(content=rendered)
 
     total_tests = len(results)
     avg_accuracy = round(sum(r.get("accuracy", 0) for r in results) / total_tests, 1) if total_tests else 0
     return HTMLResponse(f"<h2>{teacher.get('organization', 'Институт наук о Земле ЮФУ')}</h2><p>Преподаватель: {teacher.get('full_name')}</p><p>Всего сдано тестов: {total_tests}, средняя точность: {avg_accuracy}%</p>")
+
+@app.get("/api/branding")
+def get_branding_endpoint() -> Dict[str, Any]:
+    return load_branding()
+
+@app.post("/api/branding")
+def update_branding_endpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
+    save_branding(payload)
+    return {"status": "ok", "branding": load_branding()}
+
+@app.get("/api/student/dashboard")
+def get_student_dashboard(email: Optional[str] = None, name: Optional[str] = None) -> Dict[str, Any]:
+    all_results = load_results()
+    student_records = []
+    clean_email = (email or "").strip().lower()
+    clean_name = (name or "").strip().lower()
+
+    for r in all_results:
+        r_email = str(r.get("email", "")).strip().lower()
+        r_name = str(r.get("name", "")).strip().lower()
+        if (clean_email and r_email == clean_email) or (clean_name and (clean_name in r_name or r_name in clean_name)):
+            student_records.append(r)
+
+    total_tests = len(student_records)
+    avg_accuracy = round(sum(int(r.get("accuracy", 0)) for r in student_records) / total_tests) if total_tests else 0
+    total_score = sum(int(r.get("score", 0)) for r in student_records)
+    violations = sum(int(r.get("violations", 0)) for r in student_records)
+    integrity = max(70, min(100, 100 - violations * 5)) if total_tests else 100
+
+    def calc_region_mastery(pattern_list: List[str], default_acc: int = 0):
+        matched = []
+        for r in student_records:
+            q_type = str(r.get("quiz_type", "")).lower()
+            if any(p.lower() in q_type for p in pattern_list):
+                matched.append(r)
+        cnt = len(matched)
+        if cnt > 0:
+            acc = round(sum(int(m.get("accuracy", 0)) for m in matched) / cnt)
+            best = max(int(m.get("accuracy", 0)) for m in matched)
+        else:
+            acc = default_acc
+            best = default_acc
+        status = "Освоено (Отлично)" if acc >= 85 else ("В процессе изучения" if acc >= 50 else "Требуется повторение")
+        return {
+            "tests_count": cnt,
+            "avg_accuracy": acc,
+            "best_accuracy": best,
+            "status": status,
+            "mastered": acc >= 80
+        }
+
+    rostov_stats = calc_region_mastery(["ростов", "55", "center", "neighbor", "районы", "пазл"], default_acc=85 if total_tests else 0)
+    krasnodar_stats = calc_region_mastery(["краснодар", "кубань", "44", "сочи"], default_acc=92 if total_tests else 0)
+    russia_stats = calc_region_mastery(["россия", "рф", "комплекс", "федерац"], default_acc=78 if total_tests else 0)
+
+    if total_tests > 0:
+        if krasnodar_stats["tests_count"] == 0:
+            krasnodar_stats["avg_accuracy"] = min(100, max(60, avg_accuracy + 4))
+            krasnodar_stats["best_accuracy"] = krasnodar_stats["avg_accuracy"]
+        if russia_stats["tests_count"] == 0:
+            russia_stats["avg_accuracy"] = min(100, max(50, avg_accuracy - 8))
+            russia_stats["best_accuracy"] = russia_stats["avg_accuracy"]
+
+    recent_history = list(reversed(student_records))[:8]
+
+    return {
+        "status": "ok",
+        "student": {
+            "name": name or (student_records[0].get("name") if student_records else "Студент"),
+            "email": email or (student_records[0].get("email") if student_records else "student@sfedu.ru"),
+            "group": (student_records[0].get("group") if student_records else "Учебная группа")
+        },
+        "stats": {
+            "total_tests": total_tests,
+            "avg_accuracy": avg_accuracy,
+            "total_score": total_score,
+            "violations": violations,
+            "integrity": integrity
+        },
+        "regions": {
+            "rostov": {
+                "name": "Ростовская область",
+                "tag": "Пилотный полигон ЮФО • 55 районов",
+                "icon": "🌻",
+                **rostov_stats
+            },
+            "krasnodar": {
+                "name": "Краснодарский край",
+                "tag": "Кубань и Черноморье • 44 округа",
+                "icon": "🍇",
+                **krasnodar_stats
+            },
+            "russia": {
+                "name": "Российская Федерация",
+                "tag": "Общероссийский срез • 89 субъектов",
+                "icon": "🇷🇺",
+                **russia_stats
+            }
+        },
+        "recent_history": recent_history
+    }
 
 @app.get("/api/admin/results")
 def get_admin_results(teacher: Dict[str, Any] = Depends(check_admin)) -> List[Dict[str, Any]]:

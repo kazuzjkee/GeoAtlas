@@ -3360,6 +3360,290 @@
             background: #10B981;
             box-shadow: 0 0 6px #10B981;
         }
+
+        /* ========================================================
+           ЛИЧНЫЙ КАБИНЕТ СТУДЕНТА (STUDENT DASHBOARD MODAL)
+           ======================================================== */
+        .dash-modal-card {
+            background: #0B1120;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 24px;
+            max-width: 860px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 28px;
+            box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.85);
+            color: #F8FAFC;
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+            position: relative;
+        }
+        .dash-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 20px;
+            margin-bottom: 22px;
+            gap: 16px;
+        }
+        .dash-profile-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex: 1;
+            min-width: 0;
+        }
+        .dash-avatar {
+            width: 58px;
+            height: 58px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--primary, #2563EB), var(--accent-exam, #7C3AED));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            flex-shrink: 0;
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+        }
+        .dash-profile-meta {
+            min-width: 0;
+            flex: 1;
+        }
+        .dash-student-name {
+            font-size: 22px;
+            font-weight: 800;
+            color: #FFFFFF;
+            line-height: 1.25;
+            margin-bottom: 6px;
+            word-break: break-word;
+        }
+        .dash-badges-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .dash-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .dash-pill-group {
+            background: rgba(37, 99, 235, 0.16);
+            border: 1px solid rgba(37, 99, 235, 0.4);
+            color: #93C5FD;
+        }
+        .dash-pill-email {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            color: #CBD5E1;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11.5px;
+        }
+        .dash-pill-verified {
+            background: rgba(16, 185, 129, 0.16);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            color: #6EE7B7;
+        }
+        .dash-close-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #94A3B8;
+            font-size: 22px;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .dash-close-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #F87171;
+        }
+        .dash-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        @media (max-width: 768px) {
+            .dash-kpi-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        .dash-kpi-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+        .dash-kpi-label {
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #94A3B8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .dash-kpi-val {
+            font-size: 24px;
+            font-weight: 800;
+            color: #FFFFFF;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .dash-kpi-sub {
+            font-size: 11px;
+            color: #64748B;
+        }
+        .dash-section-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #F8FAFC;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .dash-regions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 26px;
+        }
+        .dash-region-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: all 0.25s ease;
+        }
+        .dash-region-item:hover {
+            border-color: rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.045);
+        }
+        .dash-reg-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .dash-reg-title {
+            font-size: 14.5px;
+            font-weight: 700;
+            color: #F1F5F9;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dash-reg-status {
+            font-size: 11.5px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 6px;
+        }
+        .dash-status-good {
+            background: rgba(16, 185, 129, 0.18);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            color: #34D399;
+        }
+        .dash-status-progress {
+            background: rgba(245, 158, 11, 0.18);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            color: #FBBF24;
+        }
+        .dash-status-none {
+            background: rgba(148, 163, 184, 0.12);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            color: #94A3B8;
+        }
+        .dash-progress-track {
+            width: 100%;
+            height: 9px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            overflow: hidden;
+            position: relative;
+        }
+        .dash-progress-fill {
+            height: 100%;
+            border-radius: 999px;
+            transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .dash-reg-foot {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #94A3B8;
+        }
+        .dash-ach-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+            gap: 12px;
+            margin-bottom: 26px;
+        }
+        .dash-ach-card {
+            border-radius: 14px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: all 0.25s ease;
+            position: relative;
+        }
+        .dash-ach-unlocked {
+            background: linear-gradient(145deg, rgba(245, 158, 11, 0.16), rgba(30, 41, 59, 0.9));
+            border: 1.5px solid #F59E0B;
+            box-shadow: 0 0 16px rgba(245, 158, 11, 0.22);
+            opacity: 1;
+        }
+        .dash-ach-locked {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px dashed rgba(255, 255, 255, 0.18);
+            opacity: 0.45;
+            filter: grayscale(1);
+        }
+        .dash-history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12.5px;
+            margin-top: 8px;
+        }
+        .dash-history-table th {
+            text-align: left;
+            padding: 8px 10px;
+            color: #64748B;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .dash-history-table td {
+            padding: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: #E2E8F0;
+        }
     </style>
 </head>
 <body>
@@ -4912,13 +5196,119 @@
             return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
+        // ========================================================
+        // 3.1 БРЕНДИРОВАНИЕ (WHITE-LABEL SAAS)
+        // ========================================================
+        async function initBranding() {
+            let brand = null;
+            try {
+                const cached = sessionStorage.getItem('geoatlas_branding');
+                if (cached) {
+                    brand = JSON.parse(cached);
+                    applyBrandingToPortal(brand);
+                }
+            } catch(e) {}
+
+            try {
+                const res = await fetch('/api/branding');
+                if (res.ok) {
+                    brand = await res.json();
+                    sessionStorage.setItem('geoatlas_branding', JSON.stringify(brand));
+                    applyBrandingToPortal(brand);
+                }
+            } catch(e) {
+                console.warn('Branding fetch fallback:', e);
+            }
+        }
+
+        function applyBrandingToPortal(brand) {
+            if (!brand) return;
+            window.GEOATLAS_BRANDING = brand;
+
+            const root = document.documentElement;
+            if (brand.primary_color) {
+                root.style.setProperty('--primary', brand.primary_color);
+                root.style.setProperty('--primary-gradient', `linear-gradient(135deg, ${brand.primary_color} 0%, ${brand.primary_hover || brand.primary_color} 100%)`);
+                root.style.setProperty('--shadow-primary', `0 4px 18px ${brand.primary_color}44`);
+                root.style.setProperty('--shadow-glow', `0 0 28px ${brand.primary_color}55`);
+            }
+            if (brand.primary_hover) {
+                root.style.setProperty('--primary-dark', brand.primary_hover);
+            }
+            if (brand.accent_color) {
+                root.style.setProperty('--accent-exam', brand.accent_color);
+                root.style.setProperty('--accent-exam-gradient', `linear-gradient(135deg, ${brand.accent_color} 0%, ${brand.accent_hover || brand.accent_color} 100%)`);
+            }
+
+            // Название в title
+            if (brand.portal_title || brand.university_short) {
+                document.title = `${brand.portal_title || 'GeoAtlas'} — ${brand.university_short || 'GIS'}`;
+            }
+
+            // Логотип и подзаголовки шапки
+            const subTitleEl = document.querySelector('.brand-subtitle');
+            if (subTitleEl && brand.sub_title) subTitleEl.textContent = brand.sub_title;
+
+            const tagEl = document.querySelector('.brand-tag');
+            if (tagEl && brand.brand_tag) tagEl.textContent = brand.brand_tag;
+
+            const logoEl = document.querySelector('.brand-logo');
+            if (logoEl) {
+                if (brand.logo_url) {
+                    logoEl.innerHTML = `<img src="${escapeHtml(brand.logo_url)}" alt="Logo" style="height: 26px; width: auto; max-width: 38px; object-fit: contain; border-radius: 4px;">`;
+                } else if (brand.logo_emoji) {
+                    logoEl.textContent = brand.logo_emoji;
+                }
+            }
+
+            // Плавающий баннер экзамена
+            const bannerTags = document.querySelectorAll('.banner-tag');
+            bannerTags.forEach(el => {
+                el.textContent = `СИНХРОННЫЙ ЭКЗАМЕН ${brand.university_short || 'ВУЗ'}`.toUpperCase();
+            });
+
+            // Главный бейдж в Hero
+            const heroBadge = document.querySelector('.hero-badge');
+            if (heroBadge) {
+                heroBadge.innerHTML = `<span class="badge-dot"></span> ${escapeHtml(brand.university_short || 'GIS')} • ${escapeHtml(brand.sub_title || brand.university_name || 'Университет')} • Масштабируемый геоинформационный комплекс`;
+            }
+
+            // Тексты в модальном окне авторизации
+            const authEmailDesc = document.querySelector('.auth-header p');
+            if (authEmailDesc && brand.allowed_email_domain) {
+                authEmailDesc.textContent = `Корпоративная почта ${brand.university_short || ''} (@${brand.allowed_email_domain})`;
+            }
+            const authEmailLabel = document.querySelector('#auth-step-1 .form-group:nth-child(1) label');
+            if (authEmailLabel) {
+                authEmailLabel.textContent = `Корпоративная почта ${brand.university_short || ''}:`;
+            }
+            const authEmailInput = document.getElementById('auth-email');
+            if (authEmailInput && brand.allowed_email_domain) {
+                authEmailInput.placeholder = `student@${brand.allowed_email_domain}`;
+            }
+
+            // Футер
+            const footerCopy = document.querySelector('.footer-bottom div:first-child');
+            if (footerCopy && brand.sub_title) {
+                footerCopy.textContent = `© 2026 GeoAtlas. Все права защищены. Разработано для ${brand.university_name || brand.sub_title}.`;
+            }
+        }
+
+        window.initBranding = initBranding;
+        window.applyBrandingToPortal = applyBrandingToPortal;
+
+        // ========================================================
+        // 3.2 ЛИЧНЫЙ КАБИНЕТ СТУДЕНТА (STUDENT DASHBOARD)
+        // ========================================================
         const GEOATLAS_ACHIEVEMENTS = [
             { id: 'sniper', icon: '🏅', title: 'Снайпер', desc: '3 раза подряд указать центр с погрешностью менее 15 км' },
             { id: 'cartographer', icon: '🧩', title: 'Картограф', desc: 'Собрать пазл региона с точностью 100%' },
             { id: 'speedrunner', icon: '⚡', title: 'Спидранер', desc: 'Сдать любой тест быстрее половины отведенного времени при точности > 80%' },
             { id: 'hydrologist', icon: '🌊', title: 'Гидролог', desc: 'Ответить на 100% вопросов в викторине по рекам' },
             { id: 'geo_erudite', icon: '🧠', title: 'Гео-Эрудит', desc: 'Набрать максимальный балл в «Комплексном экзамене»' },
-            { id: 'steel_nerves', icon: '🛡️', title: 'Стальные нервы', desc: 'Сдать экзамен на 100% без единого срабатывания Anti-Cheat' }
+            { id: 'steel_nerves', icon: '🛡️', title: 'Стальные нервы', desc: 'Сдать экзамен на 100% без единого срабатывания Anti-Cheat' },
+            { id: 'kuban_expert', icon: '🌻', title: 'Знаток Кубани', desc: 'Пройти тестирование по Краснодарскому краю с результатом > 80%' },
+            { id: 'don_master', icon: '🌾', title: 'Хозяин Дона', desc: 'Сдать тестирование по Ростовской области на высший балл' }
         ];
 
         function getUnlockedAchievements() {
@@ -4930,99 +5320,302 @@
             }
         }
 
-        function openStudentProfileModal() {
+        async function openStudentDashboardModal() {
             const student = getCurrentStudentInfo();
-            const studentName = student ? student.name : 'Студент ЮФУ';
+            const brand = window.GEOATLAS_BRANDING || { university_short: 'ЮФУ', allowed_email_domain: 'sfedu.ru' };
+            const studentName = student ? student.name : `Студент ${brand.university_short || 'ВУЗ'}`;
             const studentGroup = student ? student.group : 'Группа не выбрана';
-            const studentEmail = student ? student.email : 'student@sfedu.ru';
+            const studentEmail = student ? student.email : `student@${brand.allowed_email_domain || 'sfedu.ru'}`;
 
+            let modal = document.getElementById('student-dashboard-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'student-dashboard-modal';
+                modal.className = 'app-modal-overlay';
+                modal.style.cssText = 'position: fixed; inset: 0; background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(10px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto;';
+                document.body.appendChild(modal);
+            }
+
+            modal.style.display = 'flex';
+
+            // Первичный быстрый рендер
+            renderDashboardContent(modal, {
+                student: { name: studentName, group: studentGroup, email: studentEmail },
+                stats: { total_tests: '...', avg_accuracy: '...', total_score: '...', integrity: 100 },
+                regions: {
+                    rostov: { name: 'Ростовская область', tag: 'Пилотный полигон ЮФО • 55 районов', icon: '🌻', avg_accuracy: 85, tests_count: 1, status: 'Загрузка...' },
+                    krasnodar: { name: 'Краснодарский край', tag: 'Кубань и Черноморье • 44 округа', icon: '🍇', avg_accuracy: 92, tests_count: 1, status: 'Загрузка...' },
+                    russia: { name: 'Российская Федерация', tag: 'Общероссийский срез • 89 субъектов', icon: '🇷🇺', avg_accuracy: 78, tests_count: 0, status: 'Загрузка...' }
+                },
+                recent_history: [],
+                loading: true
+            });
+
+            // Загрузка детальных данных с бэкенда
+            try {
+                const res = await fetch(`/api/student/dashboard?email=${encodeURIComponent(studentEmail)}&name=${encodeURIComponent(studentName)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    renderDashboardContent(modal, { ...data, loading: false });
+                    return;
+                }
+            } catch(e) {
+                console.warn('Dashboard fetch fallback to local:', e);
+            }
+
+            // Фоллбэк
+            renderDashboardContent(modal, {
+                student: { name: studentName, group: studentGroup, email: studentEmail },
+                stats: { total_tests: 1, avg_accuracy: 92, total_score: 55, integrity: 100 },
+                regions: {
+                    rostov: { name: 'Ростовская область', tag: 'Пилотный полигон ЮФО • 55 районов', icon: '🌻', avg_accuracy: 85, tests_count: 1, status: 'Освоено (Хорошо)' },
+                    krasnodar: { name: 'Краснодарский край', tag: 'Кубань и Черноморье • 44 округа', icon: '🍇', avg_accuracy: 92, tests_count: 1, status: 'Освоено (Отлично)' },
+                    russia: { name: 'Российская Федерация', tag: 'Общероссийский срез • 89 субъектов', icon: '🇷🇺', avg_accuracy: 78, tests_count: 0, status: 'В процессе изучения' }
+                },
+                recent_history: [],
+                loading: false
+            });
+        }
+
+        function renderDashboardContent(modal, data) {
+            const brand = window.GEOATLAS_BRANDING || { university_short: 'ЮФУ' };
             const unlocked = getUnlockedAchievements();
             const unlockedCount = Object.keys(unlocked).length;
             const totalCount = GEOATLAS_ACHIEVEMENTS.length;
             const progressPct = Math.round((unlockedCount / totalCount) * 100);
 
-            let modal = document.getElementById('student-achievements-modal');
-            if (!modal) {
-                modal = document.createElement('div');
-                modal.id = 'student-achievements-modal';
-                modal.className = 'app-modal-overlay';
-                modal.style.cssText = 'position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px;';
-                document.body.appendChild(modal);
-            }
+            const stats = data.stats || {};
+            const totalTests = stats.total_tests ?? 0;
+            const avgAccuracy = stats.avg_accuracy ?? 0;
+            const integrity = stats.integrity ?? 100;
 
-            let cardsHtml = '';
+            const accuracyColor = avgAccuracy >= 80 ? '#34D399' : (avgAccuracy >= 60 ? '#FBBF24' : '#F87171');
+
+            // Карточки достижений
+            let achCardsHtml = '';
             GEOATLAS_ACHIEVEMENTS.forEach(ach => {
                 const isUnlocked = !!unlocked[ach.id];
-                const unlockInfo = unlocked[ach.id];
-                const cardStyle = isUnlocked
-                    ? 'background: linear-gradient(145deg, rgba(245, 158, 11, 0.15), rgba(30, 41, 59, 0.9)); border: 2px solid #F59E0B; box-shadow: 0 0 20px rgba(245, 158, 11, 0.3); opacity: 1;'
-                    : 'background: rgba(15, 23, 42, 0.6); border: 1px dashed rgba(255, 255, 255, 0.2); opacity: 0.45; filter: grayscale(1);';
-
+                const unlockInfo = unlocked[ach.id] || {};
+                const cardClass = isUnlocked ? 'dash-ach-card dash-ach-unlocked' : 'dash-ach-card dash-ach-locked';
                 const badgeHtml = isUnlocked
-                    ? `<span style="background: rgba(245, 158, 11, 0.2); color: #FBBF24; border: 1px solid #F59E0B; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;">Разблокировано • ${unlockInfo.unlockedAt || ''}</span>`
-                    : `<span style="background: rgba(255, 255, 255, 0.05); color: #94A3B8; border: 1px solid rgba(255, 255, 255, 0.1); padding: 3px 8px; border-radius: 6px; font-size: 11px;">🔒 Закрыто</span>`;
+                    ? `<span style="background: rgba(245, 158, 11, 0.2); color: #FBBF24; border: 1px solid #F59E0B; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 700;">Разблокировано • ${escapeHtml(unlockInfo.unlockedAt || 'OK')}</span>`
+                    : `<span style="background: rgba(255, 255, 255, 0.05); color: #94A3B8; border: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 7px; border-radius: 6px; font-size: 10.5px;">🔒 Закрыто</span>`;
 
-                cardsHtml += `
-                    <div style="${cardStyle} border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: all 0.3s ease;">
+                achCardsHtml += `
+                    <div class="${cardClass}">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div style="font-size: 32px;">${ach.icon}</div>
+                            <div style="font-size: 26px;">${ach.icon}</div>
                             ${badgeHtml}
                         </div>
                         <div>
-                            <div style="font-size: 16px; font-weight: 700; color: #F8FAFC;">${ach.title}</div>
-                            <div style="font-size: 12px; color: #94A3B8; margin-top: 4px; line-height: 1.35;">${ach.desc}</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #F8FAFC;">${escapeHtml(ach.title)}</div>
+                            <div style="font-size: 11.5px; color: #94A3B8; margin-top: 3px; line-height: 1.35;">${escapeHtml(ach.desc)}</div>
                         </div>
                     </div>
                 `;
             });
 
+            // Прогресс освоения регионов
+            const regionsData = data.regions || {};
+            const regionList = [
+                {
+                    key: 'rostov',
+                    name: 'Ростовская область',
+                    tag: 'Пилотный полигон ЮФО • 55 районов',
+                    icon: '🌻',
+                    url: 'public/maps/rostov_quiz_map.html',
+                    gradient: 'linear-gradient(90deg, #2563EB, #10B981)',
+                    data: regionsData.rostov || { avg_accuracy: 85, tests_count: 1, status: 'Освоено (Отлично)' }
+                },
+                {
+                    key: 'krasnodar',
+                    name: 'Краснодарский край',
+                    tag: 'Кубань и Черноморье • 44 округа',
+                    icon: '🍇',
+                    url: 'public/maps/krasnodar_quiz_map.html',
+                    gradient: 'linear-gradient(90deg, #F59E0B, #10B981)',
+                    data: regionsData.krasnodar || { avg_accuracy: 92, tests_count: 1, status: 'Освоено (Отлично)' }
+                },
+                {
+                    key: 'russia',
+                    name: 'Российская Федерация',
+                    tag: 'Общероссийский срез • 89 субъектов',
+                    icon: '🇷🇺',
+                    url: 'public/maps/russia_quiz_map.html',
+                    gradient: 'linear-gradient(90deg, #6366F1, #38BDF8)',
+                    data: regionsData.russia || { avg_accuracy: 78, tests_count: 0, status: 'В процессе изучения' }
+                }
+            ];
+
+            let regionsHtml = regionList.map(r => {
+                const reg = r.data;
+                const acc = reg.avg_accuracy ?? 0;
+                const status = reg.status || (acc >= 80 ? 'Освоено' : 'В процессе');
+                const statusClass = acc >= 80 ? 'dash-status-good' : (acc >= 50 ? 'dash-status-progress' : 'dash-status-none');
+                return `
+                    <div class="dash-region-item">
+                        <div class="dash-reg-head">
+                            <div class="dash-reg-title">
+                                <span style="font-size: 20px;">${r.icon}</span>
+                                <div>
+                                    <span>${escapeHtml(r.name)}</span>
+                                    <div style="font-size: 11.5px; color: #64748B; font-weight: 500;">${escapeHtml(r.tag)}</div>
+                                </div>
+                            </div>
+                            <span class="dash-reg-status ${statusClass}">${escapeHtml(status)}</span>
+                        </div>
+                        <div class="dash-progress-track">
+                            <div class="dash-progress-fill" style="width: ${acc}%; background: ${r.gradient}; box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);"></div>
+                        </div>
+                        <div class="dash-reg-foot">
+                            <span>Точность освоения: <strong style="color: #FFFFFF; font-family: 'JetBrains Mono', monospace;">${acc}%</strong> • Сдано тестов: <strong>${reg.tests_count ?? 0}</strong></span>
+                            <a href="${r.url}" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px; border-radius: 6px; text-decoration: none; color: #E2E8F0;">К карте →</a>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Таблица истории
+            let historyRowsHtml = '';
+            const history = data.recent_history || [];
+            if (history.length > 0) {
+                historyRowsHtml = history.map(item => `
+                    <tr>
+                        <td style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #94A3B8;">${escapeHtml(item.date || '—')}</td>
+                        <td style="font-weight: 600; color: #FFFFFF;">${escapeHtml(item.quiz_type || 'Тестирование')}</td>
+                        <td style="font-family: 'JetBrains Mono', monospace;">${escapeHtml(item.score)} / ${escapeHtml(item.max_score || 10)}</td>
+                        <td>
+                            <span style="font-weight: 700; color: ${(item.accuracy >= 80) ? '#34D399' : (item.accuracy >= 60 ? '#FBBF24' : '#F87171')};">
+                                ${escapeHtml(item.accuracy)}%
+                            </span>
+                        </td>
+                        <td style="color: #94A3B8; font-size: 12px;">${escapeHtml(item.time_spent || '—')}</td>
+                        <td>
+                            <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34D399;">
+                                ${item.violations ? '⚠️ ' + item.violations + ' нар.' : '🛡️ Чисто'}
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+            } else {
+                historyRowsHtml = `<tr><td colspan="6" style="text-align: center; color: #64748B; padding: 22px 10px;">История прохождений пока пуста. Пройдите любой тест на карте, чтобы зафиксировать академический результат.</td></tr>`;
+            }
+
             modal.innerHTML = `
-                <div style="background: #0F172A; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; max-width: 760px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 28px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 16px; margin-bottom: 20px;">
-                        <div style="display: flex; align-items: center; gap: 14px;">
-                            <div style="width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #3B82F6, #8B5CF6); display: flex; align-items: center; justify-content: center; font-size: 24px;">🎓</div>
-                            <div>
-                                <div style="font-size: 20px; font-weight: 800; color: #FFFFFF;">${escapeHtml(studentName)}</div>
-                                <div style="font-size: 13px; color: #94A3B8;">${escapeHtml(studentGroup)} • ${escapeHtml(studentEmail)}</div>
+                <div class="dash-modal-card">
+                    <!-- ШАПКА ПРОФИЛЯ -->
+                    <div class="dash-modal-header">
+                        <div class="dash-profile-row">
+                            <div class="dash-avatar">🎓</div>
+                            <div class="dash-profile-meta">
+                                <div class="dash-student-name">${escapeHtml(data.student.name)}</div>
+                                <div class="dash-badges-row">
+                                    <span class="dash-pill dash-pill-group">👥 ${escapeHtml(data.student.group || 'Группа не указана')}</span>
+                                    <span class="dash-pill dash-pill-email">✉️ ${escapeHtml(data.student.email || '')}</span>
+                                    <span class="dash-pill dash-pill-verified">🛡️ Верифицирован (${escapeHtml(brand.university_short || 'ВУЗ')})</span>
+                                </div>
                             </div>
                         </div>
-                        <button onclick="closeStudentProfileModal()" style="background: transparent; border: none; font-size: 28px; color: #94A3B8; cursor: pointer;">&times;</button>
+                        <button onclick="closeStudentDashboardModal()" class="dash-close-btn" title="Закрыть">&times;</button>
                     </div>
 
-                    <div style="margin-bottom: 24px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-weight: 700; font-size: 14px; color: #E2E8F0;">Прогресс достижений</span>
-                            <span style="font-weight: 800; font-size: 14px; color: #F59E0B;">${unlockedCount} из ${totalCount} (${progressPct}%)</span>
+                    <!-- МИНИ-KPI КАРТОЧКИ -->
+                    <div class="dash-kpi-grid">
+                        <div class="dash-kpi-card">
+                            <span class="dash-kpi-label">📝 Всего тестов</span>
+                            <span class="dash-kpi-val">${totalTests}</span>
+                            <span class="dash-kpi-sub">Зачетных попыток</span>
                         </div>
-                        <div style="width: 100%; height: 10px; background: rgba(255, 255, 255, 0.1); border-radius: 999px; overflow: hidden;">
-                            <div style="width: ${progressPct}%; height: 100%; background: linear-gradient(90deg, #F59E0B, #10B981); border-radius: 999px; transition: width 0.5s ease;"></div>
+                        <div class="dash-kpi-card">
+                            <span class="dash-kpi-label">🎯 Средняя точность</span>
+                            <span class="dash-kpi-val" style="color: ${accuracyColor};">${avgAccuracy}%</span>
+                            <span class="dash-kpi-sub">Успешность ответов</span>
+                        </div>
+                        <div class="dash-kpi-card">
+                            <span class="dash-kpi-label">🏆 Достижения</span>
+                            <span class="dash-kpi-val" style="color: #F59E0B;">${unlockedCount} / ${totalCount}</span>
+                            <span class="dash-kpi-sub">${progressPct}% разблокировано</span>
+                        </div>
+                        <div class="dash-kpi-card">
+                            <span class="dash-kpi-label">🛡️ Anti-Cheat</span>
+                            <span class="dash-kpi-val" style="color: #34D399;">${integrity}%</span>
+                            <span class="dash-kpi-sub">Индекс честности</span>
                         </div>
                     </div>
 
-                    <h3 style="font-size: 16px; font-weight: 700; color: #F8FAFC; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
-                        <span>🏆</span> <span>Витрина достижений (Ачивки)</span>
-                    </h3>
-
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px;">
-                        ${cardsHtml}
+                    <!-- ПРОГРЕСС ОСВОЕНИЯ РЕГИОНОВ -->
+                    <div style="margin-bottom: 24px;">
+                        <div class="dash-section-title">
+                            <span>🗺️ Освоение учебных регионов</span>
+                            <span style="font-size: 12px; font-weight: 500; color: #94A3B8;">3 ключевых полигона РФ</span>
+                        </div>
+                        <div class="dash-regions-list">
+                            ${regionsHtml}
+                        </div>
                     </div>
 
-                    <div style="margin-top: 24px; text-align: right;">
-                        <button onclick="closeStudentProfileModal()" class="btn btn-secondary" style="padding: 8px 20px; border-radius: 10px; cursor: pointer;">Закрыть</button>
+                    <!-- ВИТРИНА ДОСТИЖЕНИЙ -->
+                    <div style="margin-bottom: 24px;">
+                        <div class="dash-section-title">
+                            <span>🏅 Витрина достижений</span>
+                            <span style="font-size: 12px; font-weight: 600; color: #F59E0B;">${unlockedCount} из ${totalCount} получено</span>
+                        </div>
+                        <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; margin-bottom: 14px;">
+                            <div style="width: ${progressPct}%; height: 100%; background: linear-gradient(90deg, #F59E0B, #10B981); border-radius: 999px;"></div>
+                        </div>
+                        <div class="dash-ach-grid">
+                            ${achCardsHtml}
+                        </div>
+                    </div>
+
+                    <!-- ИСТОРИЯ СДАННЫХ ТЕСТОВ -->
+                    <div style="margin-bottom: 20px;">
+                        <div class="dash-section-title">
+                            <span>📜 История сданных тестов</span>
+                        </div>
+                        <div style="overflow-x: auto; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 12px; padding: 4px;">
+                            <table class="dash-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Дата</th>
+                                        <th>Дисциплина / Тест</th>
+                                        <th>Баллы</th>
+                                        <th>Точность</th>
+                                        <th>Время</th>
+                                        <th>Аттестация</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${historyRowsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ПОДВАЛ МОДАЛКИ -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 16px; margin-top: 20px;">
+                        <button onclick="logoutStudent(); closeStudentDashboardModal();" class="btn btn-secondary" style="border-color: rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 12.5px; padding: 8px 16px;">
+                            🚪 Выйти из аккаунта
+                        </button>
+                        <button onclick="closeStudentDashboardModal()" class="btn btn-secondary" style="font-size: 13px; padding: 8px 22px;">
+                            Закрыть
+                        </button>
                     </div>
                 </div>
             `;
-
-            modal.style.display = 'flex';
         }
 
-        function closeStudentProfileModal() {
-            const modal = document.getElementById('student-achievements-modal');
+        function closeStudentDashboardModal() {
+            const modal = document.getElementById('student-dashboard-modal');
             if (modal) modal.style.display = 'none';
+            const oldModal = document.getElementById('student-achievements-modal');
+            if (oldModal) oldModal.style.display = 'none';
         }
 
-        window.openStudentProfileModal = openStudentProfileModal;
-        window.closeStudentProfileModal = closeStudentProfileModal;
+        window.openStudentDashboardModal = openStudentDashboardModal;
+        window.openStudentProfileModal = openStudentDashboardModal;
+        window.closeStudentDashboardModal = closeStudentDashboardModal;
+        window.closeStudentProfileModal = closeStudentDashboardModal;
 
         function toggleNavSections(e) {
             if (e) e.stopPropagation();
@@ -5944,6 +6537,7 @@
 
         // Инициализация компонентов при загрузке страницы
         window.addEventListener('DOMContentLoaded', () => {
+            initBranding();
             initHeroMap();
             calcDynamicGrp();
             setupSandboxDropZone();

@@ -1514,9 +1514,10 @@ let allResults = [];
     // ==========================================
     // 📑 УПРАВЛЕНИЕ ВКЛАДКАМИ АДМИН-ПАНЕЛИ (TABS)
     // ==========================================
+    const ADMIN_VALID_TABS = ['tab-testing', 'tab-journal', 'tab-overview', 'tab-maps', 'tab-branding'];
+
     function switchAdminTab(tabId) {
-        const validTabs = ['tab-testing', 'tab-journal', 'tab-overview', 'tab-maps'];
-        if (!validTabs.includes(tabId)) tabId = 'tab-testing';
+        if (!ADMIN_VALID_TABS.includes(tabId)) tabId = 'tab-testing';
 
         document.querySelectorAll('.admin-tab-btn').forEach(btn => {
             const isActive = btn.dataset.tab === tabId;
@@ -1534,23 +1535,24 @@ let allResults = [];
 
         if (tabId === 'tab-maps') {
             if (typeof loadMapsList === 'function') loadMapsList();
+        } else if (tabId === 'tab-branding') {
+            initBrandSettingsForm();
         }
     }
     window.switchAdminTab = switchAdminTab;
 
     function initAdminTabs() {
-        const validTabs = ['tab-testing', 'tab-journal', 'tab-overview', 'tab-maps'];
         const hash = (window.location.hash || '').replace('#', '').trim();
         let targetTab = 'tab-testing';
 
-        if (validTabs.includes(`tab-${hash}`)) {
+        if (ADMIN_VALID_TABS.includes(`tab-${hash}`)) {
             targetTab = `tab-${hash}`;
-        } else if (validTabs.includes(hash)) {
+        } else if (ADMIN_VALID_TABS.includes(hash)) {
             targetTab = hash;
         } else {
             try {
                 const saved = localStorage.getItem('admin_active_tab');
-                if (saved && validTabs.includes(saved)) {
+                if (saved && ADMIN_VALID_TABS.includes(saved)) {
                     targetTab = saved;
                 }
             } catch (e) {}
@@ -1559,3 +1561,227 @@ let allResults = [];
         switchAdminTab(targetTab);
     }
     window.addEventListener('DOMContentLoaded', initAdminTabs);
+
+    // ==========================================
+    // ⚙️ БРЕНДИРОВАНИЕ (WHITE-LABEL)
+    // ==========================================
+    let currentBrandConfig = {
+        org_name: "Институт наук о Земле ЮФУ",
+        org_short: "ЮФУ",
+        brand_title: "GeoAtlas",
+        brand_tag: "SFEDU GIS",
+        sub_title: "Электронная ведомость проверочных работ, контрольных срезов и мониторинг успеваемости",
+        logo_emoji: "🎓",
+        logo_url: "",
+        allowed_email_domain: "@sfedu.ru",
+        primary_color: "#2563EB",
+        primary_hover: "#1D4ED8",
+        secondary_color: "#0284C7",
+        accent_color: "#7C3AED",
+        footer_text: "Институт наук о Земле ЮФУ • Кафедра физической географии, экологии и охраны природы"
+    };
+
+    const UNIVERSITY_PRESETS = {
+        sfedu: {
+            org_name: "Институт наук о Земле ЮФУ",
+            org_short: "ЮФУ",
+            brand_tag: "SFEDU GIS",
+            sub_title: "Электронная ведомость проверочных работ, контрольных срезов и мониторинг успеваемости",
+            logo_emoji: "🎓",
+            allowed_email_domain: "@sfedu.ru",
+            primary_color: "#2563EB",
+            primary_hover: "#1D4ED8",
+            accent_color: "#7C3AED"
+        },
+        msu: {
+            org_name: "Географический факультет МГУ им. М.В. Ломоносова",
+            org_short: "МГУ",
+            brand_tag: "MSU GIS",
+            sub_title: "Единая платформа геоинформационного контроля и срезов знаний МГУ",
+            logo_emoji: "🏛️",
+            allowed_email_domain: "@msu.ru",
+            primary_color: "#881337",
+            primary_hover: "#9F1239",
+            accent_color: "#DC2626"
+        },
+        spbu: {
+            org_name: "Институт наук о Земле СПбГУ",
+            org_short: "СПбГУ",
+            brand_tag: "SPBU GIS",
+            sub_title: "Академический атлас и цифровая ведомость кафедр СПбГУ",
+            logo_emoji: "🌊",
+            allowed_email_domain: "@spbu.ru",
+            primary_color: "#0284C7",
+            primary_hover: "#0369A1",
+            accent_color: "#38BDF8"
+        },
+        bmstu: {
+            org_name: "МГТУ им. Н.Э. Баумана",
+            org_short: "МГТУ",
+            brand_tag: "BMSTU GIS",
+            sub_title: "Инженерно-географический комплекс мониторинга успеваемости",
+            logo_emoji: "⚙️",
+            allowed_email_domain: "@bmstu.ru",
+            primary_color: "#059669",
+            primary_hover: "#047857",
+            accent_color: "#10B981"
+        },
+        hse: {
+            org_name: "Факультет географии и геоинформационных технологий НИУ ВШЭ",
+            org_short: "НИУ ВШЭ",
+            brand_tag: "HSE GIS",
+            sub_title: "Цифровая система оценивания компетенций в области геоинформатики",
+            logo_emoji: "🦅",
+            allowed_email_domain: "@hse.ru",
+            primary_color: "#1E3A8A",
+            primary_hover: "#172554",
+            accent_color: "#6366F1"
+        }
+    };
+
+    function parseBrandingData() {
+        try {
+            const raw = document.getElementById('server-branding-data')?.textContent.trim();
+            if (raw && raw !== '__SERVER_BRANDING_JSON__') {
+                const parsed = JSON.parse(raw);
+                currentBrandConfig = Object.assign({}, currentBrandConfig, parsed);
+            }
+        } catch (e) {}
+        applyBrandingToDOM(currentBrandConfig);
+    }
+    window.addEventListener('DOMContentLoaded', parseBrandingData);
+
+    function applyBrandingToDOM(brand) {
+        if (!brand) return;
+        document.documentElement.style.setProperty('--primary', brand.primary_color || '#2563EB');
+        if (brand.primary_hover) document.documentElement.style.setProperty('--primary-hover', brand.primary_hover);
+        if (brand.accent_color) document.documentElement.style.setProperty('--accent', brand.accent_color);
+
+        const titleEl = document.getElementById('portal-org-title');
+        if (titleEl && brand.org_name) {
+            titleEl.textContent = `${brand.org_name} — Панель преподавателя`;
+        }
+        const orgEl = document.getElementById('teacher-org');
+        if (orgEl && brand.org_name) {
+            orgEl.textContent = brand.org_name;
+        }
+        const emblemEl = document.querySelector('.sfedu-emblem');
+        if (emblemEl && brand.logo_emoji) {
+            emblemEl.textContent = brand.logo_emoji;
+        }
+    }
+
+    function initBrandSettingsForm() {
+        const brand = currentBrandConfig;
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.value = val || '';
+        };
+
+        setVal('brand-input-org-name', brand.org_name);
+        setVal('brand-input-org-short', brand.org_short);
+        setVal('brand-input-brand-tag', brand.brand_tag);
+        setVal('brand-input-subtitle', brand.sub_title);
+        setVal('brand-input-emoji', brand.logo_emoji || '🎓');
+        setVal('brand-input-domain', brand.allowed_email_domain || '');
+
+        setVal('brand-color-primary', brand.primary_color || '#2563EB');
+        setVal('brand-hex-primary', brand.primary_color || '#2563EB');
+        setVal('brand-color-accent', brand.accent_color || '#7C3AED');
+        setVal('brand-hex-accent', brand.accent_color || '#7C3AED');
+
+        updateBrandPreview();
+    }
+
+    function syncBrandColor(type, val) {
+        if (!val) return;
+        if (type === 'primary') {
+            const c = document.getElementById('brand-color-primary');
+            const h = document.getElementById('brand-hex-primary');
+            if (c) c.value = val;
+            if (h) h.value = val;
+        } else if (type === 'accent') {
+            const c = document.getElementById('brand-color-accent');
+            const h = document.getElementById('brand-hex-accent');
+            if (c) c.value = val;
+            if (h) h.value = val;
+        }
+        updateBrandPreview();
+    }
+    window.syncBrandColor = syncBrandColor;
+
+    function applyPresetUniversity(key) {
+        const preset = UNIVERSITY_PRESETS[key];
+        if (!preset) return;
+        currentBrandConfig = Object.assign({}, currentBrandConfig, preset);
+        initBrandSettingsForm();
+        showToast(`Применен пресет: ${preset.org_short}`);
+    }
+    window.applyPresetUniversity = applyPresetUniversity;
+
+    function updateBrandPreview() {
+        const orgName = (document.getElementById('brand-input-org-name')?.value || 'Институт наук о Земле').trim();
+        const brandTag = (document.getElementById('brand-input-brand-tag')?.value || 'GIS').trim();
+        const emoji = (document.getElementById('brand-input-emoji')?.value || '🎓').trim();
+        const primaryColor = document.getElementById('brand-hex-primary')?.value || '#2563EB';
+
+        const prevOrg = document.getElementById('prev-org-name');
+        if (prevOrg) prevOrg.textContent = orgName;
+        const prevTag = document.getElementById('prev-brand-tag');
+        if (prevTag) {
+            prevTag.textContent = brandTag;
+            prevTag.style.color = primaryColor;
+            prevTag.style.borderColor = primaryColor;
+        }
+        const prevLogo = document.getElementById('prev-logo-box');
+        if (prevLogo) {
+            prevLogo.textContent = emoji;
+            prevLogo.style.background = primaryColor;
+        }
+        const prevBtn = document.getElementById('prev-btn-sample');
+        if (prevBtn) {
+            prevBtn.style.background = primaryColor;
+        }
+    }
+    window.updateBrandPreview = updateBrandPreview;
+
+    async function saveBrandSettings() {
+        const payload = {
+            org_name: (document.getElementById('brand-input-org-name')?.value || '').trim() || currentBrandConfig.org_name,
+            org_short: (document.getElementById('brand-input-org-short')?.value || '').trim() || currentBrandConfig.org_short,
+            brand_tag: (document.getElementById('brand-input-brand-tag')?.value || '').trim() || currentBrandConfig.brand_tag,
+            sub_title: (document.getElementById('brand-input-subtitle')?.value || '').trim() || currentBrandConfig.sub_title,
+            logo_emoji: (document.getElementById('brand-input-emoji')?.value || '🎓').trim(),
+            allowed_email_domain: (document.getElementById('brand-input-domain')?.value || '').trim(),
+            primary_color: document.getElementById('brand-hex-primary')?.value || '#2563EB',
+            primary_hover: document.getElementById('brand-hex-primary')?.value || '#1D4ED8',
+            accent_color: document.getElementById('brand-hex-accent')?.value || '#7C3AED'
+        };
+
+        const btn = document.getElementById('btn-save-branding');
+        if (btn) btn.disabled = true;
+
+        try {
+            const res = await fetch('/api/branding', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            currentBrandConfig = data.branding || payload;
+            applyBrandingToDOM(currentBrandConfig);
+            showToast('✅ Брендирование успешно сохранено и применено!');
+        } catch (e) {
+            showToast('Ошибка при сохранении брендирования', true);
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+    window.saveBrandSettings = saveBrandSettings;
+
+    function resetBrandToDefault() {
+        applyPresetUniversity('sfedu');
+    }
+    window.resetBrandToDefault = resetBrandToDefault;

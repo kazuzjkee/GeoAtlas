@@ -1,0 +1,18 @@
+{
+  "org_name": "Институт наук о Земле ЮФУ",
+  "org_short": "ЮФУ",
+  "brand_title": "GeoAtlas",
+  "brand_tag": "SFEDU GIS",
+  "sub_title": "Институт наук о Земле ЮФУ",
+  "logo_emoji": "🎓",
+  "logo_url": "",
+  "allowed_email_domain": "sfedu.ru",
+  "primary_color": "#2563EB",
+  "primary_hover": "#1D4ED8",
+  "secondary_color": "#0284C7",
+  "accent_color": "#7C3AED",
+  "footer_text": "Институт наук о Земле ЮФУ • Кафедра физической географии, экологии и охраны природы",
+  "university_short": "ЮФУ",
+  "university_name": "Институт наук о Земле ЮФУ",
+  "portal_title": "GeoAtlas"
+}

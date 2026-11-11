@@ -65,6 +65,10 @@
             <span class="tab-icon">🗺️</span>
             <span class="tab-text">Управление картами</span>
         </button>
+        <button type="button" class="admin-tab-btn" data-tab="tab-branding" onclick="switchAdminTab('tab-branding')">
+            <span class="tab-icon">⚙️</span>
+            <span class="tab-text">Брендирование</span>
+        </button>
     </nav>
 
     <!-- ВКЛАДКА 1: ТЕСТИРОВАНИЕ И ГРУППЫ -->
@@ -509,6 +513,141 @@
             </div>
         </section>
     </div>
+
+    <!-- ВКЛАДКА 5: БРЕНДИРОВАНИЕ (WHITE-LABEL) -->
+    <div class="admin-tab-pane" id="tab-branding" style="display: none;">
+        <section class="section-card">
+            <div class="section-header">
+                <div class="section-title">
+                    <span>⚙️</span> <span>Система брендирования и адаптации (White-label)</span>
+                </div>
+                <span class="badge badge-purple">Multi-University Ready</span>
+            </div>
+
+            <div style="padding: 24px;">
+                <p style="color: #64748B; font-size: 13.5px; margin-bottom: 20px; line-height: 1.5;">
+                    Настройте комплекс под визуальный стиль и регламенты вашего университета. Название, корпоративные цвета, эмблема и правила доступа применятся ко всему интерактивному атласу и панели преподавателя.
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+                    <!-- Левая колонка: Форма настроек -->
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div class="form-field">
+                            <label class="form-label" for="brand-input-org-name">1. Полное наименование университета / института</label>
+                            <input type="text" id="brand-input-org-name" class="form-input" placeholder="Например: Институт наук о Земле ЮФУ" oninput="updateBrandPreview()">
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="form-field">
+                                <label class="form-label" for="brand-input-org-short">2. Краткое имя / Аббревиатура</label>
+                                <input type="text" id="brand-input-org-short" class="form-input" placeholder="Например: ЮФУ" oninput="updateBrandPreview()">
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label" for="brand-input-brand-tag">3. Шильдик платформы (Brand Tag)</label>
+                                <input type="text" id="brand-input-brand-tag" class="form-input" placeholder="Например: SFEDU GIS" oninput="updateBrandPreview()">
+                            </div>
+                        </div>
+
+                        <div class="form-field">
+                            <label class="form-label" for="brand-input-subtitle">4. Подзаголовок платформы</label>
+                            <input type="text" id="brand-input-subtitle" class="form-input" placeholder="Электронная ведомость проверочных работ..." oninput="updateBrandPreview()">
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="form-field">
+                                <label class="form-label" for="brand-input-emoji">5. Эмблема / Эмодзи</label>
+                                <input type="text" id="brand-input-emoji" class="form-input" placeholder="🎓" oninput="updateBrandPreview()" maxlength="4">
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label" for="brand-input-domain">6. Домен почты студентов</label>
+                                <input type="text" id="brand-input-domain" class="form-input" placeholder="@sfedu.ru (пусто = любой)" oninput="updateBrandPreview()">
+                            </div>
+                        </div>
+
+                        <!-- Выбор цветов -->
+                        <div class="form-field">
+                            <label class="form-label">7. Корпоративные цвета бренда</label>
+                            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 8px; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 6px 10px; border-radius: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: #475569;">Основной:</span>
+                                    <input type="color" id="brand-color-primary" value="#2563EB" style="width: 32px; height: 32px; border: none; cursor: pointer; border-radius: 6px;" oninput="syncBrandColor('primary', this.value)">
+                                    <input type="text" id="brand-hex-primary" value="#2563EB" class="form-input" style="width: 85px; font-family: monospace; font-size: 12px; padding: 4px 6px;" oninput="syncBrandColor('primary', this.value)">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 6px 10px; border-radius: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: #475569;">Акцент:</span>
+                                    <input type="color" id="brand-color-accent" value="#7C3AED" style="width: 32px; height: 32px; border: none; cursor: pointer; border-radius: 6px;" oninput="syncBrandColor('accent', this.value)">
+                                    <input type="text" id="brand-hex-accent" value="#7C3AED" class="form-input" style="width: 85px; font-family: monospace; font-size: 12px; padding: 4px 6px;" oninput="syncBrandColor('accent', this.value)">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Быстрые пресеты ведущих вузов -->
+                        <div class="form-field">
+                            <label class="form-label">Готовые пресеты университетов РФ:</label>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="applyPresetUniversity('sfedu')" style="font-size: 11.5px;">🎓 ЮФУ (Синий)</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="applyPresetUniversity('msu')" style="font-size: 11.5px;">🏛️ МГУ (Бордовый)</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="applyPresetUniversity('spbu')" style="font-size: 11.5px;">🌊 СПбГУ (Лазурный)</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="applyPresetUniversity('bmstu')" style="font-size: 11.5px;">⚙️ МГТУ (Изумрудный)</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="applyPresetUniversity('hse')" style="font-size: 11.5px;">🦅 НИУ ВШЭ (Индиго)</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Правая колонка: Интерактивный предпросмотр в реальном времени -->
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+                        <div style="font-size: 12px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+                            <span>👁️</span> <span>Интерактивный предпросмотр (Live Preview)</span>
+                        </div>
+
+                        <!-- Мини-макет шапки -->
+                        <div style="background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 12px; padding: 14px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.04);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div id="prev-logo-box" style="width: 34px; height: 34px; border-radius: 8px; background: #2563EB; color: white; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold;">🎓</div>
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 800; color: #0F172A; display: flex; align-items: center; gap: 6px;">
+                                            <span>GeoAtlas</span>
+                                            <span id="prev-brand-tag" style="font-size: 9px; font-weight: 700; background: #EFF6FF; color: #2563EB; padding: 1px 5px; border-radius: 4px; border: 1px solid #BFDBFE;">SFEDU GIS</span>
+                                        </div>
+                                        <div id="prev-org-name" style="font-size: 10.5px; color: #64748B; font-weight: 600;">Институт наук о Земле ЮФУ</div>
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; gap: 6px; align-items: center;">
+                                    <div id="prev-btn-sample" style="background: #2563EB; color: white; padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;">🚀 Запустить</div>
+                                    <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 6px; padding: 3px 8px; font-size: 11px; display: flex; align-items: center; gap: 4px;">
+                                        <span>🎓</span> <strong style="font-size: 10px; color: #1E293B;">Студент</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Описание применения -->
+                        <div style="font-size: 12px; color: #64748B; line-height: 1.45; background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px;">
+                            <div style="font-weight: 700; color: #1E293B; margin-bottom: 4px;">Где применится брендирование:</div>
+                            <ul style="margin: 0; padding-left: 18px;">
+                                <li>Верхняя панель навигации главной страницы и всех карт</li>
+                                <li>Электронная ведомость проверочных работ и Moodle/1C</li>
+                                <li>Официальные PDF-отчеты для аттестационной комиссии</li>
+                                <li>Валидация студенческих аккаунтов по корпоративному домену</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Кнопки сохранения -->
+                <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid #E2E8F0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <button type="button" class="btn btn-secondary" onclick="resetBrandToDefault()">
+                        <span>🔄</span> <span>Сбросить к стандарту (ЮФУ)</span>
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="saveBrandSettings()" id="btn-save-branding" style="padding: 10px 24px;">
+                        <span>💾</span> <span>Сохранить и применить брендирование</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
 </div>
 
 <!-- МОДАЛЬНОЕ ОКНО СОЗДАНИЯ / РЕДАКТИРОВАНИЯ УЧЕБНОЙ ГРУППЫ -->
@@ -583,6 +722,9 @@ __SERVER_TEACHER_JSON__
 </script>
 <script id="server-all-teachers-data" type="application/json">
 __SERVER_ALL_TEACHERS_JSON__
+</script>
+<script id="server-branding-data" type="application/json">
+__SERVER_BRANDING_JSON__
 </script>
 
 <script src="/public/admin.js"></script>

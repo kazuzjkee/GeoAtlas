@@ -1389,6 +1389,17 @@ window.serverMapZoom = {self.zoom};
         with open(quiz_js_path, 'r', encoding='utf-8') as f:
             quiz_js = f.read()
 
+        branding_data = {}
+        branding_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'branding.json')
+        if os.path.exists(branding_path):
+            try:
+                with open(branding_path, 'r', encoding='utf-8') as f:
+                    branding_data = json.load(f)
+            except Exception:
+                pass
+        brand_org_short = branding_data.get('org_short') or branding_data.get('university_short') or 'ЮФУ'
+        brand_sub_title = branding_data.get('sub_title') or branding_data.get('org_name') or 'Институт наук о Земле ЮФУ'
+
         self.map.get_root().html.add_child(folium.Element(f"<script>{dynamic_js}\n{quiz_js}</script>"))
 
         quiz_html = f'''
@@ -1439,7 +1450,7 @@ window.serverMapZoom = {self.zoom};
                 </div>
                 <div class="exam-sidebar-meta">
                     <div class="exam-sidebar-student">Студент: <b id="exam-sidebar-student-name">Студент</b></div>
-                    <div class="exam-sidebar-group">Группа: <b id="exam-sidebar-group-name">ЮФУ</b></div>
+                    <div class="exam-sidebar-group">Группа: <b id="exam-sidebar-group-name">{brand_org_short}</b></div>
                 </div>
                 <div class="timer-track" style="margin-top: 8px;">
                     <div id="timer-bar"></div>
@@ -1448,7 +1459,7 @@ window.serverMapZoom = {self.zoom};
 
             <div class="panel-header">
                 <div class="panel-header-bar">
-                    <div class="panel-institution-badge">ЮФУ • Институт наук о Земле</div>
+                    <div class="panel-institution-badge">{brand_sub_title}</div>
                     <button id="panel-collapse-btn" class="mobile-collapse-trigger btn-icon" onclick="togglePanelCollapse()" aria-label="Свернуть/развернуть панель" title="Свернуть панель к карте">
                         <svg class="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="6 9 12 15 18 9"></polyline>
@@ -1710,9 +1721,9 @@ window.serverMapZoom = {self.zoom};
         <!-- МОДАЛЬНОЕ ОКНО НАСТРОЙКИ КОНТРОЛЬНОЙ РАБОТЫ (ЭКЗАМЕНА) -->
         <div id="exam-setup-modal" class="welcome-overlay" style="display: none;">
             <div class="welcome-card" style="max-width: 480px;">
-                <div class="welcome-badge" style="background: linear-gradient(135deg, #7C3AED, #4F46E5); color: white;">ЮФУ Экзамен</div>
+                <div class="welcome-badge" style="background: linear-gradient(135deg, #7C3AED, #4F46E5); color: white;">{brand_org_short} Экзамен</div>
                 <h2 class="welcome-title" style="margin-bottom: 6px;">📝 Режим контрольной работы</h2>
-                <p class="welcome-subtitle" style="margin-bottom: 16px;">Аттестационное тестирование студентов Института наук о Земле ЮФУ</p>
+                <p class="welcome-subtitle" style="margin-bottom: 16px;">Аттестационное тестирование студентов {brand_sub_title}</p>
                 
                 <div class="exam-setup-form">
                     <div class="form-group" style="margin-bottom: 14px; text-align: left;">
@@ -1797,7 +1808,7 @@ window.serverMapZoom = {self.zoom};
 
                 <div class="exam-token-card" style="margin: 10px 0 14px 0;">
                     <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">
-                        Цифровой токен сдачи (ЮФУ)
+                        Цифровой токен сдачи ({brand_org_short})
                     </div>
                     <div class="exam-token-val" id="puzzle-token-display">PUZZLE-XXXX-XXXX</div>
                     <div>

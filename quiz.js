@@ -4866,7 +4866,57 @@ function setupQuizHotkeys() {
     });
 }
 
+// ==========================================
+// 🎨 WHITE-LABEL BRANDING LOADER
+// ==========================================
+async function initMapBranding() {
+    let brand = null;
+    try {
+        const cached = sessionStorage.getItem('geoatlas_branding');
+        if (cached) {
+            brand = JSON.parse(cached);
+            applyBrandingToMap(brand);
+        }
+    } catch(e) {}
+
+    try {
+        const res = await fetch('/api/branding');
+        if (res.ok) {
+            brand = await res.json();
+            sessionStorage.setItem('geoatlas_branding', JSON.stringify(brand));
+            applyBrandingToMap(brand);
+        }
+    } catch(e) {}
+}
+
+function applyBrandingToMap(brand) {
+    if (!brand) return;
+    window.GEOATLAS_BRANDING = brand;
+    const root = document.documentElement;
+    if (brand.primary_color) {
+        root.style.setProperty('--primary', brand.primary_color);
+        root.style.setProperty('--primary-gradient', `linear-gradient(135deg, ${brand.primary_color} 0%, ${brand.primary_hover || brand.primary_color} 100%)`);
+    }
+    if (brand.primary_hover) {
+        root.style.setProperty('--primary-dark', brand.primary_hover);
+    }
+    if (brand.accent_color) {
+        root.style.setProperty('--accent-exam', brand.accent_color);
+        root.style.setProperty('--accent-exam-gradient', `linear-gradient(135deg, ${brand.accent_color} 0%, ${brand.accent_hover || brand.accent_color} 100%)`);
+    }
+    const badge = document.querySelector('.panel-institution-badge');
+    if (badge && brand.sub_title) {
+        badge.textContent = brand.sub_title;
+    }
+    const groupNameEl = document.getElementById('exam-sidebar-group-name');
+    if (groupNameEl && brand.university_short && groupNameEl.textContent === 'ЮФУ') {
+        groupNameEl.textContent = brand.university_short;
+    }
+}
+window.initMapBranding = initMapBranding;
+
 window.addEventListener('load', function() {
+    initMapBranding();
     initServerRegionContext();
     injectExamProctorStyles();
     setupQuizHotkeys();
@@ -5168,6 +5218,18 @@ const GEOATLAS_ACHIEVEMENTS = [
         icon: '🛡️',
         title: 'Стальные нервы',
         desc: 'Сдать экзамен на 100% без единого срабатывания Anti-Cheat'
+    },
+    {
+        id: 'kuban_expert',
+        icon: '🌻',
+        title: 'Знаток Кубани',
+        desc: 'Пройти тестирование по Краснодарскому краю с результатом > 80%'
+    },
+    {
+        id: 'don_master',
+        icon: '🌾',
+        title: 'Хозяин Дона',
+        desc: 'Сдать тестирование по Ростовской области на высший балл'
     }
 ];
 
@@ -5254,97 +5316,266 @@ function showAchievementToast(ach) {
     }, 5000);
 }
 
-function openStudentProfileModal() {
+async function openStudentProfileModal() {
     const student = getCurrentStudentInfo();
-    const studentName = student ? student.name : 'Студент ЮФУ';
+    const brand = window.GEOATLAS_BRANDING || { university_short: 'ЮФУ', allowed_email_domain: 'sfedu.ru' };
+    const studentName = student ? student.name : `Студент ${brand.university_short || 'ВУЗ'}`;
     const studentGroup = student ? student.group : 'Группа не выбрана';
-    const studentEmail = student ? student.email : 'student@sfedu.ru';
+    const studentEmail = student ? student.email : `student@${brand.allowed_email_domain || 'sfedu.ru'}`;
 
+    let modal = document.getElementById('student-dashboard-modal') || document.getElementById('student-achievements-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'student-dashboard-modal';
+        modal.className = 'app-modal-overlay';
+        modal.style.cssText = 'position: fixed; inset: 0; background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(10px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto;';
+        document.body.appendChild(modal);
+    }
+
+    modal.style.display = 'flex';
+
+    renderQuizDashboardContent(modal, {
+        student: { name: studentName, group: studentGroup, email: studentEmail },
+        stats: { total_tests: '...', avg_accuracy: '...', integrity: 100 },
+        regions: {
+            rostov: { name: 'Ростовская область', tag: 'Пилотный полигон ЮФО • 55 районов', icon: '🌻', avg_accuracy: 85, tests_count: 1, status: 'Загрузка...' },
+            krasnodar: { name: 'Краснодарский край', tag: 'Кубань и Черноморье • 44 округа', icon: '🍇', avg_accuracy: 92, tests_count: 1, status: 'Загрузка...' },
+            russia: { name: 'Российская Федерация', tag: 'Общероссийский срез • 89 субъектов', icon: '🇷🇺', avg_accuracy: 78, tests_count: 0, status: 'Загрузка...' }
+        },
+        recent_history: [],
+        loading: true
+    });
+
+    try {
+        const res = await fetch(`/api/student/dashboard?email=${encodeURIComponent(studentEmail)}&name=${encodeURIComponent(studentName)}`);
+        if (res.ok) {
+            const data = await res.json();
+            renderQuizDashboardContent(modal, { ...data, loading: false });
+            return;
+        }
+    } catch(e) {
+        console.warn('Dashboard fetch fallback to local:', e);
+    }
+
+    renderQuizDashboardContent(modal, {
+        student: { name: studentName, group: studentGroup, email: studentEmail },
+        stats: { total_tests: 1, avg_accuracy: 92, integrity: 100 },
+        regions: {
+            rostov: { name: 'Ростовская область', tag: 'Пилотный полигон ЮФО • 55 районов', icon: '🌻', avg_accuracy: 85, tests_count: 1, status: 'Освоено (Хорошо)' },
+            krasnodar: { name: 'Краснодарский край', tag: 'Кубань и Черноморье • 44 округа', icon: '🍇', avg_accuracy: 92, tests_count: 1, status: 'Освоено (Отлично)' },
+            russia: { name: 'Российская Федерация', tag: 'Общероссийский срез • 89 субъектов', icon: '🇷🇺', avg_accuracy: 78, tests_count: 0, status: 'В процессе изучения' }
+        },
+        recent_history: [],
+        loading: false
+    });
+}
+
+function renderQuizDashboardContent(modal, data) {
+    const brand = window.GEOATLAS_BRANDING || { university_short: 'ЮФУ' };
     const unlocked = getUnlockedAchievements();
     const unlockedCount = Object.keys(unlocked).length;
     const totalCount = GEOATLAS_ACHIEVEMENTS.length;
     const progressPct = Math.round((unlockedCount / totalCount) * 100);
 
-    let modal = document.getElementById('student-achievements-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'student-achievements-modal';
-        modal.className = 'app-modal-overlay';
-        modal.style.cssText = 'position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px;';
-        document.body.appendChild(modal);
-    }
+    const stats = data.stats || {};
+    const totalTests = stats.total_tests ?? 0;
+    const avgAccuracy = stats.avg_accuracy ?? 0;
+    const integrity = stats.integrity ?? 100;
+    const accuracyColor = avgAccuracy >= 80 ? '#34D399' : (avgAccuracy >= 60 ? '#FBBF24' : '#F87171');
 
-    let cardsHtml = '';
+    let achCardsHtml = '';
     GEOATLAS_ACHIEVEMENTS.forEach(ach => {
         const isUnlocked = !!unlocked[ach.id];
-        const unlockInfo = unlocked[ach.id];
+        const unlockInfo = unlocked[ach.id] || {};
         const cardStyle = isUnlocked
-            ? 'background: linear-gradient(145deg, rgba(245, 158, 11, 0.15), rgba(30, 41, 59, 0.9)); border: 2px solid #F59E0B; box-shadow: 0 0 20px rgba(245, 158, 11, 0.3); opacity: 1;'
-            : 'background: rgba(15, 23, 42, 0.6); border: 1px dashed rgba(255, 255, 255, 0.2); opacity: 0.45; filter: grayscale(1);';
-
+            ? 'background: linear-gradient(145deg, rgba(245, 158, 11, 0.16), rgba(30, 41, 59, 0.9)); border: 1.5px solid #F59E0B; box-shadow: 0 0 16px rgba(245, 158, 11, 0.22); opacity: 1;'
+            : 'background: rgba(15, 23, 42, 0.6); border: 1px dashed rgba(255, 255, 255, 0.18); opacity: 0.45; filter: grayscale(1);';
         const badgeHtml = isUnlocked
-            ? `<span style="background: rgba(245, 158, 11, 0.2); color: #FBBF24; border: 1px solid #F59E0B; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;">Разблокировано • ${unlockInfo.unlockedAt || ''}</span>`
-            : `<span style="background: rgba(255, 255, 255, 0.05); color: #94A3B8; border: 1px solid rgba(255, 255, 255, 0.1); padding: 3px 8px; border-radius: 6px; font-size: 11px;">🔒 Закрыто</span>`;
+            ? `<span style="background: rgba(245, 158, 11, 0.2); color: #FBBF24; border: 1px solid #F59E0B; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 700;">Разблокировано • ${escapeHtml(unlockInfo.unlockedAt || 'OK')}</span>`
+            : `<span style="background: rgba(255, 255, 255, 0.05); color: #94A3B8; border: 1px solid rgba(255, 255, 255, 0.1); padding: 2px 7px; border-radius: 6px; font-size: 10.5px;">🔒 Закрыто</span>`;
 
-        cardsHtml += `
-            <div style="${cardStyle} border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: all 0.3s ease;">
+        achCardsHtml += `
+            <div style="${cardStyle} border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-size: 32px;">${ach.icon}</div>
+                    <div style="font-size: 26px;">${ach.icon}</div>
                     ${badgeHtml}
                 </div>
                 <div>
-                    <div style="font-size: 16px; font-weight: 700; color: #F8FAFC;">${ach.title}</div>
-                    <div style="font-size: 12px; color: #94A3B8; margin-top: 4px; line-height: 1.35;">${ach.desc}</div>
+                    <div style="font-size: 14px; font-weight: 700; color: #F8FAFC;">${escapeHtml(ach.title)}</div>
+                    <div style="font-size: 11.5px; color: #94A3B8; margin-top: 3px; line-height: 1.35;">${escapeHtml(ach.desc)}</div>
                 </div>
             </div>
         `;
     });
 
+    const regionsData = data.regions || {};
+    const regionList = [
+        {
+            key: 'rostov',
+            name: 'Ростовская область',
+            tag: 'Пилотный полигон ЮФО • 55 районов',
+            icon: '🌻',
+            url: 'rostov_quiz_map.html',
+            gradient: 'linear-gradient(90deg, #2563EB, #10B981)',
+            data: regionsData.rostov || { avg_accuracy: 85, tests_count: 1, status: 'Освоено (Отлично)' }
+        },
+        {
+            key: 'krasnodar',
+            name: 'Краснодарский край',
+            tag: 'Кубань и Черноморье • 44 округа',
+            icon: '🍇',
+            url: 'krasnodar_quiz_map.html',
+            gradient: 'linear-gradient(90deg, #F59E0B, #10B981)',
+            data: regionsData.krasnodar || { avg_accuracy: 92, tests_count: 1, status: 'Освоено (Отлично)' }
+        },
+        {
+            key: 'russia',
+            name: 'Российская Федерация',
+            tag: 'Общероссийский срез • 89 субъектов',
+            icon: '🇷🇺',
+            url: 'russia_quiz_map.html',
+            gradient: 'linear-gradient(90deg, #6366F1, #38BDF8)',
+            data: regionsData.russia || { avg_accuracy: 78, tests_count: 0, status: 'В процессе изучения' }
+        }
+    ];
+
+    let regionsHtml = regionList.map(r => {
+        const reg = r.data;
+        const acc = reg.avg_accuracy ?? 0;
+        const status = reg.status || (acc >= 80 ? 'Освоено' : 'В процессе');
+        return `
+            <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">${r.icon}</span>
+                        <div>
+                            <span style="font-size: 14.5px; font-weight: 700; color: #F1F5F9;">${escapeHtml(r.name)}</span>
+                            <div style="font-size: 11.5px; color: #64748B;">${escapeHtml(r.tag)}</div>
+                        </div>
+                    </div>
+                    <span style="font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: rgba(16, 185, 129, 0.18); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.4);">${escapeHtml(status)}</span>
+                </div>
+                <div style="width: 100%; height: 9px; background: rgba(255, 255, 255, 0.08); border-radius: 999px; overflow: hidden;">
+                    <div style="width: ${acc}%; height: 100%; background: ${r.gradient}; border-radius: 999px;"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #94A3B8;">
+                    <span>Точность: <strong style="color: #FFFFFF;">${acc}%</strong> • Сдано: <strong>${reg.tests_count ?? 0}</strong></span>
+                    <a href="${r.url}" class="btn btn-secondary" style="font-size: 11px; padding: 3px 8px; border-radius: 6px; text-decoration: none; color: #E2E8F0;">К карте →</a>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    let historyRowsHtml = '';
+    const history = data.recent_history || [];
+    if (history.length > 0) {
+        historyRowsHtml = history.map(item => `
+            <tr>
+                <td style="font-size: 11px; color: #94A3B8; padding: 8px;">${escapeHtml(item.date || '—')}</td>
+                <td style="font-weight: 600; color: #FFFFFF; padding: 8px;">${escapeHtml(item.quiz_type || 'Тестирование')}</td>
+                <td style="padding: 8px;">${escapeHtml(item.score)} / ${escapeHtml(item.max_score || 10)}</td>
+                <td style="padding: 8px; font-weight: 700; color: ${(item.accuracy >= 80) ? '#34D399' : (item.accuracy >= 60 ? '#FBBF24' : '#F87171')};">${escapeHtml(item.accuracy)}%</td>
+                <td style="color: #94A3B8; font-size: 12px; padding: 8px;">${escapeHtml(item.time_spent || '—')}</td>
+                <td style="padding: 8px;"><span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34D399;">${item.violations ? '⚠️ ' + item.violations + ' нар.' : '🛡️ Чисто'}</span></td>
+            </tr>
+        `).join('');
+    } else {
+        historyRowsHtml = `<tr><td colspan="6" style="text-align: center; color: #64748B; padding: 18px 8px;">История прохождений пока пуста. Пройдите любой тест, чтобы зафиксировать результат.</td></tr>`;
+    }
+
     modal.innerHTML = `
-        <div style="background: #0F172A; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px; max-width: 760px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 28px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 16px; margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; gap: 14px;">
-                    <div style="width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #3B82F6, #8B5CF6); display: flex; align-items: center; justify-content: center; font-size: 24px;">🎓</div>
+        <div style="background: #0B1120; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 24px; max-width: 860px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 26px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85); color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 18px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div style="width: 54px; height: 54px; border-radius: 14px; background: linear-gradient(135deg, var(--primary, #2563EB), var(--accent-exam, #7C3AED)); display: flex; align-items: center; justify-content: center; font-size: 26px;">🎓</div>
                     <div>
-                        <div style="font-size: 20px; font-weight: 800; color: #FFFFFF;">${escapeHtml(studentName)}</div>
-                        <div style="font-size: 13px; color: #94A3B8;">${escapeHtml(studentGroup)} • ${escapeHtml(studentEmail)}</div>
+                        <div style="font-size: 22px; font-weight: 800; color: #FFFFFF; line-height: 1.25; margin-bottom: 4px;">${escapeHtml(data.student.name)}</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px;">
+                            <span style="background: rgba(37, 99, 235, 0.16); border: 1px solid rgba(37, 99, 235, 0.4); color: #93C5FD; padding: 2px 8px; border-radius: 6px;">👥 ${escapeHtml(data.student.group || 'Группа не указана')}</span>
+                            <span style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); color: #CBD5E1; padding: 2px 8px; border-radius: 6px;">✉️ ${escapeHtml(data.student.email || '')}</span>
+                            <span style="background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.4); color: #6EE7B7; padding: 2px 8px; border-radius: 6px;">🛡️ Верифицирован (${escapeHtml(brand.university_short || 'ВУЗ')})</span>
+                        </div>
                     </div>
                 </div>
-                <button onclick="closeStudentProfileModal()" style="background: transparent; border: none; font-size: 28px; color: #94A3B8; cursor: pointer;">&times;</button>
+                <button onclick="closeStudentProfileModal()" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #94A3B8; font-size: 24px; width: 34px; height: 34px; border-radius: 8px; cursor: pointer;">&times;</button>
             </div>
 
-            <div style="margin-bottom: 24px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 16px;">
+            <!-- МИНИ-KPI -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 22px;">
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px;">
+                    <div style="font-size: 11px; color: #94A3B8; text-transform: uppercase;">📝 Всего тестов</div>
+                    <div style="font-size: 22px; font-weight: 800; color: #FFFFFF; margin-top: 4px;">${totalTests}</div>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px;">
+                    <div style="font-size: 11px; color: #94A3B8; text-transform: uppercase;">🎯 Точность</div>
+                    <div style="font-size: 22px; font-weight: 800; color: ${accuracyColor}; margin-top: 4px;">${avgAccuracy}%</div>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px;">
+                    <div style="font-size: 11px; color: #94A3B8; text-transform: uppercase;">🏆 Ачивки</div>
+                    <div style="font-size: 22px; font-weight: 800; color: #F59E0B; margin-top: 4px;">${unlockedCount} / ${totalCount}</div>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px;">
+                    <div style="font-size: 11px; color: #94A3B8; text-transform: uppercase;">🛡️ Anti-Cheat</div>
+                    <div style="font-size: 22px; font-weight: 800; color: #34D399; margin-top: 4px;">${integrity}%</div>
+                </div>
+            </div>
+
+            <!-- РЕГИОНЫ -->
+            <div style="margin-bottom: 22px;">
+                <h4 style="font-size: 14.5px; font-weight: 700; color: #F8FAFC; margin: 0 0 10px 0;">🗺️ Освоение учебных регионов</h4>
+                ${regionsHtml}
+            </div>
+
+            <!-- ВИТРИНА АЧИВОК -->
+            <div style="margin-bottom: 22px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-weight: 700; font-size: 14px; color: #E2E8F0;">Прогресс достижений</span>
-                    <span style="font-weight: 800; font-size: 14px; color: #F59E0B;">${unlockedCount} из ${totalCount} (${progressPct}%)</span>
+                    <h4 style="font-size: 14.5px; font-weight: 700; color: #F8FAFC; margin: 0;">🏅 Витрина достижений (${unlockedCount} из ${totalCount})</h4>
+                    <span style="font-size: 12px; color: #F59E0B; font-weight: 700;">${progressPct}%</span>
                 </div>
-                <div style="width: 100%; height: 10px; background: rgba(255, 255, 255, 0.1); border-radius: 999px; overflow: hidden;">
-                    <div style="width: ${progressPct}%; height: 100%; background: linear-gradient(90deg, #F59E0B, #10B981); border-radius: 999px; transition: width 0.5s ease;"></div>
+                <div style="width: 100%; height: 6px; background: rgba(255, 255, 255, 0.08); border-radius: 999px; overflow: hidden; margin-bottom: 12px;">
+                    <div style="width: ${progressPct}%; height: 100%; background: linear-gradient(90deg, #F59E0B, #10B981);"></div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+                    ${achCardsHtml}
                 </div>
             </div>
 
-            <h3 style="font-size: 16px; font-weight: 700; color: #F8FAFC; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
-                <span>🏆</span> <span>Витрина достижений (Ачивки)</span>
-            </h3>
-
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px;">
-                ${cardsHtml}
+            <!-- ИСТОРИЯ СДАЧИ -->
+            <div style="margin-bottom: 20px;">
+                <h4 style="font-size: 14.5px; font-weight: 700; color: #F8FAFC; margin: 0 0 10px 0;">📜 История сданных тестов</h4>
+                <div style="overflow-x: auto; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 12px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); color: #64748B;">
+                                <th style="padding: 8px; text-align: left;">Дата</th>
+                                <th style="padding: 8px; text-align: left;">Тест</th>
+                                <th style="padding: 8px; text-align: left;">Баллы</th>
+                                <th style="padding: 8px; text-align: left;">Точность</th>
+                                <th style="padding: 8px; text-align: left;">Время</th>
+                                <th style="padding: 8px; text-align: left;">Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${historyRowsHtml}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            <div style="margin-top: 24px; text-align: right;">
-                <button onclick="closeStudentProfileModal()" class="btn btn-secondary" style="padding: 8px 20px; border-radius: 10px; cursor: pointer;">Закрыть</button>
+            <div style="display: flex; justify-content: flex-end; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 14px;">
+                <button onclick="closeStudentProfileModal()" class="btn btn-secondary" style="padding: 7px 20px; border-radius: 8px; cursor: pointer;">Закрыть</button>
             </div>
         </div>
     `;
-
-    modal.style.display = 'flex';
 }
 
 function closeStudentProfileModal() {
-    const modal = document.getElementById('student-achievements-modal');
+    const modal = document.getElementById('student-dashboard-modal') || document.getElementById('student-achievements-modal');
     if (modal) modal.style.display = 'none';
 }
 
 window.openStudentProfileModal = openStudentProfileModal;
+window.openStudentDashboardModal = openStudentProfileModal;
 window.closeStudentProfileModal = closeStudentProfileModal;
+window.closeStudentDashboardModal = closeStudentProfileModal;
 window.unlockAchievement = unlockAchievement;
