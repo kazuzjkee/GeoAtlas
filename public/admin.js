@@ -1914,6 +1914,26 @@ let allResults = [];
         if (emblemEl && brand.logo_emoji) {
             emblemEl.textContent = brand.logo_emoji;
         }
+
+        if (!window._geoatlasThemeListenerAdded) {
+            window._geoatlasThemeListenerAdded = true;
+            document.addEventListener('geoatlas:theme-change', (e) => {
+                const isDark = e.detail && e.detail.theme === 'dark';
+                if (typeof Chart !== 'undefined') {
+                    Chart.defaults.color = isDark ? '#94A3B8' : '#475569';
+                    Chart.defaults.borderColor = isDark ? '#1E293B' : '#E2E8F0';
+                    // Перерисовать графики
+                    if (typeof renderExecutiveCharts === 'function') {
+                        renderExecutiveCharts(allResults);
+                    }
+                }
+            });
+            if (typeof Chart !== 'undefined') {
+                const isDarkInit = (document.documentElement.getAttribute('data-theme') || 'light') === 'dark';
+                Chart.defaults.color = isDarkInit ? '#94A3B8' : '#475569';
+                Chart.defaults.borderColor = isDarkInit ? '#1E293B' : '#E2E8F0';
+            }
+        }
     }
 
     function initBrandSettingsForm() {

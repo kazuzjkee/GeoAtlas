@@ -1,4 +1,18 @@
 :root {
+            --bg: #F8FAFC;
+            --bg-elevated: #FFFFFF;
+            --bg-sunken: #F1F5F9;
+            --surface: #FFFFFF;
+            --surface-hover: #F8FAFC;
+            --border: #E2E8F0;
+            --border-strong: #CBD5E1;
+            --text-main: #0F172A;
+            --text-muted: #475569;
+            --text-light: #64748B;
+            --text-inverse: #F8FAFC;
+            --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+            --shadow-md: 0 8px 24px -4px rgba(15, 23, 42, 0.08);
+
             --primary: #0284C7;
             --primary-dark: #0369A1;
             --primary-sfedu: #003366;
@@ -13,11 +27,22 @@
             --danger: #EF4444;
             --danger-bg: #FEE2E2;
             --danger-text: #991B1B;
-            --bg: #F8FAFC;
-            --surface: #FFFFFF;
-            --border: #E2E8F0;
-            --text-main: #0F172A;
-            --text-muted: #64748B;
+        }
+
+        [data-theme="dark"] {
+            --bg: #0B1120;
+            --bg-elevated: #0F172A;
+            --bg-sunken: #060913;
+            --surface: #111C33;
+            --surface-hover: #1E293B;
+            --border: #1E293B;
+            --border-strong: #334155;
+            --text-main: #F8FAFC;
+            --text-muted: #CBD5E1;
+            --text-light: #94A3B8;
+            --text-inverse: #0F172A;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 8px 24px -4px rgba(0, 0, 0, 0.4);
         }
 
         * {
@@ -433,8 +458,8 @@
         }
 
         .pill-btn {
-            background: #FFFFFF;
-            color: #475569;
+            background: var(--surface);
+            color: var(--text-muted);
             border: 1px solid var(--border);
             padding: 7px 14px;
             border-radius: 8px;
@@ -450,9 +475,9 @@
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
         }
         .pill-btn:hover {
-            background: #F8FAFC;
-            color: #1E293B;
-            border-color: #94A3B8;
+            background: var(--surface-hover);
+            color: var(--text-main);
+            border-color: var(--border-strong);
             transform: translateY(-1.5px);
             box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
         }
@@ -507,8 +532,8 @@
         }
 
         table.journal-table th {
-            background: #F8FAFC;
-            color: #334155;
+            background: var(--bg-sunken);
+            color: var(--text-muted);
             font-weight: 700;
             padding: 10px 14px;
             border-bottom: 1px solid var(--border);
@@ -521,13 +546,14 @@
 
         table.journal-table td {
             padding: 9px 14px;
-            border-bottom: 1px solid #F1F5F9;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-main);
             vertical-align: middle;
             white-space: nowrap;
         }
 
         table.journal-table tr:hover {
-            background: #F8FAFC;
+            background: var(--surface-hover);
         }
 
         /* Badges */
@@ -658,7 +684,7 @@
         }
 
         .lms-group-card {
-            background: #FFFFFF;
+            background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 16px;
@@ -684,7 +710,7 @@
         .lms-group-name {
             font-size: 15px;
             font-weight: 800;
-            color: #0F172A;
+            color: var(--text-main);
             font-family: 'JetBrains Mono', monospace;
             display: flex;
             align-items: center;
@@ -789,7 +815,7 @@
             font-size: 13px;
             font-family: inherit;
             color: var(--text-main);
-            background: #FFFFFF;
+            background: var(--surface);
             outline: none;
             transition: all 0.2s ease;
         }
@@ -800,7 +826,7 @@
 
         .dispatcher-bottom-bar {
             padding: 14px 20px;
-            background: #F8FAFC;
+            background: var(--bg-sunken);
             border-top: 1px solid var(--border);
             display: flex;
             align-items: center;

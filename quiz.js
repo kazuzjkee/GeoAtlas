@@ -6923,9 +6923,43 @@ window.checkActiveQuizDraft = checkActiveQuizDraft;
 window.saveActiveQuizDraft = saveActiveQuizDraft;
 window.clearActiveQuizDraft = clearActiveQuizDraft;
 
-// Автопроверка параметров URL для дуэли
+// Автопроверка параметров URL для дуэли и поддержка темы
 if (typeof window !== 'undefined') {
     window.addEventListener('load', () => {
         DuelManager.initFromUrl();
+
+        // Проверка начальной темы для тайлов карты
+        const isInitialDark = (document.documentElement.getAttribute('data-theme') || 'light') === 'dark';
+        if (isInitialDark) {
+            const map = getMapObject();
+            if (map) {
+                const layers = map._layers || {};
+                Object.values(layers).forEach(layer => {
+                    if (layer instanceof L.TileLayer) {
+                        const url = layer._url || '';
+                        if (url.includes('voyager')) {
+                            layer.setUrl(url.replace('voyager', 'dark_all'));
+                        }
+                    }
+                });
+            }
+        }
+
+        window.addEventListener('geoatlas:theme-change', (e) => {
+            const map = getMapObject();
+            if (!map) return;
+            const layers = map._layers || {};
+            const isDark = e.detail && e.detail.theme === 'dark';
+            Object.values(layers).forEach(layer => {
+                if (layer instanceof L.TileLayer) {
+                    const url = layer._url || '';
+                    if (isDark && url.includes('voyager')) {
+                        layer.setUrl(url.replace('voyager', 'dark_all'));
+                    } else if (!isDark && url.includes('dark_all')) {
+                        layer.setUrl(url.replace('dark_all', 'voyager'));
+                    }
+                }
+            });
+        });
     });
 }

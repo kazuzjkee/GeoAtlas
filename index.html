@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2563EB" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0B1120" media="(prefers-color-scheme: dark)">
     <title>GeoAtlas — Региональный учебно-картографический комплекс ЮФУ</title>
     
+    <!-- Переключатель темы (без мигания) -->
+    <script src="/public/theme.js"></script>
+
     <!-- Шрифты Plus Jakarta Sans и JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,6 +21,20 @@
 
     <style>
         :root {
+            --bg: #F8FAFC;
+            --bg-elevated: #FFFFFF;
+            --bg-sunken: #F1F5F9;
+            --surface: #FFFFFF;
+            --surface-hover: #F8FAFC;
+            --border: #E2E8F0;
+            --border-strong: #CBD5E1;
+            --text-main: #0F172A;
+            --text-muted: #475569;
+            --text-light: #64748B;
+            --text-inverse: #F8FAFC;
+            --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+            --shadow-md: 0 8px 24px -4px rgba(15, 23, 42, 0.08);
+
             --primary: #2563EB;
             --primary-dark: #1D4ED8;
             --primary-light: #EFF6FF;
@@ -28,24 +47,37 @@
             --danger: #EF4444;
             --danger-gradient: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
             --warning: #F59E0B;
-            --surface: #FFFFFF;
-            --background: #F8FAFC;
-            --surface-subtle: #F1F5F9;
-            --border: #E2E8F0;
-            --border-hover: #CBD5E1;
+            --background: var(--bg);
+            --surface-subtle: var(--bg-sunken);
+            --border-hover: var(--border-strong);
             --border-focus: #2563EB;
-            --text-main: #0F172A;
-            --text-muted: #475569;
-            --text-light: #64748B;
             --radius-sm: 8px;
             --radius-md: 14px;
             --radius-lg: 20px;
             --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
-            --shadow-sm: 0 2px 6px rgba(15, 23, 42, 0.05);
-            --shadow-md: 0 8px 24px -4px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
             --shadow-lg: 0 16px 36px -6px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
             --shadow-primary: 0 4px 18px rgba(37, 99, 235, 0.32);
             --shadow-glow: 0 0 28px rgba(37, 99, 235, 0.38);
+        }
+
+        [data-theme="dark"] {
+            --bg: #0B1120;
+            --bg-elevated: #0F172A;
+            --bg-sunken: #060913;
+            --surface: #111C33;
+            --surface-hover: #1E293B;
+            --border: #1E293B;
+            --border-strong: #334155;
+            --text-main: #F8FAFC;
+            --text-muted: #CBD5E1;
+            --text-light: #94A3B8;
+            --text-inverse: #0F172A;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 8px 24px -4px rgba(0, 0, 0, 0.4);
+
+            --background: var(--bg);
+            --surface-subtle: var(--bg-sunken);
+            --border-hover: var(--border-strong);
         }
 
         * {
@@ -128,15 +160,15 @@
         }
 
         .btn-secondary {
-            background: #FFFFFF;
-            color: #334155 !important;
-            border: 1px solid #CBD5E1;
+            background: var(--surface);
+            color: var(--text-muted) !important;
+            border: 1px solid var(--border);
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
         .btn-secondary:hover {
-            background: #F8FAFC;
-            color: #0F172A !important;
-            border-color: #94A3B8;
+            background: var(--surface-hover);
+            color: var(--text-main) !important;
+            border-color: var(--border-strong);
             box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
         }
 
@@ -3592,6 +3624,198 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             color: #E2E8F0;
         }
+        /* ========================================================
+           СПЕЦИФИЧНЫЕ ПЕРЕОПРЕДЕЛЕНИЯ ДЛЯ ТЁМНОЙ ТЕМЫ (GEOATLAS DARK)
+           ======================================================== */
+        [data-theme="dark"] .top-navbar {
+            background: rgba(11, 17, 32, 0.88);
+            border-bottom-color: rgba(30, 41, 59, 0.85);
+        }
+        [data-theme="dark"] .hero-scrim {
+            background: radial-gradient(circle at 50% 38%, rgba(11,17,32,0.55) 0%, rgba(11,17,32,0.82) 65%, rgba(11,17,32,0.95) 100%);
+        }
+        [data-theme="dark"] .hero-title { color: #F8FAFC; }
+        [data-theme="dark"] .hero-description { color: #CBD5E1; }
+        [data-theme="dark"] .academic-badge {
+            background: rgba(15, 23, 42, 0.85);
+            color: #93C5FD;
+            border-color: #1E3A8A;
+        }
+        [data-theme="dark"] .hero-kpi-bar {
+            background: rgba(15, 23, 42, 0.85);
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .kpi-val { color: #F8FAFC; }
+        [data-theme="dark"] .kpi-lbl { color: #94A3B8; }
+        [data-theme="dark"] .student-badge {
+            background: #1E293B;
+            border-color: #334155;
+        }
+        [data-theme="dark"] .badge-name { color: #F8FAFC; }
+        [data-theme="dark"] .btn-secondary {
+            background: #111C33;
+            border-color: #334155;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .btn-secondary:hover {
+            background: #1E293B;
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .sandbox-canvas-panel,
+        [data-theme="dark"] .sandbox-tray-panel {
+            background: #0F172A;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .sandbox-slot {
+            fill: rgba(30, 41, 59, 0.7);
+            stroke: #64748B;
+        }
+        [data-theme="dark"] .sandbox-piece-card {
+            background: #111C33;
+            border-color: #334155;
+        }
+        [data-theme="dark"] .bento-card {
+            background: #0F172A;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .footer {
+            background: #060913;
+            border-top-color: #1E293B;
+        }
+        [data-theme="dark"] .search-box input {
+            background: #111C33;
+            border-color: #334155;
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .region-card {
+            background: linear-gradient(145deg, #0B1120 0%, #111C33 100%);
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .arch-pillar-card {
+            background: #0F172A;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .architecture-wrapper {
+            background: #111C33;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .sandbox-card {
+            background: #111C33;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .sandbox-inspector-bar {
+            background: #0F172A;
+            border-color: #1E293B;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .sandbox-overlay-label {
+            background: #111C33;
+            color: #F8FAFC;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .auth-card {
+            background: #111C33;
+            border-color: #1E293B;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .auth-input {
+            background: #0F172A;
+            border-color: #334155;
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .gec-report-window {
+            background: #111C33;
+            border-color: #1E293B;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .gec-report-body {
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .gec-meta-grid {
+            background: #0F172A;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .gec-table th {
+            background: #060913;
+            color: #94A3B8;
+            border-bottom-color: #1E293B;
+        }
+        [data-theme="dark"] .gec-table td {
+            color: #F8FAFC;
+            border-bottom-color: #1E293B;
+        }
+        [data-theme="dark"] .gec-table tr:hover {
+            background: #1E293B;
+        }
+        [data-theme="dark"] .gec-report-footer {
+            background: #060913;
+            border-top-color: #1E293B;
+        }
+        [data-theme="dark"] .tech-badge-chip {
+            background: #111C33;
+            border-color: #1E293B;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .spatial-layer-display,
+        [data-theme="dark"] .pillar-mini-spec {
+            background: #0F172A;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .spatial-toggle-switch {
+            background: #1E293B;
+        }
+        [data-theme="dark"] .spatial-toggle-btn.active {
+            background: #111C33;
+            color: #93C5FD;
+        }
+        [data-theme="dark"] .layer-metric-box {
+            background: #111C33;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .layer-timeline-tag {
+            background: #111C33;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .grp-sliders-grid {
+            background: #0F172A;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .bento-mockup-wrap {
+            background: #0B1120;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .mock-token-bar {
+            background: #111C33;
+            border-color: #334155;
+            color: #93C5FD;
+        }
+        [data-theme="dark"] .topology-node {
+            background: #111C33;
+            border-color: #334155;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .mock-table-row {
+            background: #111C33;
+            border-color: #1E293B;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .quiz-option {
+            background: #111C33;
+            border-color: #1E293B;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .lb-styled-table th {
+            background: #0B1120;
+            color: #94A3B8;
+            border-bottom: 1px solid #1E293B;
+        }
+        [data-theme="dark"] .lb-styled-table td {
+            color: #CBD5E1;
+            border-bottom: 1px solid #1E293B;
+        }
+        [data-theme="dark"] .lb-styled-table tr:hover {
+            background: #1E293B;
+        }
     </style>
 </head>
 <body>
@@ -3629,6 +3853,10 @@
             </nav>
             
             <div class="nav-actions">
+                <button type="button" id="theme-toggle" onclick="toggleTheme()" 
+                        class="btn btn-secondary nav-btn" title="Переключить тему">
+                    <span id="theme-toggle-icon">🌙</span>
+                </button>
                 <button type="button" onclick="openDuelModal()" class="btn btn-secondary nav-btn duel-nav-btn" title="Мультиплеер 1 на 1 в реальном времени" style="border-color: #F59E0B; color: #F59E0B;">
                     <span>⚔️ Дуэль 1 на 1</span>
                 </button>
@@ -4728,12 +4956,26 @@
                     keyboard: false
                 });
 
-                // Светлая подложка CartoDB Positron с валидным API-ключом
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_3wsm_1_6bdccfe40c07a69c4fce7b68', {
+                // Подложка CartoDB с поддержкой темной/светлой темы
+                const isDarkTheme = (document.documentElement.getAttribute('data-theme') || 'light') === 'dark';
+                const initialTileStyle = isDarkTheme ? 'dark_all' : 'light_all';
+                const heroTileLayer = L.tileLayer(`https://{s}.basemaps.cartocdn.com/${initialTileStyle}/{z}/{x}/{y}{r}.png?key=cb1_3wsm_1_6bdccfe40c07a69c4fce7b68`, {
                     maxZoom: 19,
                     subdomains: 'abcd',
                     attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
                 }).addTo(heroMap);
+
+                window.addEventListener('geoatlas:theme-change', (e) => {
+                    const isDark = e.detail && e.detail.theme === 'dark';
+                    if (heroTileLayer) {
+                        const curUrl = heroTileLayer._url || '';
+                        if (isDark && curUrl.includes('light_all')) {
+                            heroTileLayer.setUrl(curUrl.replace('light_all', 'dark_all'));
+                        } else if (!isDark && curUrl.includes('dark_all')) {
+                            heroTileLayer.setUrl(curUrl.replace('dark_all', 'light_all'));
+                        }
+                    }
+                });
 
                 // Принудительная инвалидация размеров контейнера для моментального рендеринга тайлов
                 heroMap.invalidateSize();

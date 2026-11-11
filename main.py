@@ -1400,10 +1400,33 @@ window.serverMapZoom = {self.zoom};
         brand_org_short = branding_data.get('org_short') or branding_data.get('university_short') or 'ЮФУ'
         brand_sub_title = branding_data.get('sub_title') or branding_data.get('org_name') or 'Институт наук о Земле ЮФУ'
 
-        self.map.get_root().html.add_child(folium.Element(f"<script>{dynamic_js}\n{quiz_js}</script>"))
+        self.map.get_root().header.add_child(folium.Element(
+            '<meta name="theme-color" content="#2563EB" media="(prefers-color-scheme: light)">\n'
+            '<meta name="theme-color" content="#0B1120" media="(prefers-color-scheme: dark)">\n'
+            '<script src="/public/theme.js"></script>'
+        ))
+
+        self.map.get_root().html.add_child(folium.Element(f"<script src='/public/theme.js'></script><script>{dynamic_js}\n{quiz_js}</script>"))
 
         quiz_html = f'''
+        <meta name="theme-color" content="#2563EB" media="(prefers-color-scheme: light)">
+        <meta name="theme-color" content="#0B1120" media="(prefers-color-scheme: dark)">
+        <script src="/public/theme.js"></script>
         <link rel="stylesheet" href="/public/map.css">
+        <style>
+        [data-theme="dark"] .app-card,
+        [data-theme="dark"] .district-info-box,
+        [data-theme="dark"] .quiz-option {{
+            background: #111C33;
+            border-color: #1E293B;
+            color: #CBD5E1;
+        }}
+        [data-theme="dark"] .leaflet-tooltip {{
+            background-color: #111C33 !important;
+            border-color: #334155 !important;
+            color: #F8FAFC !important;
+        }}
+        </style>
         <!-- OVERLAY LOADER ПЕРВИЧНОЙ ЗАГРУЗКИ КАРТЫ -->
         <div id="map-loader" class="map-loader-overlay">
             <div class="map-loader-content">
@@ -1414,6 +1437,9 @@ window.serverMapZoom = {self.zoom};
         </div>
 
         <div class="top-nav-buttons" id="top-nav-panel">
+            <button type="button" id="theme-toggle" onclick="toggleTheme()" class="btn btn-secondary nav-top-btn" title="Переключить тему">
+                <span id="theme-toggle-icon">🌙</span>
+            </button>
             <a href="index.html" class="btn btn-secondary nav-top-btn" title="Вернуться к выбору региона"><span>🏠 На главную</span></a>
             <button class="btn btn-secondary nav-top-btn reset-map-btn" onclick="resetMapView()" title="Показать всю карту">
                 <span>🌍 Вся карта</span>

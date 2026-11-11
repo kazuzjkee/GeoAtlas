@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2563EB" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0B1120" media="(prefers-color-scheme: dark)">
     <title>Панель преподавателя | Институт наук о Земле ЮФУ</title>
+    <script src="/public/theme.js"></script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
     <link rel="stylesheet" href="/public/admin.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -30,6 +33,10 @@
             <span class="badge badge-blue" id="teacher-id-badge" style="font-size: 0.75rem; margin-left: 6px;">SaaS Tenant</span>
         </div>
         <div class="header-actions">
+            <button type="button" id="theme-toggle" onclick="toggleTheme()" 
+                    class="btn btn-glass" title="Переключить тему">
+                <span id="theme-toggle-icon">🌙</span>
+            </button>
             <a href="/" class="btn btn-glass" title="Вернуться к интерактивному атласу">
                 <span>←</span> <span>На карту атласа</span>
             </a>

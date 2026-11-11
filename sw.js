@@ -8,6 +8,8 @@ const STATIC_PRECACHE_URLS = [
     '/index.html',
     '/quiz.js',
     '/branding.json',
+    '/public/theme.js',
+    '/public/map.css',
     '/public/admin.css',
     '/public/admin.js'
 ];
