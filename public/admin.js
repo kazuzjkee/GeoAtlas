@@ -284,10 +284,14 @@ let allResults = [];
         const avgAcc = total > 0 ? Math.round(allResults.reduce((sum, r) => sum + (parseInt(r.accuracy) || 0), 0) / total) : 0;
         const violatingTests = allResults.filter(r => (parseInt(r.violations) || 0) > 0 || (r.exam_status && r.exam_status.includes('Подозрение'))).length;
 
-        document.getElementById('kpi-total-tests').textContent = total;
-        document.getElementById('kpi-exam-tests').textContent = exams;
-        document.getElementById('kpi-avg-accuracy').textContent = `${avgAcc}%`;
-        document.getElementById('kpi-total-violations').textContent = totalViolations;
+        const elTotal = document.getElementById('kpi-total-tests');
+        if (elTotal) elTotal.textContent = total;
+        const elExam = document.getElementById('kpi-exam-tests');
+        if (elExam) elExam.textContent = exams;
+        const elAvg = document.getElementById('kpi-avg-accuracy');
+        if (elAvg) elAvg.textContent = `${avgAcc}%`;
+        const elViolations = document.getElementById('kpi-total-violations');
+        if (elViolations) elViolations.textContent = totalViolations;
 
         const vIcon = document.getElementById('kpi-violations-icon');
         if (vIcon) {
@@ -299,10 +303,14 @@ let allResults = [];
             }
         }
 
-        document.getElementById('cnt-all').textContent = total;
-        document.getElementById('cnt-exams').textContent = exams;
-        document.getElementById('cnt-quizzes').textContent = total - exams;
-        document.getElementById('cnt-violations').textContent = violatingTests;
+        const cntAll = document.getElementById('cnt-all');
+        if (cntAll) cntAll.textContent = total;
+        const cntExams = document.getElementById('cnt-exams');
+        if (cntExams) cntExams.textContent = exams;
+        const cntQuizzes = document.getElementById('cnt-quizzes');
+        if (cntQuizzes) cntQuizzes.textContent = total - exams;
+        const cntViolations = document.getElementById('cnt-violations');
+        if (cntViolations) cntViolations.textContent = violatingTests;
         updateMistakesAnalytics();
     }
 

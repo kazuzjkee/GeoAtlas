@@ -2259,7 +2259,7 @@ window.serverMapZoom = {self.zoom};
             align-items: center;
             gap: 8px;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-            max-width: 220px;
+            max-width: 280px !important;
             flex-shrink: 0;
         }}
         .badge-avatar {{
@@ -2274,9 +2274,22 @@ window.serverMapZoom = {self.zoom};
             font-size: 13px;
             flex-shrink: 0;
         }}
-        .badge-info {{ display: flex; flex-direction: column; text-align: left; min-width: 0; overflow: hidden; }}
-        .badge-name {{ font-size: 11.5px; font-weight: 700; color: #1E293B; line-height: 1.2; max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-        .badge-group {{ font-size: 10px; color: #64748B; max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+        .badge-info {{
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+            text-align: left;
+        }}
+        .badge-name, .badge-group {{
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 170px;
+            display: block;
+        }}
+        .badge-name {{ font-size: 11.5px; font-weight: 700; color: #1E293B; line-height: 1.2; }}
+        .badge-group {{ font-size: 10px; color: #64748B; }}
         .badge-logout {{
             background: none;
             border: none;

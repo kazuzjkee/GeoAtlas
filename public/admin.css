@@ -310,7 +310,7 @@
             border: 1px solid var(--border);
             border-radius: 14px;
             box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
-            margin-bottom: 22px;
+            margin-bottom: 24px;
             overflow: hidden;
         }
 
@@ -756,9 +756,15 @@
         /* Dispatcher Form */
         .dispatcher-form-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 16px;
             padding: 18px 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .dispatcher-form-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
         }
 
         .form-field {
@@ -803,6 +809,10 @@
             flex-wrap: wrap;
         }
 
+        .dispatcher-bottom-bar .btn-primary {
+            margin-left: auto;
+        }
+
         .dispatcher-info-note {
             font-size: 12px;
             color: #475569;
@@ -818,7 +828,7 @@
             color: white;
             border-radius: 14px;
             padding: 18px 22px;
-            margin-bottom: 22px;
+            margin-bottom: 24px;
             box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12);
         }
 
@@ -1303,4 +1313,23 @@
             background: #F8FAFC;
             border-radius: 8px;
             border: 1px dashed #CBD5E1;
+        }
+
+        /* Student Badge Component (Header) */
+        .student-badge {
+            max-width: 280px !important;
+            flex-shrink: 0;
+        }
+        .badge-info {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+        }
+        .badge-name, .badge-group {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 170px;
+            display: block;
         }
