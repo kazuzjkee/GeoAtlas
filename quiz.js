@@ -120,10 +120,12 @@ class QuizManagerClass {
         this.studyIndex = 0;
         this.studyCenterMarker = null;
         this.currentSessionMistakes = [];
+        this.currentSessionMistakesDetails = [];
     }
 
     reset() {
         this.currentSessionMistakes = [];
+        this.currentSessionMistakesDetails = [];
         this.currentQuiz = null;
         this.currentQuestion = 0;
         this.score = 0;
@@ -205,6 +207,7 @@ Object.defineProperty(_root, 'studyQueue', { get() { return QuizManager.studyQue
 Object.defineProperty(_root, 'studyIndex', { get() { return QuizManager.studyIndex; }, set(v) { QuizManager.studyIndex = v; }, configurable: true });
 Object.defineProperty(_root, 'studyCenterMarker', { get() { return QuizManager.studyCenterMarker; }, set(v) { QuizManager.studyCenterMarker = v; }, configurable: true });
 Object.defineProperty(_root, 'currentSessionMistakes', { get() { return QuizManager.currentSessionMistakes; }, set(v) { QuizManager.currentSessionMistakes = v; }, configurable: true });
+Object.defineProperty(_root, 'currentSessionMistakesDetails', { get() { return QuizManager.currentSessionMistakesDetails; }, set(v) { QuizManager.currentSessionMistakesDetails = v; }, configurable: true });
 
 Object.defineProperty(_root, 'isExamMode', { get() { return ExamProctor.isExam; }, set(v) { ExamProctor.isExam = Boolean(v); }, configurable: true });
 Object.defineProperty(_root, 'examCategory', { get() { return ExamProctor.category; }, set(v) { ExamProctor.category = v; }, configurable: true });
@@ -591,6 +594,7 @@ function removeExamKioskTopBar() {
 
 async function initExamMode(options = {}) {
     currentSessionMistakes = [];
+    currentSessionMistakesDetails = [];
     initServerRegionContext();
     const urlParams = new URLSearchParams(window.location.search);
 
@@ -1279,6 +1283,7 @@ function selectModeFromWelcome(mode) {
 
 function startSelectedTestMode(mode = 'mixed', options = {}) {
     currentSessionMistakes = [];
+    currentSessionMistakesDetails = [];
     const count = options.count || 15;
     const timeLimit = options.timeLimit || 10;
     const isExam = options.isExam !== undefined ? options.isExam : isExamMode;
@@ -1596,6 +1601,7 @@ function generateExamQuestions(category, count) {
 
 function startPuzzleMode() {
     currentSessionMistakes = [];
+    currentSessionMistakesDetails = [];
     if (typeof EMBEDDED_PUZZLE_DATA === 'undefined' || !EMBEDDED_PUZZLE_DATA || EMBEDDED_PUZZLE_DATA.length < 2) {
         alert('Для запуска режима пазла требуются пространственные данные районов этого региона.');
         return;
@@ -2527,6 +2533,16 @@ function triggerPuzzleMismatch(targetDistrict, message = null) {
     puzzleMistakes++;
     if (targetDistrict && targetDistrict.name) {
         currentSessionMistakes.push(targetDistrict.name);
+        if (Array.isArray(currentSessionMistakesDetails)) {
+            currentSessionMistakesDetails.push({
+                type: 'puzzle',
+                targetName: targetDistrict.name,
+                correctAnswer: targetDistrict.name,
+                studentAnswer: 'Неверный слот',
+                explanation: `Район «${targetDistrict.name}» был помещен не в свой контур.`,
+                questionIndex: currentSessionMistakesDetails.length + 1
+            });
+        }
     }
 
     const card = document.getElementById('puzzle-active-piece-card');
@@ -3352,6 +3368,17 @@ function checkAnswer() {
         if (problematicName) {
             currentSessionMistakes.push(problematicName);
         }
+        if (Array.isArray(currentSessionMistakesDetails)) {
+            currentSessionMistakesDetails.push({
+                type: question.type || 'district',
+                targetName: problematicName,
+                correctAnswer: question.correctAnswer || question.districtName || question.riverName,
+                studentAnswer: selectedOption || 'Не выбран',
+                questionText: question.text || question.prompt || '',
+                questionIndex: currentQuestion + 1,
+                districtName: question.districtName || question.correctAnswer
+            });
+        }
 
         // При ошибке: полигон ошибки — красный (#EF4444), полигон правильного ответа — зеленый (#10B981)
         if (question.type === 'district' || question.type === 'neighbor') {
@@ -3505,6 +3532,23 @@ function handleMapClick(lat, lon, question) {
         if (centerName) {
             currentSessionMistakes.push(centerName);
         }
+    }
+
+    if (distance > 15 && Array.isArray(currentSessionMistakesDetails)) {
+        const centerName = question.correctAnswer || question.name;
+        currentSessionMistakesDetails.push({
+            type: 'center',
+            targetName: centerName,
+            correctAnswer: centerName,
+            studentAnswer: `Клик (${Math.round(distance)} км от цели)`,
+            studentLat: lat,
+            studentLon: lon,
+            correctLat: correctLat,
+            correctLon: correctLon,
+            distanceKm: Math.round(distance),
+            pointsAwarded: pointsAwarded,
+            questionIndex: currentQuestion + 1
+        });
     }
 
     score += pointsAwarded;
@@ -4275,6 +4319,31 @@ function showResults() {
         `;
     }
 
+    // Кнопка разбора ошибок
+    const mistakesCount = (window.currentSessionMistakesDetails && window.currentSessionMistakesDetails.length) || (currentSessionMistakes && currentSessionMistakes.length) || 0;
+    const reviewBtnHtml = mistakesCount > 0 ? `
+        <div style="margin-top: 14px;">
+            <button id="btn-review-mistakes" onclick="startReviewMistakesMode()" class="btn btn-warning btn-block" style="font-weight: 700; background: linear-gradient(135deg, #F59E0B, #D97706); color: white; border: none; padding: 11px 16px; border-radius: 12px; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; font-size: 13.5px;">
+                <span>🔍</span> <span>Разобрать ошибки (${mistakesCount})</span>
+            </button>
+        </div>
+    ` : `
+        <div style="margin-top: 10px; color: #10B981; font-weight: 700; font-size: 13px;">
+            🎉 Превосходно! Ни одной ошибки не допущено.
+        </div>
+    `;
+    rc.insertAdjacentHTML('beforeend', reviewBtnHtml);
+
+    const staticReviewBtn = document.getElementById('btn-review-mistakes-action');
+    if (staticReviewBtn) {
+        if (mistakesCount > 0) {
+            staticReviewBtn.style.display = 'block';
+            staticReviewBtn.innerHTML = `<span>🔍</span> <span>Разобрать ошибки (${mistakesCount})</span>`;
+        } else {
+            staticReviewBtn.style.display = 'none';
+        }
+    }
+
     saveResult(accuracy, wasExam, examToken, finalExamViolations, finalExamStatus);
     isExamMode = false;
     currentQuiz = null;
@@ -4287,6 +4356,347 @@ function closeResultsAndReturnToMenu() {
     document.getElementById('normal-mode').style.display = 'block';
     resetQuiz();
 }
+
+// ==========================================
+// 🔍 РЕЖИМ РАЗБОРА ОШИБОК (REVIEW MODE)
+// ==========================================
+let _currentReviewIndex = 0;
+let _reviewActiveLayers = [];
+let _reviewMarkers = [];
+
+function findRiverLayerByName(riverName) {
+    const map = getMapObject();
+    if (!map || !riverName) return null;
+    const target = riverName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+    let matched = null;
+    map.eachLayer(function(layer) {
+        if (matched) return;
+        if (layer.feature && layer.feature.properties) {
+            const props = layer.feature.properties;
+            const rName = (props.name_ru || props.name || props.NAME || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+            if (rName && (rName === target || rName.includes(target) || target.includes(rName))) {
+                matched = layer;
+            }
+        }
+    });
+    return matched;
+}
+
+function startReviewMistakesMode() {
+    let mistakes = window.currentSessionMistakesDetails || [];
+    if (mistakes.length === 0 && currentSessionMistakes && currentSessionMistakes.length > 0) {
+        mistakes = currentSessionMistakes.map((name, i) => ({
+            type: 'district',
+            targetName: name,
+            correctAnswer: name,
+            studentAnswer: 'Ошибочный ответ',
+            questionIndex: i + 1
+        }));
+        window.currentSessionMistakesDetails = mistakes;
+    }
+
+    if (!mistakes || mistakes.length === 0) {
+        alert('В этой сессии не зафиксировано ошибок для разбора!');
+        return;
+    }
+
+    // Скрываем окно результатов и переводим карту в режим разбора
+    const resultsEl = document.getElementById('results-mode');
+    if (resultsEl) resultsEl.style.display = 'none';
+
+    enablePopups();
+    setBasemapVisible(true);
+    restoreAllLayers();
+
+    // Сворачиваем боковую панель на мобильных экранах
+    const quizControls = document.getElementById('quiz-controls');
+    if (quizControls && window.innerWidth <= 840) {
+        quizControls.classList.add('collapsed');
+    }
+
+    _currentReviewIndex = 0;
+    showReviewHUD();
+    renderReviewMistake(_currentReviewIndex);
+}
+
+function showReviewHUD() {
+    let hud = document.getElementById('geoatlas-review-hud');
+    if (!hud) {
+        hud = document.createElement('div');
+        hud.id = 'geoatlas-review-hud';
+        hud.className = 'geoatlas-review-hud';
+        hud.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 99999;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(245, 158, 11, 0.6);
+            border-radius: 16px;
+            padding: 12px 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 24px rgba(245, 158, 11, 0.25);
+            color: #F8FAFC;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            max-width: 95vw;
+            width: auto;
+            transition: all 0.3s ease;
+        `;
+        document.body.appendChild(hud);
+    }
+    hud.style.display = 'flex';
+}
+
+function cleanReviewMapObjects() {
+    const map = getMapObject();
+    if (map) {
+        _reviewMarkers.forEach(m => {
+            try { map.removeLayer(m); } catch(e) {}
+        });
+        _reviewMarkers = [];
+    }
+
+    const defaultDistrictStyle = {
+        color: '#2E8B57',
+        weight: 2,
+        fillColor: '#90EE90',
+        fillOpacity: 0.25,
+        dashArray: '5, 5'
+    };
+
+    _reviewActiveLayers.forEach(l => {
+        try {
+            if (l.layer && typeof l.layer.setStyle === 'function') {
+                l.layer.setStyle(l.originalStyle || defaultDistrictStyle);
+            }
+            if (l.layer && typeof l.layer.closePopup === 'function') {
+                l.layer.closePopup();
+            }
+            if (l.layer && typeof l.layer.unbindTooltip === 'function') {
+                l.layer.unbindTooltip();
+            }
+        } catch(e) {}
+    });
+    _reviewActiveLayers = [];
+}
+
+function renderReviewMistake(index) {
+    const mistakes = window.currentSessionMistakesDetails || [];
+    if (!mistakes || index < 0 || index >= mistakes.length) return;
+
+    cleanReviewMapObjects();
+    const item = mistakes[index];
+    const map = getMapObject();
+
+    const hud = document.getElementById('geoatlas-review-hud');
+    if (hud) {
+        let questionTypeLabel = 'Территория';
+        if (item.type === 'center') questionTypeLabel = 'Поиск райцентра';
+        else if (item.type === 'neighbor') questionTypeLabel = 'Топология смежности';
+        else if (item.type === 'river') questionTypeLabel = 'Гидрография (Река)';
+        else if (item.type === 'puzzle') questionTypeLabel = 'Топологический пазл';
+
+        let detailsHtml = '';
+        if (item.type === 'center') {
+            detailsHtml = `
+                <div style="font-weight: 700; color: #10B981; font-size: 13.5px;">✓ Истинный центр: ${escapeHtml(item.correctAnswer)}</div>
+                <div style="font-size: 12px; color: #EF4444; margin-top: 2px;">
+                    Ваш клик: <b>${escapeHtml(item.studentAnswer)}</b> • Дистанция промаха: <b>${item.distanceKm || 0} км</b>
+                </div>
+            `;
+        } else if (item.type === 'river') {
+            detailsHtml = `
+                <div style="font-weight: 700; color: #10B981; font-size: 13.5px;">✓ Правильная река: ${escapeHtml(item.correctAnswer)}</div>
+                <div style="font-size: 12px; color: #EF4444; margin-top: 2px;">
+                    Вы выбрали: <b>${escapeHtml(item.studentAnswer)}</b>
+                </div>
+            `;
+        } else {
+            detailsHtml = `
+                <div style="font-weight: 700; color: #10B981; font-size: 13.5px;">✓ Правильный объект: ${escapeHtml(item.correctAnswer)}</div>
+                <div style="font-size: 12px; color: #EF4444; margin-top: 2px;">
+                    Вы ошибочно указали: <b>${escapeHtml(item.studentAnswer)}</b>
+                </div>
+            `;
+        }
+
+        const prevDisabled = index === 0 ? 'opacity: 0.4; cursor: not-allowed;' : 'cursor: pointer;';
+        const nextDisabled = index === mistakes.length - 1 ? 'opacity: 0.4; cursor: not-allowed;' : 'cursor: pointer;';
+
+        hud.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="font-size: 26px;">🔍</div>
+                <div>
+                    <div style="font-size: 11px; font-weight: 800; color: #F59E0B; text-transform: uppercase; letter-spacing: 0.5px;">
+                        РАЗБОР ОШИБОК (${questionTypeLabel})
+                    </div>
+                    <div style="font-size: 13px; font-weight: 700; color: #FFFFFF;">
+                        Вопрос <span style="color: #F59E0B;">${index + 1}</span> из ${mistakes.length}
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 6px 14px; min-width: 260px; max-width: 440px;">
+                ${detailsHtml}
+            </div>
+
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <button onclick="prevReviewMistake()" style="${prevDisabled} background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #FFF; padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600;" ${index === 0 ? 'disabled' : ''}>◀ Назад</button>
+                <button onclick="nextReviewMistake()" style="${nextDisabled} background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #FFF; padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600;" ${index === mistakes.length - 1 ? 'disabled' : ''}>Вперед ▶</button>
+                <button onclick="exitReviewMistakesMode()" class="btn btn-primary" style="background: #EF4444; border: none; color: #FFF; padding: 6px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);">✕ Выход</button>
+            </div>
+        `;
+    }
+
+    if (!map) return;
+
+    // ВИЗУАЛИЗАЦИЯ НА КАРТЕ
+    if (item.type === 'center' && item.correctLat && item.correctLon && item.studentLat && item.studentLon) {
+        // Точка клика студента (Красный маркер)
+        const studentMarker = L.circleMarker([item.studentLat, item.studentLon], {
+            radius: 10,
+            color: '#B91C1C',
+            fillColor: '#EF4444',
+            fillOpacity: 0.9,
+            weight: 3
+        }).addTo(map);
+        studentMarker.bindTooltip(`❌ Ваш клик (Погрешность ${item.distanceKm} км)`, { permanent: true, direction: 'bottom' });
+
+        // Истинная точка райцентра (Зеленый маркер)
+        const correctMarker = L.circleMarker([item.correctLat, item.correctLon], {
+            radius: 9,
+            color: '#047857',
+            fillColor: '#10B981',
+            fillOpacity: 0.95,
+            weight: 3
+        }).addTo(map);
+        correctMarker.bindTooltip(`📍 Истинный центр: ${escapeHtml(item.correctAnswer)}`, { permanent: true, direction: 'top' });
+
+        // Пунктирная линия между ними
+        const errorLine = L.polyline([[item.studentLat, item.studentLon], [item.correctLat, item.correctLon]], {
+            color: '#EF4444',
+            weight: 3,
+            dashArray: '6, 8',
+            opacity: 0.85
+        }).addTo(map);
+
+        _reviewMarkers.push(studentMarker, correctMarker, errorLine);
+
+        // Зум к паре точек
+        const bounds = L.latLngBounds([
+            [item.studentLat, item.studentLon],
+            [item.correctLat, item.correctLon]
+        ]);
+        map.fitBounds(bounds, { padding: [100, 100], maxZoom: 10, animate: true });
+    }
+    else if (item.type === 'river') {
+        const riverLayer = findRiverLayerByName(item.correctAnswer);
+        if (riverLayer) {
+            try {
+                if (typeof riverLayer.setStyle === 'function') {
+                    riverLayer.setStyle({ color: '#10B981', weight: 6, opacity: 1 });
+                    _reviewActiveLayers.push({ layer: riverLayer });
+                }
+                if (riverLayer.bringToFront) riverLayer.bringToFront();
+                if (typeof riverLayer.getBounds === 'function') {
+                    map.fitBounds(riverLayer.getBounds(), { padding: [60, 60], animate: true });
+                }
+            } catch(e) {}
+        }
+    }
+    else {
+        // District, neighbor, puzzle
+        const wrongLayer = findDistrictLayerByName(item.studentAnswer);
+        const correctLayer = findDistrictLayerByName(item.correctAnswer);
+
+        let wrongBounds = null;
+        let correctBounds = null;
+
+        if (wrongLayer) {
+            try {
+                wrongLayer.setStyle({
+                    color: '#B91C1C',
+                    weight: 4,
+                    fillColor: '#EF4444',
+                    fillOpacity: 0.65,
+                    dashArray: null
+                });
+                if (wrongLayer.bringToFront) wrongLayer.bringToFront();
+                wrongLayer.bindTooltip(`❌ Ваш ошибочный ответ: ${escapeHtml(item.studentAnswer)}`, { permanent: true, direction: 'center' });
+                _reviewActiveLayers.push({ layer: wrongLayer });
+                if (typeof wrongLayer.getBounds === 'function') wrongBounds = wrongLayer.getBounds();
+            } catch(e) {}
+        }
+
+        if (correctLayer) {
+            try {
+                correctLayer.setStyle({
+                    color: '#047857',
+                    weight: 4,
+                    fillColor: '#10B981',
+                    fillOpacity: 0.7,
+                    dashArray: null
+                });
+                if (correctLayer.bringToFront) correctLayer.bringToFront();
+                correctLayer.bindTooltip(`✓ Истинный район: ${escapeHtml(item.correctAnswer)}`, { permanent: true, direction: 'top' });
+                _reviewActiveLayers.push({ layer: correctLayer });
+                if (typeof correctLayer.getBounds === 'function') correctBounds = correctLayer.getBounds();
+            } catch(e) {}
+        }
+
+        let combined = null;
+        if (wrongBounds && correctBounds) {
+            combined = L.latLngBounds(wrongBounds).extend(correctBounds);
+        } else if (correctBounds) {
+            combined = correctBounds;
+        } else if (wrongBounds) {
+            combined = wrongBounds;
+        }
+
+        if (combined && (!combined.isValid || combined.isValid())) {
+            map.fitBounds(combined, { padding: [80, 80], maxZoom: 10, animate: true });
+        }
+    }
+}
+
+function prevReviewMistake() {
+    if (_currentReviewIndex > 0) {
+        _currentReviewIndex--;
+        renderReviewMistake(_currentReviewIndex);
+    }
+}
+
+function nextReviewMistake() {
+    const mistakes = window.currentSessionMistakesDetails || [];
+    if (_currentReviewIndex < mistakes.length - 1) {
+        _currentReviewIndex++;
+        renderReviewMistake(_currentReviewIndex);
+    }
+}
+
+function exitReviewMistakesMode() {
+    cleanReviewMapObjects();
+    const hud = document.getElementById('geoatlas-review-hud');
+    if (hud) hud.remove();
+
+    // Возвращаем панель результатов
+    const resultsMode = document.getElementById('results-mode');
+    if (resultsMode) resultsMode.style.display = 'block';
+
+    const quizControls = document.getElementById('quiz-controls');
+    if (quizControls) quizControls.classList.remove('collapsed');
+
+    resetMapView();
+}
+
+window.startReviewMistakesMode = startReviewMistakesMode;
+window.prevReviewMistake = prevReviewMistake;
+window.nextReviewMistake = nextReviewMistake;
+window.exitReviewMistakesMode = exitReviewMistakesMode;
 
 function saveResult(accuracy, wasExam = false, token = '', violations = 0, examStatusText = 'passed') {
     const student = getCurrentStudentInfo();
@@ -4550,6 +4960,7 @@ function closeLeaderboardModal() {
 function resetQuiz() {
     stopTimer();
     currentSessionMistakes = [];
+    currentSessionMistakesDetails = [];
     currentQuestion = 0;
     score = 0;
     maxPossibleScore = 0;

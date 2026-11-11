@@ -7,6 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
     <link rel="stylesheet" href="/public/admin.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -319,6 +320,41 @@
                 <div class="exec-metric-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); padding: 14px; border-radius: 12px;">
                     <div style="font-size: 0.8rem; color: #9CA3AF;">Индекс академической честности</div>
                     <div style="font-size: 1.45rem; font-weight: bold; color: #FBBF24;" id="exec-metric-integrity">98.2%</div>
+                </div>
+            </div>
+
+            <!-- ГРАФИКИ EXECUTIVE DASHBOARD (Chart.js) -->
+            <div class="executive-charts-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; margin-top: 22px;">
+                <!-- График 1: Круговая диаграмма успеваемости -->
+                <div class="exec-chart-card" style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                        <div style="font-size: 0.95rem; font-weight: 700; color: #F8FAFC; display: flex; align-items: center; gap: 8px;">
+                            <span>📊</span> <span>Распределение академических оценок</span>
+                        </div>
+                        <span class="badge badge-purple" style="font-size: 0.75rem;">ФГОС ВО</span>
+                    </div>
+                    <div style="position: relative; flex: 1; min-height: 250px; max-height: 280px; display: flex; align-items: center; justify-content: center;">
+                        <canvas id="exec-grades-pie-chart"></canvas>
+                    </div>
+                    <div id="exec-grades-legend-summary" style="margin-top: 12px; display: flex; justify-content: space-around; font-size: 11.5px; color: #94A3B8; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 10px;">
+                    </div>
+                </div>
+
+                <!-- График 2: Линейный график активности по дням -->
+                <div class="exec-chart-card" style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                        <div style="font-size: 0.95rem; font-weight: 700; color: #F8FAFC; display: flex; align-items: center; gap: 8px;">
+                            <span>📈</span> <span>Динамика сдачи тестов (по дням)</span>
+                        </div>
+                        <span class="badge badge-blue" style="font-size: 0.75rem;">Последние 7 дней</span>
+                    </div>
+                    <div style="position: relative; flex: 1; min-height: 250px; max-height: 280px;">
+                        <canvas id="exec-activity-line-chart"></canvas>
+                    </div>
+                    <div id="exec-activity-legend-summary" style="margin-top: 12px; display: flex; justify-content: space-between; font-size: 11.5px; color: #94A3B8; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 10px;">
+                        <span>Пиковая нагрузка: <strong id="exec-peak-activity" style="color: #60A5FA;">—</strong></span>
+                        <span>Всего за период: <strong id="exec-total-period-activity" style="color: #34D399;">—</strong></span>
+                    </div>
                 </div>
             </div>
         </section>

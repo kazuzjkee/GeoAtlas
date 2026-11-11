@@ -1664,6 +1664,9 @@ window.serverMapZoom = {self.zoom};
                 <div id="results-content">
                 </div>
                 <div class="btn-group-vertical" style="margin-top: 12px;">
+                    <button id="btn-review-mistakes-action" onclick="startReviewMistakesMode()" class="btn btn-warning btn-block" style="display: none; margin-bottom: 8px; font-weight: 700; background: linear-gradient(135deg, #F59E0B, #D97706); color: white; border: none; padding: 10px 14px; border-radius: 10px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35); cursor: pointer;">
+                        <span>🔍</span> <span>Разобрать ошибки</span>
+                    </button>
                     <button onclick="closeResultsAndReturnToMenu()" class="btn btn-primary btn-block">
                         В главное меню
                     </button>

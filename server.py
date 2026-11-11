@@ -1115,6 +1115,12 @@ window.serverMapZoom = {info['zoom']};
     else:
         html = f"{context_script}\n{html}"
 
+    if "/quiz.js" not in html:
+        if "</body>" in html:
+            html = html.replace("</body>", '<script src="/quiz.js"></script>\n</body>', 1)
+        elif "</html>" in html:
+            html = html.replace("</html>", '<script src="/quiz.js"></script>\n</html>', 1)
+
     return HTMLResponse(content=html, media_type="text/html")
 
 @app.post("/api/upload-map")

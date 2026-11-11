@@ -173,6 +173,12 @@ let allResults = [];
         );
         if (isDean) {
             initExecutiveDashboard();
+        } else {
+            const section = document.getElementById('executive-dashboard-section');
+            if (section) section.style.display = 'block';
+            const filterWrap = document.getElementById('executive-teacher-filter')?.parentElement;
+            if (filterWrap) filterWrap.style.display = 'none';
+            updateExecutiveMetrics();
         }
 
         if (activeSession) {
@@ -1322,7 +1328,234 @@ let allResults = [];
             const integrityPct = Math.max(70, Math.min(100, Math.round(100 - (violationsCount / total) * 15)));
             if (integrityEl) integrityEl.textContent = `${integrityPct}%`;
         }
+
+        renderExecutiveCharts(allResults);
     }
+
+    // ==========================================
+    // 📊 ВИЗУАЛИЗАЦИЯ ДАННЫХ ДЕКАНАТА (CHART.JS)
+    // ==========================================
+    let execGradesChartInstance = null;
+    let execActivityChartInstance = null;
+
+    function renderExecutiveCharts(results) {
+        if (typeof Chart === 'undefined') {
+            console.warn('Chart.js не загружен');
+            return;
+        }
+        const safeResults = results || allResults || [];
+
+        // 1. КРУГОВАЯ ДИАГРАММА: РАСПРЕДЕЛЕНИЕ ОЦЕНОК
+        const pieCanvas = document.getElementById('exec-grades-pie-chart');
+        if (pieCanvas) {
+            let countExcellent = 0;     // 90%+
+            let countGood = 0;          // 70-89%
+            let countSatisfactory = 0;   // 50-69%
+            let countFailed = 0;        // < 50%
+
+            safeResults.forEach(r => {
+                const acc = typeof r.accuracy === 'number' ? r.accuracy : (parseInt(r.accuracy, 10) || 0);
+                if (acc >= 90) countExcellent++;
+                else if (acc >= 70) countGood++;
+                else if (acc >= 50) countSatisfactory++;
+                else countFailed++;
+            });
+
+            const totalGraded = countExcellent + countGood + countSatisfactory + countFailed;
+
+            if (execGradesChartInstance) {
+                execGradesChartInstance.destroy();
+                execGradesChartInstance = null;
+            }
+
+            const pieCtx = pieCanvas.getContext('2d');
+            execGradesChartInstance = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Отлично (90%+)', 'Хорошо (70-89%)', 'Удовлетворительно (50-69%)', 'Не сдали (<50%)'],
+                    datasets: [{
+                        data: [countExcellent, countGood, countSatisfactory, countFailed],
+                        backgroundColor: [
+                            '#10B981', // Изумрудный (Отлично)
+                            '#3B82F6', // Синий (Хорошо)
+                            '#F59E0B', // Янтарный (Удовл.)
+                            '#EF4444'  // Красный (Не сдали)
+                        ],
+                        borderColor: '#0F172A',
+                        borderWidth: 2,
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#CBD5E1',
+                                font: { family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', size: 11 },
+                                padding: 12,
+                                usePointStyle: true,
+                                pointStyle: 'circle'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#F8FAFC',
+                            bodyColor: '#E2E8F0',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.raw || 0;
+                                    const pct = totalGraded > 0 ? Math.round((val / totalGraded) * 100) : 0;
+                                    return ` ${context.label}: ${val} чел. (${pct}%)`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '62%'
+                }
+            });
+
+            const legendSummary = document.getElementById('exec-grades-legend-summary');
+            if (legendSummary) {
+                legendSummary.innerHTML = `
+                    <div><span style="color:#10B981; font-weight:700;">${countExcellent}</span> Отл.</div>
+                    <div><span style="color:#3B82F6; font-weight:700;">${countGood}</span> Хор.</div>
+                    <div><span style="color:#F59E0B; font-weight:700;">${countSatisfactory}</span> Удовл.</div>
+                    <div><span style="color:#EF4444; font-weight:700;">${countFailed}</span> Не сдали</div>
+                `;
+            }
+        }
+
+        // 2. ЛИНЕЙНЫЙ ГРАФИК: ДИНАМИКА АКТИВНОСТИ ПО ДНЯМ (ЗА ПОСЛЕДНИЕ 7 ДНЕЙ)
+        const lineCanvas = document.getElementById('exec-activity-line-chart');
+        if (lineCanvas) {
+            const dateCounts = {};
+            let latestDateMs = 0;
+
+            safeResults.forEach(r => {
+                if (r.date) {
+                    const datePart = r.date.split(' ')[0]; // 'DD.MM.YYYY'
+                    dateCounts[datePart] = (dateCounts[datePart] || 0) + 1;
+                    const parts = datePart.split('.');
+                    if (parts.length === 3) {
+                        const t = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10)).getTime();
+                        if (!isNaN(t) && t > latestDateMs) latestDateMs = t;
+                    }
+                }
+            });
+
+            const anchorMs = latestDateMs > 0 ? latestDateMs : Date.now();
+            const days = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(anchorMs - i * 24 * 60 * 60 * 1000);
+                const dayStr = String(d.getDate()).padStart(2, '0');
+                const monthStr = String(d.getMonth() + 1).padStart(2, '0');
+                const yearStr = d.getFullYear();
+                days.push({
+                    full: `${dayStr}.${monthStr}.${yearStr}`,
+                    short: `${dayStr}.${monthStr}`
+                });
+            }
+
+            let labels = days.map(d => d.short);
+            let dataPoints = days.map(d => dateCounts[d.full] || 0);
+
+            // Если за последние календарные 7 дней 0, но в базе есть даты, показываем последние 7 активных дат
+            const sumPoints = dataPoints.reduce((a, b) => a + b, 0);
+            if (sumPoints === 0 && Object.keys(dateCounts).length > 0) {
+                const sortedDates = Object.keys(dateCounts).sort((a, b) => {
+                    const pa = a.split('.'), pb = b.split('.');
+                    return new Date(pa[2], pa[1]-1, pa[0]) - new Date(pb[2], pb[1]-1, pb[0]);
+                }).slice(-7);
+                labels = [];
+                dataPoints = [];
+                sortedDates.forEach(dt => {
+                    const p = dt.split('.');
+                    labels.push(`${p[0]}.${p[1]}`);
+                    dataPoints.push(dateCounts[dt]);
+                });
+            }
+
+            const peakCount = Math.max(0, ...dataPoints);
+            const totalPeriodCount = dataPoints.reduce((a, b) => a + b, 0);
+
+            const peakEl = document.getElementById('exec-peak-activity');
+            if (peakEl) peakEl.textContent = `${peakCount} тестов/день`;
+            const totalEl = document.getElementById('exec-total-period-activity');
+            if (totalEl) totalEl.textContent = `${totalPeriodCount} сданных тестов`;
+
+            if (execActivityChartInstance) {
+                execActivityChartInstance.destroy();
+                execActivityChartInstance = null;
+            }
+
+            const lineCtx = lineCanvas.getContext('2d');
+            const gradient = lineCtx.createLinearGradient(0, 0, 0, 260);
+            gradient.addColorStop(0, 'rgba(139, 92, 246, 0.45)');
+            gradient.addColorStop(1, 'rgba(139, 92, 246, 0.0)');
+
+            execActivityChartInstance = new Chart(lineCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Сдано тестов',
+                        data: dataPoints,
+                        borderColor: '#8B5CF6',
+                        backgroundColor: gradient,
+                        borderWidth: 2.5,
+                        fill: true,
+                        tension: 0.35,
+                        pointBackgroundColor: '#8B5CF6',
+                        pointBorderColor: '#FFFFFF',
+                        pointBorderWidth: 2,
+                        pointRadius: 4.5,
+                        pointHoverRadius: 7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#F8FAFC',
+                            bodyColor: '#E2E8F0',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    return ` Сдано: ${context.raw} тестов`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94A3B8', font: { size: 11 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: {
+                                color: '#94A3B8',
+                                font: { size: 11 },
+                                stepSize: 1,
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+    window.renderExecutiveCharts = renderExecutiveCharts;
 
     function onExecutiveTeacherFilterChange(teacherId) {
         if (teacherId === 'all') {
@@ -1537,6 +1770,8 @@ let allResults = [];
             if (typeof loadMapsList === 'function') loadMapsList();
         } else if (tabId === 'tab-branding') {
             initBrandSettingsForm();
+        } else if (tabId === 'tab-overview') {
+            setTimeout(() => renderExecutiveCharts(allResults), 60);
         }
     }
     window.switchAdminTab = switchAdminTab;
