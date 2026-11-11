@@ -2170,6 +2170,10 @@ window.serverMapZoom = {self.zoom};
         with open(filename, 'r', encoding='utf-8') as f:
             html = f.read()
 
+        css_path = os.path.join(BASE_DIR, 'public', 'map.css')
+        if not os.path.exists(css_path):
+            print("⚠️ ВНИМАНИЕ: public/map.css не найден, стили карты могут не работать!")
+
         custom_css_js = ""
 
         my_attribution_html = """
@@ -2274,7 +2278,8 @@ def main():
 
     if target in REGIONS_CONFIG or target in ['rf', 'российская федерация', 'россия']:
         key = 'russia' if target in ['rf', 'российская федерация', 'россия'] else target
-        out = build_configured_region(key, open_browser=True)
+        is_server = os.environ.get("RENDER") is not None or os.environ.get("PORT") is not None
+        out = build_configured_region(key, open_browser=not is_server)
         generated_files.append((REGIONS_CONFIG[key]['title'], out))
 
     elif target is None and not do_all:

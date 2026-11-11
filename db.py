@@ -19,6 +19,8 @@ def init_db():
     with _lock:
         conn = _conn()
         try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS results (
                     submission_id TEXT PRIMARY KEY,
@@ -78,26 +80,27 @@ def init_db():
 # ---------- RESULTS ----------
 
 def load_results() -> List[Dict[str, Any]]:
-    conn = _conn()
-    try:
-        cur = conn.execute("SELECT * FROM results ORDER BY created_at ASC")
-        out = []
-        for row in cur.fetchall():
-            d = dict(row)
-            d["is_exam"] = bool(d.get("is_exam"))
-            d["max_score"] = d.get("max_score") or 0
-            d["accuracy"] = d.get("accuracy") or 0
-            try:
-                d["mistakes_log"] = json.loads(d.get("mistakes_log") or "[]")
-            except Exception:
-                d["mistakes_log"] = []
-            d["group"] = d.pop("grp", "")
-            if not d.get("teacher_id"):
-                d["teacher_id"] = "teacher-petrov" if "эконом" in str(d.get("group", "")).lower() else "teacher-ivanov"
-            out.append(d)
-        return out
-    finally:
-        conn.close()
+    with _lock:
+        conn = _conn()
+        try:
+            cur = conn.execute("SELECT * FROM results ORDER BY created_at ASC")
+            out = []
+            for row in cur.fetchall():
+                d = dict(row)
+                d["is_exam"] = bool(d.get("is_exam"))
+                d["max_score"] = d.get("max_score") or 0
+                d["accuracy"] = d.get("accuracy") or 0
+                try:
+                    d["mistakes_log"] = json.loads(d.get("mistakes_log") or "[]")
+                except Exception:
+                    d["mistakes_log"] = []
+                d["group"] = d.pop("grp", "")
+                if not d.get("teacher_id"):
+                    d["teacher_id"] = "teacher-petrov" if "эконом" in str(d.get("group", "")).lower() else "teacher-ivanov"
+                out.append(d)
+            return out
+        finally:
+            conn.close()
 
 def save_result(result: Dict[str, Any]) -> Dict[str, Any]:
     sub_id = str(result.get("submission_id") or "").strip()
@@ -180,20 +183,21 @@ def save_result(result: Dict[str, Any]) -> Dict[str, Any]:
 # ---------- GROUPS ----------
 
 def load_groups() -> List[Dict[str, Any]]:
-    conn = _conn()
-    try:
-        cur = conn.execute("SELECT * FROM groups ORDER BY created_at ASC")
-        out = []
-        for row in cur.fetchall():
-            d = dict(row)
-            try:
-                d["students"] = json.loads(d.get("students") or "[]")
-            except Exception:
-                d["students"] = []
-            out.append(d)
-        return out
-    finally:
-        conn.close()
+    with _lock:
+        conn = _conn()
+        try:
+            cur = conn.execute("SELECT * FROM groups ORDER BY created_at ASC")
+            out = []
+            for row in cur.fetchall():
+                d = dict(row)
+                try:
+                    d["students"] = json.loads(d.get("students") or "[]")
+                except Exception:
+                    d["students"] = []
+                out.append(d)
+            return out
+        finally:
+            conn.close()
 
 def save_group(group: Dict[str, Any]) -> None:
     with _lock:
@@ -282,18 +286,19 @@ def cleanup_expired_auth() -> None:
 # ---------- SESSIONS HISTORY ----------
 
 def load_sessions_history() -> List[Dict[str, Any]]:
-    conn = _conn()
-    try:
-        cur = conn.execute("SELECT data FROM sessions_history ORDER BY updated_at ASC")
-        out = []
-        for row in cur.fetchall():
-            try:
-                out.append(json.loads(row["data"]))
-            except Exception:
-                pass
-        return out
-    finally:
-        conn.close()
+    with _lock:
+        conn = _conn()
+        try:
+            cur = conn.execute("SELECT data FROM sessions_history ORDER BY updated_at ASC")
+            out = []
+            for row in cur.fetchall():
+                try:
+                    out.append(json.loads(row["data"]))
+                except Exception:
+                    pass
+            return out
+        finally:
+            conn.close()
 
 def record_session_history(session_data: Dict[str, Any]) -> None:
     sess_id = session_data.get("sessionId") or session_data.get("session_id")

@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, F
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
 import zipfile
 import tempfile
 import shutil
@@ -25,16 +26,16 @@ import db
 
 db.init_db()
 
-_rate_limit_store = collections.defaultdict(list)
 RATE_LIMIT_WINDOW = 60
 RATE_LIMIT_MAX = 3
+_rate_limit_store = collections.defaultdict(lambda: collections.deque(maxlen=RATE_LIMIT_MAX))
 
 def check_rate_limit(key: str) -> bool:
     now = time.time()
-    _rate_limit_store[key] = [t for t in _rate_limit_store[key] if now - t < RATE_LIMIT_WINDOW]
-    if len(_rate_limit_store[key]) >= RATE_LIMIT_MAX:
+    dq = _rate_limit_store[key]
+    if len(dq) == RATE_LIMIT_MAX and now - dq[0] < RATE_LIMIT_WINDOW:
         return False
-    _rate_limit_store[key].append(now)
+    dq.append(now)
     return True
 
 def _hash_pw(pw: str) -> str:
@@ -43,7 +44,14 @@ def _hash_pw(pw: str) -> str:
 logger = logging.getLogger("geoatlas")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-app = FastAPI(title="GeoAtlas — Учебно-картографический атлас ЮФУ (Ростов, Краснодар, Россия)")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db.init_db()
+    db.migrate_legacy_json(BASE_DIR)
+    load_duel_rooms_from_disk()
+    yield
+
+app = FastAPI(title="GeoAtlas — Учебно-картографический атлас ЮФУ (Ростов, Краснодар, Россия)", lifespan=lifespan)
 security = HTTPBasic()
 security_optional = HTTPBasic(auto_error=False)
 
@@ -66,7 +74,7 @@ async def csrf_guard(request: Request, call_next):
     if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
         path = request.url.path
         if path.startswith("/api/") and not path.startswith("/api/auth/") \
-           and not path.startswith("/api/results/") and not path.startswith("/api/duel/"):
+           and not path.startswith("/api/duel/"):
             origin = request.headers.get("origin", "")
             referer = request.headers.get("referer", "")
             host = request.headers.get("host", "")
@@ -1712,7 +1720,9 @@ class DuelRoom:
                         self.winner_name = "Ничья"
                         self.winner_reason = "Боевая ничья!"
 
-DUEL_ROOMS_FILE = os.path.join(BASE_DIR, "duel_rooms.json")
+DUEL_DATA_DIR = os.environ.get("DUEL_DATA_DIR", "/tmp")
+os.makedirs(DUEL_DATA_DIR, exist_ok=True)
+DUEL_ROOMS_FILE = os.path.join(DUEL_DATA_DIR, "duel_rooms.json")
 active_duel_rooms: Dict[str, DuelRoom] = {}
 
 def save_duel_rooms_to_disk() -> None:
@@ -1769,12 +1779,6 @@ def load_room_fresh(room_id: str) -> Optional["DuelRoom"]:
 
 # Первичная загрузка с диска при старте приложения
 load_duel_rooms_from_disk()
-
-@app.on_event("startup")
-def on_app_startup():
-    db.init_db()
-    db.migrate_legacy_json(BASE_DIR)
-    load_duel_rooms_from_disk()
 
 def clean_stale_duel_rooms():
     now = time.time()

@@ -9,10 +9,7 @@ const STATIC_PRECACHE_URLS = [
     '/quiz.js',
     '/branding.json',
     '/public/admin.css',
-    '/public/admin.js',
-    '/public/maps/rostov_quiz_map.html',
-    '/public/maps/krasnodar_quiz_map.html',
-    '/public/maps/russia_quiz_map.html'
+    '/public/admin.js'
 ];
 
 self.addEventListener('install', (event) => {

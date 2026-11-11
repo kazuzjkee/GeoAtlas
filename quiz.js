@@ -6428,7 +6428,7 @@ var DuelManager = {
         } catch(e) {
             this.fallbackToPolling();
         }
-        setTimeout(() => {
+        this._wsTimeout = setTimeout(() => {
             if (!this.isWsConnected && this.active && !this.hasFinished) {
                 this.fallbackToPolling();
             }
@@ -6693,6 +6693,7 @@ var DuelManager = {
     },
 
     onGameOver(room) {
+        if (this._wsTimeout) clearTimeout(this._wsTimeout);
         this.hideWaitingOverlay();
         if (this.hasFinished) return;
         this.hasFinished = true;
