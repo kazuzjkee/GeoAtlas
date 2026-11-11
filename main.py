@@ -2204,21 +2204,32 @@ window.serverMapZoom = {self.zoom};
             padding: 8px 14px !important;
             display: inline-flex !important;
             align-items: center !important;
+            justify-content: center !important;
             gap: 6px !important;
             font-size: 12px !important;
             font-weight: 600 !important;
             color: #1E293B !important;
+            text-decoration: none !important;
             cursor: pointer !important;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
             transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }}
+        #top-nav-panel a,
+        #top-nav-panel a:hover,
+        #top-nav-panel a:visited,
+        #top-nav-panel a:active {{
+            text-decoration: none !important;
+            color: #1E293B !important;
+        }}
         .nav-top-btn:hover {{
             transform: translateY(-1.5px) !important;
             background: #FFFFFF !important;
+            text-decoration: none !important;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
         }}
         .nav-top-btn:active {{
             transform: translateY(0.5px) scale(0.985) !important;
+            text-decoration: none !important;
         }}
 
         .reset-map-btn {{

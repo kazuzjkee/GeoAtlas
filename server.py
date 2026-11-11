@@ -1179,14 +1179,39 @@ window.serverMapCenter = {json.dumps(info['center'])};
 window.serverMapZoom = {info['zoom']};
 </script>"""
 
+    branding = load_branding()
+    brand_primary = branding.get("primary_color", "#2563EB")
+    brand_hover = branding.get("primary_hover", "#1D4ED8")
+    brand_accent = branding.get("accent_color", "#7C3AED")
+    brand_script = f"""<style id="server-branding-style">
+:root {{
+    --primary: {brand_primary};
+    --primary-hover: {brand_hover};
+    --accent: {brand_accent};
+}}
+.nav-top-btn,
+#top-nav-panel a,
+#top-nav-panel a:hover,
+#top-nav-panel a:visited,
+#top-nav-panel a:active {{
+    text-decoration: none !important;
+}}
+</style>
+<script id="server-branding-context">
+window.GEOATLAS_BRANDING = {json.dumps(branding, ensure_ascii=False)};
+</script>"""
+
     html = re.sub(r'<script id="server-region-context"[^>]*>[\s\S]*?</script>\s*<script>[\s\S]*?window\.SERVER_REGION_CONTEXT[\s\S]*?</script>', '', html)
+    html = re.sub(r'<style id="server-branding-style">[\s\S]*?</style>\s*<script id="server-branding-context">[\s\S]*?</script>', '', html)
+
+    full_injected = f"{brand_script}\n{context_script}"
 
     if "<body" in html:
-        html = re.sub(r'(<body[^>]*>)', lambda m: f'{m.group(1)}\n{context_script}', html, count=1)
+        html = re.sub(r'(<body[^>]*>)', lambda m: f'{m.group(1)}\n{full_injected}', html, count=1)
     elif "</head>" in html:
-        html = html.replace("</head>", f"{context_script}\n</head>", 1)
+        html = html.replace("</head>", f"{full_injected}\n</head>", 1)
     else:
-        html = f"{context_script}\n{html}"
+        html = f"{full_injected}\n{html}"
 
     if "/quiz.js" not in html:
         if "</body>" in html:
@@ -1507,6 +1532,25 @@ class DuelPlayer:
             "online": (self.ws is not None) or (time.time() - self.last_ping < 15)
         }
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DuelPlayer":
+        p = cls(
+            player_id=data.get("player_id", ""),
+            name=data.get("name", "Игрок"),
+            group=data.get("group", "-"),
+            email=data.get("email", ""),
+            is_host=bool(data.get("is_host", False))
+        )
+        p.ready = bool(data.get("ready", False))
+        p.score = int(data.get("score", 0))
+        p.progress = int(data.get("progress", 0))
+        p.total = int(data.get("total", 7))
+        p.mistakes = int(data.get("mistakes", 0))
+        p.finished = bool(data.get("finished", False))
+        p.finish_time = data.get("finish_time")
+        p.last_ping = data.get("last_ping", time.time())
+        return p
+
 class DuelRoom:
     def __init__(self, room_id: str, mode: str, region: str, host: DuelPlayer):
         self.room_id = room_id.upper()
@@ -1580,6 +1624,28 @@ class DuelRoom:
             "countdown": self.countdown
         }
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DuelRoom":
+        room = cls.__new__(cls)
+        room.room_id = str(data.get("room_id", "")).upper()
+        room.mode = data.get("mode", "center")
+        room.region = data.get("region", "rostov")
+        room.created_at = float(data.get("created_at", time.time()))
+        room.status = data.get("status", "waiting")
+        room.questions = data.get("questions", [])
+        room.winner = data.get("winner")
+        room.winner_reason = data.get("winner_reason", "")
+        room.winner_name = data.get("winner_name", "")
+        room.start_time = data.get("start_time")
+        room.end_time = data.get("end_time")
+        room.countdown = int(data.get("countdown", 3))
+        room.players = {}
+        for p_data in data.get("players", []):
+            if isinstance(p_data, dict):
+                p = DuelPlayer.from_dict(p_data)
+                room.players[p.player_id] = p
+        return room
+
     async def broadcast(self, message: Dict[str, Any]):
         for p in list(self.players.values()):
             if p.ws:
@@ -1652,13 +1718,56 @@ class DuelRoom:
                         self.winner_name = "Ничья"
                         self.winner_reason = "Боевая ничья!"
 
+DUEL_ROOMS_FILE = os.path.join(BASE_DIR, "duel_rooms.json")
 active_duel_rooms: Dict[str, DuelRoom] = {}
+
+def save_duel_rooms_to_disk() -> None:
+    try:
+        now = time.time()
+        active_data = {
+            rid: r.to_dict()
+            for rid, r in active_duel_rooms.items()
+            if (now - r.created_at) < 86400
+        }
+        with open(DUEL_ROOMS_FILE, "w", encoding="utf-8") as f:
+            json.dump(active_data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error("Ошибка сохранения duel_rooms.json: %s", e)
+
+def load_duel_rooms_from_disk() -> None:
+    global active_duel_rooms
+    if not os.path.exists(DUEL_ROOMS_FILE):
+        return
+    try:
+        now = time.time()
+        with open(DUEL_ROOMS_FILE, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+            if isinstance(raw, dict):
+                count = 0
+                for rid, r_data in raw.items():
+                    if isinstance(r_data, dict):
+                        room = DuelRoom.from_dict(r_data)
+                        if (now - room.created_at) < 86400:
+                            active_duel_rooms[room.room_id] = room
+                            count += 1
+                logger.info("Загружено %d комнат дуэлей из duel_rooms.json", count)
+    except Exception as e:
+        logger.error("Ошибка загрузки duel_rooms.json: %s", e)
+
+# Первичная загрузка с диска при старте приложения
+load_duel_rooms_from_disk()
+
+@app.on_event("startup")
+def on_app_startup():
+    load_duel_rooms_from_disk()
 
 def clean_stale_duel_rooms():
     now = time.time()
     stale = [rid for rid, r in active_duel_rooms.items() if now - r.created_at > 7200]
-    for rid in stale:
-        active_duel_rooms.pop(rid, None)
+    if stale:
+        for rid in stale:
+            active_duel_rooms.pop(rid, None)
+        save_duel_rooms_to_disk()
 
 @app.post("/api/duel/create")
 def create_duel_room(req: DuelCreateRequest) -> Dict[str, Any]:
@@ -1677,6 +1786,7 @@ def create_duel_room(req: DuelCreateRequest) -> Dict[str, Any]:
     )
     room = DuelRoom(room_code, req.mode, req.region, host)
     active_duel_rooms[room_code] = room
+    save_duel_rooms_to_disk()
 
     map_url = f"/map/{req.region}?duel={room_code}&player={player_id}&role=host"
     return {
@@ -1720,6 +1830,7 @@ def join_duel_room(req: DuelJoinRequest) -> Dict[str, Any]:
         role = "join"
         if len(room.players) == 2 and room.status == "waiting":
             room.status = "ready"
+        save_duel_rooms_to_disk()
 
     map_url = f"/map/{room.region}?duel={code}&player={player_id}&role={role}"
     return {
@@ -1795,6 +1906,7 @@ def handle_duel_action(room_id: str, req: DuelActionRequest) -> Dict[str, Any]:
         player.finish_time = time.time()
         room.check_finished()
 
+    save_duel_rooms_to_disk()
     return {"status": "ok", "room": room.to_dict()}
 
 @app.websocket("/ws/duel/{room_id}/{player_id}")
@@ -1842,6 +1954,7 @@ async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id:
                     await asyncio.sleep(1)
                     room.status = "playing"
                     room.start_time = time.time()
+                    save_duel_rooms_to_disk()
                     await room.broadcast({"type": "game_start", "room": room.to_dict()})
 
             elif msg_type == "answer_center":
@@ -1856,6 +1969,7 @@ async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id:
                     player.finished = True
                     player.finish_time = time.time()
                 room.check_finished()
+                save_duel_rooms_to_disk()
 
                 await room.broadcast({
                     "type": "opponent_action",
@@ -1881,6 +1995,7 @@ async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id:
                     player.finished = True
                     player.finish_time = time.time()
                 room.check_finished()
+                save_duel_rooms_to_disk()
 
                 await room.broadcast({
                     "type": "opponent_action",
@@ -1899,6 +2014,7 @@ async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id:
                 player.finished = True
                 player.finish_time = time.time()
                 room.check_finished()
+                save_duel_rooms_to_disk()
                 await room.broadcast({"type": "player_finished", "player_id": player_id, "room": room.to_dict()})
                 if room.status == "finished":
                     await room.broadcast({"type": "game_over", "room": room.to_dict()})

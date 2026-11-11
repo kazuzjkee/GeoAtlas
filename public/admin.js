@@ -1377,12 +1377,12 @@ let allResults = [];
                         data: [countExcellent, countGood, countSatisfactory, countFailed],
                         backgroundColor: [
                             '#10B981', // Изумрудный (Отлично)
-                            '#3B82F6', // Синий (Хорошо)
+                            '#2563EB', // Насыщенный синий (Хорошо)
                             '#F59E0B', // Янтарный (Удовл.)
                             '#EF4444'  // Красный (Не сдали)
                         ],
-                        borderColor: '#0F172A',
-                        borderWidth: 2,
+                        borderColor: '#FFFFFF',
+                        borderWidth: 2.5,
                         hoverOffset: 6
                     }]
                 },
@@ -1393,15 +1393,15 @@ let allResults = [];
                         legend: {
                             position: 'bottom',
                             labels: {
-                                color: '#CBD5E1',
-                                font: { family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', size: 11 },
+                                color: '#334155',
+                                font: { family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', size: 12, weight: '600' },
                                 padding: 12,
                                 usePointStyle: true,
                                 pointStyle: 'circle'
                             }
                         },
                         tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
                             titleColor: '#F8FAFC',
                             bodyColor: '#E2E8F0',
                             borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -1495,8 +1495,8 @@ let allResults = [];
 
             const lineCtx = lineCanvas.getContext('2d');
             const gradient = lineCtx.createLinearGradient(0, 0, 0, 260);
-            gradient.addColorStop(0, 'rgba(139, 92, 246, 0.45)');
-            gradient.addColorStop(1, 'rgba(139, 92, 246, 0.0)');
+            gradient.addColorStop(0, 'rgba(37, 99, 235, 0.28)');
+            gradient.addColorStop(1, 'rgba(37, 99, 235, 0.0)');
 
             execActivityChartInstance = new Chart(lineCtx, {
                 type: 'line',
@@ -1505,12 +1505,12 @@ let allResults = [];
                     datasets: [{
                         label: 'Сдано тестов',
                         data: dataPoints,
-                        borderColor: '#8B5CF6',
+                        borderColor: '#2563EB',
                         backgroundColor: gradient,
                         borderWidth: 2.5,
                         fill: true,
                         tension: 0.35,
-                        pointBackgroundColor: '#8B5CF6',
+                        pointBackgroundColor: '#2563EB',
                         pointBorderColor: '#FFFFFF',
                         pointBorderWidth: 2,
                         pointRadius: 4.5,
@@ -1523,7 +1523,7 @@ let allResults = [];
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
                             titleColor: '#F8FAFC',
                             bodyColor: '#E2E8F0',
                             borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -1537,15 +1537,15 @@ let allResults = [];
                     },
                     scales: {
                         x: {
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#94A3B8', font: { size: 11 } }
+                            grid: { color: '#F1F5F9' },
+                            ticks: { color: '#64748B', font: { size: 11.5, weight: '600' } }
                         },
                         y: {
                             beginAtZero: true,
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            grid: { color: '#F1F5F9' },
                             ticks: {
-                                color: '#94A3B8',
-                                font: { size: 11 },
+                                color: '#64748B',
+                                font: { size: 11.5, weight: '600' },
                                 stepSize: 1,
                                 precision: 0
                             }
@@ -1935,11 +1935,16 @@ let allResults = [];
             const h = document.getElementById('brand-hex-primary');
             if (c) c.value = val;
             if (h) h.value = val;
+            currentBrandConfig.primary_color = val;
+            currentBrandConfig.primary_hover = val;
+            document.documentElement.style.setProperty('--primary', val);
         } else if (type === 'accent') {
             const c = document.getElementById('brand-color-accent');
             const h = document.getElementById('brand-hex-accent');
             if (c) c.value = val;
             if (h) h.value = val;
+            currentBrandConfig.accent_color = val;
+            document.documentElement.style.setProperty('--accent', val);
         }
         updateBrandPreview();
     }
@@ -1950,6 +1955,10 @@ let allResults = [];
         if (!preset) return;
         currentBrandConfig = Object.assign({}, currentBrandConfig, preset);
         initBrandSettingsForm();
+        applyBrandingToDOM(currentBrandConfig);
+        try {
+            localStorage.setItem('geoatlas_branding', JSON.stringify(currentBrandConfig));
+        } catch(e) {}
         showToast(`Применен пресет: ${preset.org_short}`);
     }
     window.applyPresetUniversity = applyPresetUniversity;
@@ -2007,6 +2016,9 @@ let allResults = [];
             const data = await res.json();
             currentBrandConfig = data.branding || payload;
             applyBrandingToDOM(currentBrandConfig);
+            try {
+                localStorage.setItem('geoatlas_branding', JSON.stringify(currentBrandConfig));
+            } catch(e) {}
             showToast('✅ Брендирование успешно сохранено и применено!');
         } catch (e) {
             showToast('Ошибка при сохранении брендирования', true);

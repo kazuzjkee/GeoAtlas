@@ -4890,7 +4890,7 @@ function renderLeaderboardModal() {
                 ${getLbContentHtml()}
             </div>
 
-            <button onclick="closeLeaderboardModal()" class="btn-start" style="margin-top: 16px;">Закрыть</button>
+            <button onclick="closeLeaderboardModal()" class="btn btn-secondary" style="margin-top: 16px; padding: 9px 24px; font-weight: 700; border-radius: 8px; cursor: pointer;">Закрыть</button>
         </div>
     </div>
     `;
@@ -5785,6 +5785,9 @@ function showAchievementToast(ach) {
 }
 
 async function openStudentProfileModal() {
+    document.body.classList.add('modal-open');
+    document.body.style.overflow = 'hidden';
+
     const student = getCurrentStudentInfo();
     const brand = window.GEOATLAS_BRANDING || { university_short: 'ЮФУ', allowed_email_domain: 'sfedu.ru' };
     const studentName = student ? student.name : `Студент ${brand.university_short || 'ВУЗ'}`;
@@ -5797,6 +5800,12 @@ async function openStudentProfileModal() {
         modal.id = 'student-dashboard-modal';
         modal.className = 'app-modal-overlay';
         modal.style.cssText = 'position: fixed; inset: 0; background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(10px); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto;';
+        modal.onclick = (e) => {
+            if (e.target === modal) closeStudentProfileModal();
+        };
+        modal.addEventListener('wheel', (e) => {
+            e.stopPropagation();
+        }, { passive: true });
         document.body.appendChild(modal);
     }
 
@@ -6040,6 +6049,8 @@ function renderQuizDashboardContent(modal, data) {
 function closeStudentProfileModal() {
     const modal = document.getElementById('student-dashboard-modal') || document.getElementById('student-achievements-modal');
     if (modal) modal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
 }
 
 window.openStudentProfileModal = openStudentProfileModal;
