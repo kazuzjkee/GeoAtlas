@@ -318,6 +318,117 @@ def record_session_history(session_data: Dict[str, Any]) -> None:
         finally:
             conn.close()
 
+# ---------- HEATMAP ----------
+
+def get_student_mistakes_heatmap(email: str, region: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Агрегирует все ошибки студента по объектам.
+    Возвращает:
+    - by_object: {object_name: {errors, total_attempts, accuracy, last_date}}
+    - by_type: {district|river|center|neighbor|puzzle: {errors, total_attempts}}
+    - total_tests: общее число тестов
+    - last_updated: ISO timestamp
+    """
+    email_clean = (email or "").strip().lower()
+    if not email_clean:
+        return {"by_object": {}, "by_type": {}, "total_tests": 0}
+
+    with _lock:
+        conn = _conn()
+        try:
+            # Загружаем все результаты студента
+            cur = conn.execute(
+                "SELECT quiz_type, mistakes_log, accuracy, date, session_id "
+                "FROM results WHERE LOWER(email) = ? ORDER BY created_at ASC",
+                (email_clean,)
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+
+    by_object = {}
+    by_type = {}
+    total_tests = len(rows)
+    last_date = ""
+
+    # Пул всех известных объектов (для подсчёта "сколько раз спрашивали")
+    # Восстанавливаем из mistakes_log + предполагаем, что каждый тест спрашивал 
+    # примерно 15 объектов (стандарт), из которых ошибки — в mistakes_log.
+    # Это эвристика: точнее посчитать нельзя без сохранения всех вопросов.
+    for row in rows:
+        quiz_type = str(row["quiz_type"] or "").lower()
+        date_str = str(row["date"] or "")
+        accuracy = int(row["accuracy"] or 0)
+        if date_str:
+            last_date = date_str
+
+        # Парсим mistakes_log (JSON-массив строк — имён объектов)
+        try:
+            mistakes = json.loads(row["mistakes_log"] or "[]")
+            if not isinstance(mistakes, list):
+                mistakes = []
+        except Exception:
+            mistakes = []
+
+        # Определяем тип теста
+        if "река" in quiz_type or "river" in quiz_type or "гидро" in quiz_type:
+            q_type = "river"
+        elif "центр" in quiz_type or "center" in quiz_type:
+            q_type = "center"
+        elif "тополог" in quiz_type or "сосед" in quiz_type or "neighbor" in quiz_type:
+            q_type = "neighbor"
+        elif "пазл" in quiz_type or "puzzle" in quiz_type:
+            q_type = "puzzle"
+        else:
+            q_type = "district"
+
+        # Инициализируем счётчик типа
+        if q_type not in by_type:
+            by_type[q_type] = {"errors": 0, "total_tests": 0}
+        by_type[q_type]["total_tests"] += 1
+        by_type[q_type]["errors"] += len(mistakes)
+
+        # Каждая ошибка увеличивает счётчик объекта
+        for obj_name in mistakes:
+            name = str(obj_name).strip()
+            if not name:
+                continue
+            if name not in by_object:
+                by_object[name] = {
+                    "errors": 0,
+                    "type": q_type,
+                    "last_date": date_str,
+                    "sessions": set()
+                }
+            by_object[name]["errors"] += 1
+            by_object[name]["last_date"] = date_str
+            if row["session_id"]:
+                by_object[name]["sessions"].add(row["session_id"])
+
+    # Рассчитываем accuracy для каждого объекта
+    # Эвристика: если объект встретился в N сессиях, из них ошибочно — 
+    # min(errors, N). accuracy = (N - errors) / N * 100.
+    # Для базовой оценки достаточно, точнее — при накоплении данных.
+    result_objects = {}
+    for name, data in by_object.items():
+        sessions_count = max(len(data["sessions"]), data["errors"])
+        correct = max(0, sessions_count - data["errors"])
+        accuracy = round((correct / sessions_count) * 100) if sessions_count > 0 else 0
+        result_objects[name] = {
+            "errors": data["errors"],
+            "total_attempts": sessions_count,
+            "accuracy": accuracy,
+            "last_date": data["last_date"],
+            "type": data["type"]
+        }
+
+    return {
+        "by_object": result_objects,
+        "by_type": by_type,
+        "total_tests": total_tests,
+        "last_updated": time.strftime("%d.%m.%Y %H:%M", time.localtime())
+    }
+
 # ---------- MIGRATION ----------
 
 def migrate_legacy_json(base_dir: str):

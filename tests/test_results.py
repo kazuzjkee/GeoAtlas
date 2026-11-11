@@ -36,3 +36,11 @@ def test_save_result_csrf_blocked(client):
     }
     res = client.post("/api/results/save", json=payload, headers={"Origin": "https://evil.com", "Host": "testserver"})
     assert res.status_code == 403
+
+def test_student_dashboard_ok(client):
+    res = client.get("/api/student/dashboard?email=s@sfedu.ru")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "ok"
+    assert "stats" in data
+    assert "regions" in data

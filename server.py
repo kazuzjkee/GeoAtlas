@@ -827,6 +827,61 @@ def get_student_dashboard(email: Optional[str] = None, name: Optional[str] = Non
         "recent_history": recent_history
     }
 
+@app.get("/api/student/heatmap")
+def get_student_heatmap(
+    email: Optional[str] = None,
+    region: Optional[str] = None,
+    teacher: Optional[Dict[str, Any]] = Depends(check_admin_optional)
+) -> Dict[str, Any]:
+    """
+    Возвращает статистику ошибок студента по объектам.
+    Если email не передан, но передан teacher — возвращает агрегат по группе
+    (пока не реализовано, будет позже).
+    """
+    if not email:
+        raise HTTPException(status_code=400, detail="Параметр email обязателен")
+    
+    clean_email = email.strip().lower()
+    if "@" not in clean_email:
+        raise HTTPException(status_code=400, detail="Некорректный email")
+    
+    try:
+        heatmap_data = db.get_student_mistakes_heatmap(clean_email, region)
+        
+        # Дополняем рекомендациями на основе Топ-5 ошибок
+        by_object = heatmap_data.get("by_object", {})
+        sorted_objects = sorted(
+            by_object.items(),
+            key=lambda x: (-x[1]["errors"], x[0])
+        )
+        top_problematic = [
+            {
+                "name": name,
+                "errors": data["errors"],
+                "accuracy": data["accuracy"],
+                "type": data["type"],
+                "last_date": data["last_date"]
+            }
+            for name, data in sorted_objects[:5]
+        ]
+        
+        # Список mastered (accuracy >= 85 и есть попытки)
+        mastered = [
+            name for name, data in by_object.items()
+            if data["accuracy"] >= 85 and data["total_attempts"] >= 2
+        ]
+        
+        heatmap_data["top_problematic"] = top_problematic
+        heatmap_data["mastered_count"] = len(mastered)
+        heatmap_data["problematic_count"] = sum(
+            1 for d in by_object.values() if d["accuracy"] < 50
+        )
+        
+        return {"status": "ok", **heatmap_data}
+    except Exception as e:
+        logger.error("Ошибка /api/student/heatmap: %s", e)
+        raise HTTPException(status_code=500, detail="Ошибка агрегации данных")
+
 @app.get("/api/admin/results")
 def get_admin_results(teacher: Dict[str, Any] = Depends(check_admin)) -> List[Dict[str, Any]]:
     results = load_results()
