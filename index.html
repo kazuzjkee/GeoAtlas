@@ -233,7 +233,7 @@
         }
         .btn-icon:hover, .close-card-btn:hover {
             background: #E2E8F0;
-            color: #0F172A;
+            color: var(--text-main);
             transform: translateY(-1.5px);
         }
 
@@ -607,7 +607,7 @@
             font-weight: 800;
             letter-spacing: -0.8px;
             line-height: 1.18;
-            color: #0F172A;
+            color: var(--text-main);
         }
 
         .hero-title span.gradient-text {
@@ -675,7 +675,7 @@
         .kpi-val {
             font-size: 20px;
             font-weight: 800;
-            color: #0F172A;
+            color: var(--text-main);
             line-height: 1.1;
             font-variant-numeric: tabular-nums;
         }
@@ -724,7 +724,7 @@
             font-size: 30px;
             font-weight: 800;
             letter-spacing: -0.5px;
-            color: #0F172A;
+            color: var(--text-main);
             margin: 0 0 10px 0;
             line-height: 1.25;
         }
@@ -928,7 +928,7 @@
             align-items: center;
             gap: 6px;
             font-weight: 700;
-            color: #0F172A;
+            color: var(--text-main);
             white-space: nowrap;
             font-size: 11.5px;
         }
@@ -990,7 +990,7 @@
         .tray-title {
             font-size: 13.5px;
             font-weight: 700;
-            color: #0F172A;
+            color: var(--text-main);
             margin: 0 0 4px 0;
         }
 
@@ -1069,7 +1069,7 @@
         .piece-name {
             font-size: 13px;
             font-weight: 700;
-            color: #0F172A;
+            color: var(--text-main);
             margin-bottom: 3px;
         }
 
@@ -1177,7 +1177,7 @@
             font-size: 20px;
             font-weight: 800;
             letter-spacing: -0.3px;
-            color: #0F172A;
+            color: var(--text-main);
             margin: 0 0 10px 0;
             line-height: 1.35;
         }
@@ -1434,7 +1434,7 @@
         }
 
         .grp-slider-label strong {
-            color: #0F172A;
+            color: var(--text-main);
             font-family: 'JetBrains Mono', monospace;
             font-size: 11.5px;
         }
@@ -1875,7 +1875,7 @@
         .gec-report-body {
             padding: 24px 26px;
             overflow-y: auto;
-            color: #0F172A;
+            color: var(--text-main);
         }
 
         .gec-meta-grid {
@@ -1982,33 +1982,39 @@
            АРХИТЕКТУРНЫЙ БЛОК И ТЕХНОЛОГИЧЕСКИЙ СТЕК (ГЭК)
            ======================================================== */
         .architecture-wrapper {
-            background: #FFFFFF;
+            background: var(--surface, #FFFFFF);
             border: 1px solid var(--border);
             border-radius: 24px;
             padding: 38px 40px;
             box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
-            margin-top: 24px;
+            margin: 24px auto 0 auto;
+            max-width: 100%;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .arch-pillars-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 20px;
             margin-bottom: 34px;
-            align-items: start; /* Карточки больше не растягиваются насильно */
+            align-items: stretch;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .arch-pillar-card {
-            background: var(--surface-hover, #F8FAFC);
+            background: var(--bg-sunken); /* или #F8FAFC */
             border: 1px solid var(--border);
             border-radius: 18px;
-            padding: 24px;
+            padding: 20px;
             position: relative;
             display: flex;
             flex-direction: column;
-            justify-content: flex-start; /* Убираем разрыв, прижимаем всё к верху */
-            gap: 16px; /* Отступ между заголовком, текстом и метриками */
-            height: 100%;
+            justify-content: flex-start;
+            gap: 12px;
+            min-width: 0; /* Критично: не даёт карточке вылезать за сетку */
+            overflow: hidden;
             box-sizing: border-box;
             transition: all 0.2s ease;
         }
@@ -2157,7 +2163,7 @@
         }
 
         .spatial-toggle-btn:hover {
-            color: #0F172A;
+            color: var(--text-main);
         }
 
         .spatial-toggle-btn.active {
@@ -2223,16 +2229,21 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 8px;
+            min-width: 0;
+            box-sizing: border-box;
         }
 
         .layer-metric-box {
-            background: var(--bg-sunken, #F8FAFC);
-            border: 1px solid var(--border, #F1F5F9);
+            background: var(--surface);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 8px;
             display: flex;
             flex-direction: column;
             gap: 2px;
+            min-width: 0; /* Текст будет переноситься, а не расширять блок */
+            overflow: hidden;
+            box-sizing: border-box;
         }
 
         .layer-metric-box .metric-lbl {
@@ -2244,17 +2255,19 @@
         }
 
         .layer-metric-box .metric-val {
-            font-size: 12px;
+            font-size: 11.5px;
             font-weight: 800;
             color: var(--text-main, #0F172A);
             font-family: 'JetBrains Mono', monospace;
             line-height: 1.2;
+            word-break: break-word; /* Чтобы длинные числа типа 1:1 000 000 влезали */
         }
 
         .layer-metric-box .metric-sub {
             font-size: 9.5px;
             color: var(--text-light, #64748B);
             line-height: 1.2;
+            word-break: break-word;
         }
 
         .layer-timeline-tag {
@@ -2298,7 +2311,7 @@
         }
 
         .pillar-mini-spec .spec-v {
-            color: #0F172A;
+            color: var(--text-main);
             font-weight: 700;
             text-align: right;
             font-family: 'JetBrains Mono', monospace;
@@ -2403,7 +2416,7 @@
             gap: 10px;
             font-size: 15px;
             font-weight: 800;
-            color: #1E293B;
+            color: var(--text-main);
             letter-spacing: -0.2px;
             white-space: nowrap;
             margin: 0;
@@ -2675,7 +2688,7 @@
             margin: 0 0 4px 0;
             font-size: 14.5px;
             font-weight: 700;
-            color: #0F172A;
+            color: var(--text-main);
         }
 
         .footer-academic p {
@@ -2783,7 +2796,7 @@
             margin: 0;
             font-size: 16.5px;
             font-weight: 800;
-            color: #0F172A;
+            color: var(--text-main);
             letter-spacing: -0.2px;
         }
 
@@ -3627,6 +3640,39 @@
         /* ========================================================
            СПЕЦИФИЧНЫЕ ПЕРЕОПРЕДЕЛЕНИЯ ДЛЯ ТЁМНОЙ ТЕМЫ (GEOATLAS DARK)
            ======================================================== */
+        [data-theme="dark"] h1,
+        [data-theme="dark"] h2,
+        [data-theme="dark"] h3,
+        [data-theme="dark"] h4,
+        [data-theme="dark"] h5,
+        [data-theme="dark"] h6,
+        [data-theme="dark"] .section-h2,
+        [data-theme="dark"] .section-title,
+        [data-theme="dark"] .bento-title,
+        [data-theme="dark"] .arch-pillar-title,
+        [data-theme="dark"] .region-info h3,
+        [data-theme="dark"] .footer-academic h4 {
+            color: #F8FAFC !important;
+        }
+
+        /* Также принудительно делаем белыми параграфы внутри карточек */
+        [data-theme="dark"] .section-sub,
+        [data-theme="dark"] .bento-text,
+        [data-theme="dark"] .arch-pillar-text,
+        [data-theme="dark"] .tray-hint {
+            color: #CBD5E1 !important;
+        }
+
+        /* Фикс для заголовков в мокапах и мелких блоках */
+        [data-theme="dark"] .mock-status-pill,
+        [data-theme="dark"] .topology-node,
+        [data-theme="dark"] .grp-slider-label strong,
+        [data-theme="dark"] .metric-lbl,
+        [data-theme="dark"] .metric-val,
+        [data-theme="dark"] .metric-sub {
+            color: #F8FAFC !important;
+        }
+
         [data-theme="dark"] .top-navbar {
             background: rgba(11, 17, 32, 0.88);
             border-bottom-color: rgba(30, 41, 59, 0.85);
@@ -3873,9 +3919,23 @@
             color: #F8FAFC;
         }
         [data-theme="dark"] .spatial-layer-display,
-        [data-theme="dark"] .pillar-mini-spec {
-            background: #0F172A;
-            border-color: #1E293B;
+        [data-theme="dark"] .spatial-toggle-btn.active {
+            background: #1E293B !important;
+            border-color: #334155 !important;
+        }
+        [data-theme="dark"] .pillar-mini-spec,
+        [data-theme="dark"] .spatial-toggle-switch {
+            background: #0F172A !important;
+            border-color: #1E293B !important;
+        }
+        [data-theme="dark"] .spatial-toggle-btn {
+            color: #94A3B8 !important;
+        }
+        [data-theme="dark"] .spatial-toggle-btn.active {
+            color: #93C5FD !important;
+        }
+        [data-theme="dark"] .spatial-toggle-btn:hover {
+            color: #F8FAFC !important;
         }
         [data-theme="dark"] .arch-pillar-num {
             background: #1E293B !important;
@@ -3899,19 +3959,6 @@
         }
         [data-theme="dark"] .spatial-toggle-title {
             color: var(--text-light);
-        }
-        [data-theme="dark"] .spatial-toggle-switch {
-            background: #1E293B;
-        }
-        [data-theme="dark"] .spatial-toggle-btn {
-            color: #94A3B8;
-        }
-        [data-theme="dark"] .spatial-toggle-btn:hover {
-            color: #F8FAFC;
-        }
-        [data-theme="dark"] .spatial-toggle-btn.active {
-            background: #111C33;
-            color: #93C5FD;
         }
         [data-theme="dark"] .layer-metric-box {
             background: #111C33;
@@ -4846,7 +4893,7 @@
             <!-- ПУСТОЙ РЕЗУЛЬТАТ ПОИСКА -->
             <div class="empty-state" id="emptyState">
                 <div style="font-size: 32px; margin-bottom: 8px;">🔍</div>
-                <strong style="display: block; font-size: 16px; margin-bottom: 4px; color: #1E293B;">Регион не найден</strong>
+                <strong style="display: block; font-size: 16px; margin-bottom: 4px; color: var(--text-main);">Регион не найден</strong>
                 <span>Попробуйте изменить поисковый запрос (например: «Ростов» или «Кубань»)</span>
             </div>
 
@@ -4926,7 +4973,7 @@
 
             <div id="auth-step-2" style="display: none;">
                 <p style="font-size: 13.5px; color: #475569; margin: 0 0 14px 0; line-height: 1.5;">
-                    Код верификации отправлен на адрес: <br><strong id="auth-target-email" style="color: #0F172A;"></strong>
+                    Код верификации отправлен на адрес: <br><strong id="auth-target-email" style="color: var(--text-main);"></strong>
                 </p>
                 <div class="form-group">
                     <label>6-значный проверочный код:</label>
