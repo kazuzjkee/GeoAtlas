@@ -1993,58 +1993,129 @@
             box-sizing: border-box;
         }
 
+        /* --- СЕТКА --- */
         .arch-pillars-grid {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(3, minmax(0, 1fr)); /* Жёстко 3 равные колонки */
+            gap: 24px;
             margin-bottom: 34px;
-            align-items: stretch;
             width: 100%;
-            box-sizing: border-box;
         }
 
+        @media (max-width: 1024px) {
+            .arch-pillars-grid { grid-template-columns: 1fr; }
+        }
+
+        /* --- КАРТОЧКА --- */
         .arch-pillar-card {
-            background: var(--bg-sunken); /* или #F8FAFC */
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 20px;
-            position: relative;
+            background: var(--surface, #FFFFFF);
+            border: 1px solid var(--border, #E2E8F0);
+            border-radius: 20px;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
-            gap: 12px;
-            min-width: 0; /* Критично: не даёт карточке вылезать за сетку */
-            overflow: hidden;
+            gap: 16px;
             box-sizing: border-box;
-            transition: all 0.2s ease;
+            min-width: 0; /* Спасает от распирания */
+            transition: transform 0.2s ease, border-color 0.2s ease;
         }
 
         .arch-pillar-card:hover {
+            transform: translateY(-4px);
             border-color: #93C5FD;
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-sm);
         }
 
-        .arch-pillar-icon {
-            font-size: 24px;
+        /* --- ШАПКА КАРТОЧКИ --- */
+        .arch-card-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .arch-icon-box {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            flex-shrink: 0;
+        }
+
+        .bg-blue { background: #EFF6FF; border: 1px solid #BFDBFE; }
+        .bg-purple { background: #F5F3FF; border: 1px solid #DDD6FE; }
+        .bg-emerald { background: #ECFDF5; border: 1px solid #A7F3D0; }
+
+        .arch-title {
             margin: 0;
-            display: inline-block;
-        }
-
-        .arch-pillar-title {
             font-size: 16px;
             font-weight: 800;
             color: var(--text-main, #0F172A);
-            margin: 0;
-            letter-spacing: -0.2px;
+            line-height: 1.3;
         }
 
-        .arch-pillar-text {
-            font-size: 13px;
-            color: var(--text-muted);
-            line-height: 1.5;
+        .arch-subtitle {
+            font-size: 11.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .text-blue { color: #2563EB; }
+        .text-purple { color: #7C3AED; }
+        .text-emerald { color: #059669; }
+
+        /* --- ОПИСАНИЕ --- */
+        .arch-desc {
             margin: 0;
-            min-height: 60px; /* Чтобы описания были одинаковой высоты */
+            font-size: 13px;
+            color: var(--text-muted, #475569);
+            line-height: 1.55;
+            flex-grow: 1; /* Прижимает список к низу */
+        }
+
+        /* --- СПИСОК СПЕЦИФИКАЦИЙ (вместо старых вложенных квадратиков) --- */
+        .arch-spec-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: var(--bg-sunken, #F8FAFC);
+            border-radius: 12px;
+            padding: 14px;
+            border: 1px solid var(--border, #E2E8F0);
+        }
+
+        .spec-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12.5px;
+            gap: 10px;
+        }
+
+        .spec-label {
+            color: var(--text-light, #64748B);
+            white-space: nowrap;
+        }
+
+        .spec-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            color: var(--text-main, #0F172A);
+            text-align: right;
+            word-break: break-word; /* Чтобы длинные строки не вылезали */
+        }
+
+        /* --- ПОДВАЛ КАРТОЧКИ --- */
+        .arch-footer {
+            font-size: 11.5px;
+            color: var(--text-muted, #475569);
+            line-height: 1.4;
+            padding-top: 12px;
+            border-top: 1px dashed var(--border, #E2E8F0);
         }
 
         .tech-badges-header {
@@ -2091,232 +2162,6 @@
             border-radius: 50%;
         }
 
-        /* ========================================================
-           SPATIAL LAYER TIMELINE (ARCH PILLAR CARD 1)
-           ======================================================== */
-        .spatial-tag-live {
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            background: #F1F5F9;
-            color: #475569;
-            padding: 2.5px 7px;
-            border-radius: 6px;
-            border: 1px solid #E2E8F0;
-            white-space: nowrap;
-        }
-
-        .spatial-timeline-wrap {
-            margin-top: 4px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .spatial-toggle-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .spatial-toggle-title {
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #64748B;
-        }
-
-        .spatial-toggle-switch {
-            display: inline-flex;
-            background: #E2E8F0;
-            padding: 3px;
-            border-radius: 8px;
-            gap: 2px;
-        }
-
-        .spatial-toggle-btn {
-            border: none;
-            background: transparent;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 700;
-            color: #475569;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            font-family: inherit;
-        }
-
-        .spatial-toggle-btn .toggle-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #94A3B8;
-            transition: background 0.2s ease;
-        }
-
-        .spatial-toggle-btn:hover {
-            color: var(--text-main);
-        }
-
-        .spatial-toggle-btn.active {
-            background: var(--surface, #FFFFFF);
-            color: #1D4ED8;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .spatial-toggle-btn.active .toggle-dot {
-            background: #2563EB;
-        }
-
-        .spatial-layer-display {
-            background: var(--surface, #FFFFFF);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-            transition: opacity 0.16s ease, transform 0.16s ease;
-        }
-
-        .layer-meta-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 10.5px;
-            font-weight: 700;
-            color: #2563EB;
-            background: #EFF6FF;
-            border: 1px solid #DBEAFE;
-            padding: 2.5px 7px;
-            border-radius: 6px;
-            width: fit-content;
-        }
-
-        .layer-meta-badge.badge-osm {
-            color: #059669;
-            background: #ECFDF5;
-            border-color: #A7F3D0;
-        }
-
-        .layer-meta-badge .pulse-chip-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #2563EB;
-            animation: layerPulse 2s infinite ease-in-out;
-        }
-
-        .layer-meta-badge.badge-osm .pulse-chip-dot {
-            background: #059669;
-        }
-
-        @keyframes layerPulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.4); opacity: 0.6; }
-        }
-
-        .layer-metrics-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            min-width: 0;
-            box-sizing: border-box;
-        }
-
-        .layer-metric-box {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            min-width: 0; /* Текст будет переноситься, а не расширять блок */
-            overflow: hidden;
-            box-sizing: border-box;
-        }
-
-        .layer-metric-box .metric-lbl {
-            font-size: 9.5px;
-            color: var(--text-light, #64748B);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-
-        .layer-metric-box .metric-val {
-            font-size: 11.5px;
-            font-weight: 800;
-            color: var(--text-main, #0F172A);
-            font-family: 'JetBrains Mono', monospace;
-            line-height: 1.2;
-            word-break: break-word; /* Чтобы длинные числа типа 1:1 000 000 влезали */
-        }
-
-        .layer-metric-box .metric-sub {
-            font-size: 9.5px;
-            color: var(--text-light, #64748B);
-            line-height: 1.2;
-            word-break: break-word;
-        }
-
-        .layer-timeline-tag {
-            font-size: 10.5px;
-            color: #475569;
-            background: var(--bg-sunken, #F8FAFC);
-            padding: 5px 8px;
-            border-radius: 6px;
-            line-height: 1.35;
-            border-left: 3px solid #2563EB;
-            transition: border-color 0.2s ease;
-        }
-
-        .layer-timeline-tag.tag-osm {
-            border-left-color: #059669;
-        }
-
-        .pillar-mini-spec {
-            margin-top: auto; /* Прижимает к низу карточки */
-            background: var(--surface, #FFFFFF);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 10px 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .pillar-mini-spec .spec-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 10.5px;
-            gap: 6px;
-        }
-
-        .pillar-mini-spec .spec-k {
-            color: #64748B;
-            font-weight: 600;
-            white-space: nowrap;
-        }
-
-        .pillar-mini-spec .spec-v {
-            color: var(--text-main);
-            font-weight: 700;
-            text-align: right;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-        }
 
         /* ========================================================
            КАТАЛОГ РЕГИОНОВ
@@ -3810,15 +3655,30 @@
             border-color: #1E293B;
         }
         [data-theme="dark"] .arch-pillar-card {
-            background: #0F172A;
-            border-color: #1E293B;
+            background: #0F172A !important;
+            border-color: #1E293B !important;
         }
-        [data-theme="dark"] .arch-pillar-title {
-            color: #F8FAFC;
+        [data-theme="dark"] .arch-spec-list {
+            background: #060913 !important;
+            border-color: #1E293B !important;
         }
-        [data-theme="dark"] .arch-pillar-text {
-            color: #CBD5E1;
+        [data-theme="dark"] .arch-title {
+            color: #F8FAFC !important;
         }
+        [data-theme="dark"] .arch-desc,
+        [data-theme="dark"] .arch-footer,
+        [data-theme="dark"] .spec-label {
+            color: #94A3B8 !important;
+        }
+        [data-theme="dark"] .spec-val {
+            color: #F8FAFC !important;
+        }
+        [data-theme="dark"] .bg-blue { background: rgba(37, 99, 235, 0.15) !important; border-color: rgba(59, 130, 246, 0.3) !important; }
+        [data-theme="dark"] .bg-purple { background: rgba(124, 58, 237, 0.15) !important; border-color: rgba(139, 92, 246, 0.3) !important; }
+        [data-theme="dark"] .bg-emerald { background: rgba(16, 185, 129, 0.15) !important; border-color: rgba(52, 211, 153, 0.3) !important; }
+        [data-theme="dark"] .text-blue { color: #60A5FA !important; }
+        [data-theme="dark"] .text-purple { color: #A78BFA !important; }
+        [data-theme="dark"] .text-emerald { color: #34D399 !important; }
         [data-theme="dark"] .architecture-wrapper {
             background: #111C33;
             border-color: #1E293B;
@@ -3916,71 +3776,6 @@
         }
         [data-theme="dark"] .tech-badge-chip:hover {
             border-color: #3B82F6;
-            color: #F8FAFC;
-        }
-        [data-theme="dark"] .spatial-layer-display,
-        [data-theme="dark"] .spatial-toggle-btn.active {
-            background: #1E293B !important;
-            border-color: #334155 !important;
-        }
-        [data-theme="dark"] .pillar-mini-spec,
-        [data-theme="dark"] .spatial-toggle-switch {
-            background: #0F172A !important;
-            border-color: #1E293B !important;
-        }
-        [data-theme="dark"] .spatial-toggle-btn {
-            color: #94A3B8 !important;
-        }
-        [data-theme="dark"] .spatial-toggle-btn.active {
-            color: #93C5FD !important;
-        }
-        [data-theme="dark"] .spatial-toggle-btn:hover {
-            color: #F8FAFC !important;
-        }
-        [data-theme="dark"] .arch-pillar-num {
-            background: #1E293B !important;
-            border-color: #334155 !important;
-            color: #60A5FA !important;
-        }
-        [data-theme="dark"] .spatial-tag-live {
-            background: #1E293B !important;
-            color: #94A3B8 !important;
-            border-color: #334155 !important;
-        }
-        [data-theme="dark"] .layer-meta-badge {
-            background: rgba(37, 99, 235, 0.15) !important;
-            border-color: rgba(96, 165, 250, 0.3) !important;
-            color: #93C5FD !important;
-        }
-        [data-theme="dark"] .layer-meta-badge.badge-osm {
-            background: rgba(16, 185, 129, 0.15) !important;
-            border-color: rgba(52, 211, 153, 0.3) !important;
-            color: #6EE7B7 !important;
-        }
-        [data-theme="dark"] .spatial-toggle-title {
-            color: var(--text-light);
-        }
-        [data-theme="dark"] .layer-metric-box {
-            background: #111C33;
-            border-color: #1E293B;
-        }
-        [data-theme="dark"] .layer-metric-box .metric-lbl {
-            color: var(--text-light);
-        }
-        [data-theme="dark"] .layer-metric-box .metric-val {
-            color: #F8FAFC;
-        }
-        [data-theme="dark"] .layer-metric-box .metric-sub {
-            color: var(--text-light);
-        }
-        [data-theme="dark"] .layer-timeline-tag {
-            background: #111C33;
-            color: #CBD5E1;
-        }
-        [data-theme="dark"] .pillar-mini-spec .spec-k {
-            color: var(--text-light);
-        }
-        [data-theme="dark"] .pillar-mini-spec .spec-v {
             color: #F8FAFC;
         }
         [data-theme="dark"] .grp-sliders-grid {
@@ -4560,194 +4355,77 @@
                     </div>
                 </div>
             <div class="arch-pillars-grid">
-                
-                <div class="arch-pillar-card" id="archPillarCardSpatial">
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <div class="arch-pillar-num" style="width: 28px; height: 28px; border-radius: 8px; background: #EFF6FF; border: 1px solid #BFDBFE; color: #1D4ED8; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0;">1</div>
-                            <span class="arch-pillar-icon" style="font-size: 24px; margin: 0;">🗺️</span>
-                            <h4 class="arch-pillar-title" style="margin: 0; font-size: 16px;">Гибридная база геоданных</h4>
+                <!-- КАРТОЧКА 1: Гибридная база -->
+                <div class="arch-pillar-card">
+                    <div class="arch-card-header">
+                        <div class="arch-icon-box bg-blue">🗺️</div>
+                        <div>
+                            <h4 class="arch-title">Гибридная база геоданных</h4>
+                            <span class="arch-subtitle text-blue">GADM Level 2 / OSM</span>
                         </div>
-                        <span class="spatial-tag-live">v2.4 Live</span>
                     </div>
-
-                    <p class="arch-pillar-text">
-                        Двухуровневая топологическая архитектура: мгновенное переключение между макро- и микроуровнями для ГЭК.
+                    <p class="arch-desc">
+                        Двухуровневая топологическая архитектура: мгновенное переключение 
+                        между макро- и микроуровнями для ГЭК.
                     </p>
-
-                    <!-- Spatial Layer Timeline: Переключатель версий геоданных -->
-                    <div class="spatial-timeline-wrap">
-                        <div class="spatial-toggle-header">
-                            <span class="spatial-toggle-title">Слой геоданных:</span>
-                            <div class="spatial-toggle-switch" role="tablist">
-                                <button type="button" class="spatial-toggle-btn active" id="btnLayerGadm" onclick="switchSpatialLayer('gadm')" role="tab" aria-selected="true" title="Переключить на макроуровень GADM Level 2">
-                                    <span class="toggle-dot"></span>
-                                    <span>GADM Level 2</span>
-                                </button>
-                                <button type="button" class="spatial-toggle-btn" id="btnLayerOsm" onclick="switchSpatialLayer('osm')" role="tab" aria-selected="false" title="Переключить на микроуровень OSM Local SHP">
-                                    <span class="toggle-dot"></span>
-                                    <span>OSM Local SHP</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Интерактивная карточка метрик выбранного слоя -->
-                        <div class="spatial-layer-display" id="spatialLayerDisplay">
-                            <div class="layer-meta-badge" id="layerStatusChip">
-                                <span class="pulse-chip-dot"></span>
-                                <span id="layerChipText">Макроуровень • EPSG:4326 (WGS-84)</span>
-                            </div>
-
-                            <div class="layer-metrics-grid">
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Охват / Полигоны</span>
-                                    <strong class="metric-val" id="metricCoverageVal">85 субъектов РФ</strong>
-                                    <span class="metric-sub" id="metricCoverageSub">Макроуровень (Федеральный)</span>
-                                </div>
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Детализация / Масштаб</span>
-                                    <strong class="metric-val" id="metricScaleVal">1:1 000 000</strong>
-                                    <span class="metric-sub" id="metricScaleSub">Глобальная топология WGS-84</span>
-                                </div>
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Формат и вес слоя</span>
-                                    <strong class="metric-val" id="metricFormatVal">GeoJSON • 4.8 МБ</strong>
-                                    <span class="metric-sub" id="metricFormatSub">Сжатие Subpixel-SVG</span>
-                                </div>
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Целевое назначение</span>
-                                    <strong class="metric-val" id="metricTargetVal">ВРП и связи ЮФО</strong>
-                                    <span class="metric-sub" id="metricTargetSub">Межрегиональные тесты ГЭК</span>
-                                </div>
-                            </div>
-
-                            <div class="layer-timeline-tag" id="layerTagline">
-                                🏛️ <strong>GADM:</strong> Гарантированная топологическая целостность внешних границ РФ и субъектов.
-                            </div>
-                        </div>
+                    <div class="arch-spec-list">
+                        <div class="spec-row"><span class="spec-label">Охват</span><span class="spec-val">85 субъектов РФ</span></div>
+                        <div class="spec-row"><span class="spec-label">Масштаб</span><span class="spec-val">1:1 000 000</span></div>
+                        <div class="spec-row"><span class="spec-label">Формат</span><span class="spec-val">GeoJSON • 4.8 МБ</span></div>
+                        <div class="spec-row"><span class="spec-label">Проекция</span><span class="spec-val">EPSG:4326 (WGS-84)</span></div>
+                    </div>
+                    <div class="arch-footer">
+                        🏛️ GADM: Гарантированная целостность границ РФ
                     </div>
                 </div>
 
-                <div class="arch-pillar-card" id="archPillarCardProjections">
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <div class="arch-pillar-num" style="width: 28px; height: 28px; border-radius: 8px; background: #EFF6FF; border: 1px solid #BFDBFE; color: #1D4ED8; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0;">2</div>
-                            <span class="arch-pillar-icon" style="font-size: 24px; margin: 0;">📐</span>
-                            <h4 class="arch-pillar-title" style="margin: 0; font-size: 16px;">Геодезические проекции и CRS</h4>
+                <!-- КАРТОЧКА 2: Проекции -->
+                <div class="arch-pillar-card">
+                    <div class="arch-card-header">
+                        <div class="arch-icon-box bg-purple">📐</div>
+                        <div>
+                            <h4 class="arch-title">Геодезические проекции и CRS</h4>
+                            <span class="arch-subtitle text-purple">PyProj + Shapely</span>
                         </div>
-                        <span class="spatial-tag-live" style="background: #EFF6FF; color: #2563EB;">WGS-84 / GRS80</span>
                     </div>
-                    <p class="arch-pillar-text">
-                        Математическая трансформация систем координат, геометрическая автоочистка полигонов через Shapely и коррекция антимеридиана.
+                    <p class="arch-desc">
+                        Математическая трансформация систем координат и геометрическая 
+                        автоочистка полигонов.
                     </p>
-
-                    <div class="spatial-timeline-wrap">
-                        <div class="spatial-toggle-header">
-                            <span class="spatial-toggle-title">Математический пайплайн:</span>
-                            <div class="spatial-toggle-switch">
-                                <span class="spatial-toggle-btn active" style="cursor: default;">
-                                    <span class="toggle-dot" style="background: #2563EB;"></span>
-                                    <span>PyProj 3.6 + Shapely</span>
-                                </span>
-                            </div>
-                        </div>
-
-                        <div class="spatial-layer-display">
-                            <div class="layer-meta-badge" style="color: #2563EB; background: #EFF6FF; border-color: #DBEAFE;">
-                                <span class="pulse-chip-dot" style="background: #2563EB;"></span>
-                                <span>Равновеликая Альберса • EPSG:6933</span>
-                            </div>
-
-                            <div class="layer-metrics-grid">
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Входной CRS</span>
-                                    <strong class="metric-val">EPSG:4326</strong>
-                                    <span class="metric-sub">Геодезический WGS-84</span>
-                                </div>
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Топология Shapely</span>
-                                    <strong class="metric-val">0 самопересечений</strong>
-                                    <span class="metric-sub">Auto buffer(0) repair</span>
-                                </div>
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Искажение площадей</span>
-                                    <strong class="metric-val">&lt; 0.04% error</strong>
-                                    <span class="metric-sub">Сфероид Красовского</span>
-                                </div>
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Шов антимеридиана</span>
-                                    <strong class="metric-val">180° Meridian Fix</strong>
-                                    <span class="metric-sub">Коррекция Чукотки/ДВ</span>
-                                </div>
-                            </div>
-
-                            <div class="layer-timeline-tag" style="border-left-color: #2563EB;">
-                                🌐 <strong>CRS:</strong> Строгое сохранение пропорций площадей и линейных масштабов при анализе ВРП субъектов.
-                            </div>
-                        </div>
+                    <div class="arch-spec-list">
+                        <div class="spec-row"><span class="spec-label">Входной CRS</span><span class="spec-val">EPSG:4326</span></div>
+                        <div class="spec-row"><span class="spec-label">Целевой CRS</span><span class="spec-val">EPSG:6933</span></div>
+                        <div class="spec-row"><span class="spec-label">Искажение</span><span class="spec-val">&lt; 0.04%</span></div>
+                        <div class="spec-row"><span class="spec-label">Топология</span><span class="spec-val">Auto buffer(0)</span></div>
+                    </div>
+                    <div class="arch-footer">
+                        🌐 Строгое сохранение пропорций при анализе ВРП
                     </div>
                 </div>
 
-                <div class="arch-pillar-card" id="archPillarCardEngine">
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <div class="arch-pillar-num" style="width: 28px; height: 28px; border-radius: 8px; background: #EFF6FF; border: 1px solid #BFDBFE; color: #1D4ED8; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0;">3</div>
-                            <span class="arch-pillar-icon" style="font-size: 24px; margin: 0;">⚡</span>
-                            <h4 class="arch-pillar-title" style="margin: 0; font-size: 16px;">Высокопроизводительный движок</h4>
+                <!-- КАРТОЧКА 3: Движок -->
+                <div class="arch-pillar-card">
+                    <div class="arch-card-header">
+                        <div class="arch-icon-box bg-emerald">⚡</div>
+                        <div>
+                            <h4 class="arch-title">Высокопроизводительный движок</h4>
+                            <span class="arch-subtitle text-emerald">FastAPI + WebGL</span>
                         </div>
-                        <span class="spatial-tag-live" style="background: #F0FDF4; color: #16A34A;">FastAPI REST</span>
                     </div>
-                    <p class="arch-pillar-text">
-                        Предобработка пространственных слоев на Python (GeoPandas) с динамическим субпиксельным сжатием и аппаратным ускорением.
+                    <p class="arch-desc">
+                        Предобработка слоев на Python с динамическим субпиксельным 
+                        сжатием и аппаратным ускорением.
                     </p>
-
-                    <div class="spatial-timeline-wrap">
-                        <div class="spatial-toggle-header">
-                            <span class="spatial-toggle-title">Стек ускорения рендера:</span>
-                            <div class="spatial-toggle-switch">
-                                <span class="spatial-toggle-btn active" style="cursor: default; color: #16A34A;">
-                                    <span class="toggle-dot" style="background: #16A34A;"></span>
-                                    <span>Async Pool + WebGL</span>
-                                </span>
-                            </div>
-                        </div>
-
-                        <div class="spatial-layer-display">
-                            <div class="layer-meta-badge" style="color: #059669; background: #ECFDF5; border-color: #A7F3D0;">
-                                <span class="pulse-chip-dot" style="background: #059669;"></span>
-                                <span>Zero-Lag GIS Pipeline • 60 FPS</span>
-                            </div>
-
-                            <div class="layer-metrics-grid">
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Отклик REST API</span>
-                                    <strong class="metric-val">12 - 16 ms</strong>
-                                    <span class="metric-sub">Асинхронный event loop</span>
-                                </div>
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Сжатие геоданных</span>
-                                    <strong class="metric-val">-68% TopoJSON</strong>
-                                    <span class="metric-sub">Subpixel SVG оптимизация</span>
-                                </div>
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Аппаратный рендер</span>
-                                    <strong class="metric-val">60 FPS WebGL</strong>
-                                    <span class="metric-sub">Canvas GPU Acceleration</span>
-                                </div>
-                                <div class="layer-metric-box">
-                                    <span class="metric-lbl">Аудит Anti-Cheat</span>
-                                    <strong class="metric-val">100% сессий</strong>
-                                    <span class="metric-sub">Крипто-токены ЮФУ</span>
-                                </div>
-                            </div>
-
-                            <div class="layer-timeline-tag" style="border-left-color: #10B981;">
-                                🚀 <strong>Engine:</strong> Мгновенная отрисовка сотен полигонов без микрофризов даже на мобильных клиентах.
-                            </div>
-                        </div>
+                    <div class="arch-spec-list">
+                        <div class="spec-row"><span class="spec-label">Отклик API</span><span class="spec-val">12 - 16 ms</span></div>
+                        <div class="spec-row"><span class="spec-label">Сжатие</span><span class="spec-val">-68% TopoJSON</span></div>
+                        <div class="spec-row"><span class="spec-label">Рендер</span><span class="spec-val">60 FPS (WebGL)</span></div>
+                        <div class="spec-row"><span class="spec-label">Anti-Cheat</span><span class="spec-val">100% сессий</span></div>
+                    </div>
+                    <div class="arch-footer">
+                        🚀 Мгновенная отрисовка без микрофризов
                     </div>
                 </div>
-
             </div>
 
             <div class="tech-badges-header">Профессиональный стек технологий проекта:</div>
@@ -6538,92 +6216,6 @@
             }
         });
 
-        // ========================================================
-        // 4.5 SPATIAL LAYER TIMELINE (ARCH PILLAR CARD 1)
-        // ========================================================
-        const spatialLayerData = {
-            gadm: {
-                chipText: 'Макроуровень • EPSG:4326 (WGS-84)',
-                isOsm: false,
-                coverageVal: '85 субъектов РФ',
-                coverageSub: 'Макроуровень (Федеральный)',
-                scaleVal: '1:1 000 000',
-                scaleSub: 'Глобальная топология WGS-84',
-                formatVal: 'GeoJSON • 4.8 МБ',
-                formatSub: 'Сжатие Subpixel-SVG',
-                targetVal: 'ВРП и связи ЮФО',
-                targetSub: 'Межрегиональные тесты ГЭК',
-                tagline: '🏛️ <strong>GADM:</strong> Гарантированная топологическая целостность внешних границ РФ и субъектов.'
-            },
-            osm: {
-                chipText: 'Микроуровень • EPSG:6933 (Albers Equal-Area)',
-                isOsm: true,
-                coverageVal: '2000+ районов и МО',
-                coverageSub: 'Микроуровень (Муниципальный)',
-                scaleVal: '1:50 000',
-                scaleSub: 'Высокая детализация гидросети',
-                formatVal: 'ESRI .shp • 42.6 МБ',
-                formatSub: 'Полигоны и рельефные буферы',
-                targetVal: 'Агломерации и экология',
-                targetSub: 'Локальные задачи кафедры ЮФУ',
-                tagline: '🗺️ <strong>OSM SHP:</strong> Порайонная детализация, реки Дона, прибрежная полоса и сельские поселения.'
-            }
-        };
-
-        function switchSpatialLayer(mode) {
-            const data = spatialLayerData[mode];
-            if (!data) return;
-
-            const btnGadm = document.getElementById('btnLayerGadm');
-            const btnOsm = document.getElementById('btnLayerOsm');
-            const display = document.getElementById('spatialLayerDisplay');
-
-            if (btnGadm) {
-                btnGadm.classList.toggle('active', mode === 'gadm');
-                btnGadm.setAttribute('aria-selected', mode === 'gadm');
-            }
-            if (btnOsm) {
-                btnOsm.classList.toggle('active', mode === 'osm');
-                btnOsm.setAttribute('aria-selected', mode === 'osm');
-            }
-
-            if (!display) return;
-
-            display.style.opacity = '0.35';
-            display.style.transform = 'translateY(2px)';
-
-            setTimeout(() => {
-                const chip = document.getElementById('layerStatusChip');
-                const chipText = document.getElementById('layerChipText');
-                const covVal = document.getElementById('metricCoverageVal');
-                const covSub = document.getElementById('metricCoverageSub');
-                const scaleVal = document.getElementById('metricScaleVal');
-                const scaleSub = document.getElementById('metricScaleSub');
-                const fmtVal = document.getElementById('metricFormatVal');
-                const fmtSub = document.getElementById('metricFormatSub');
-                const tgtVal = document.getElementById('metricTargetVal');
-                const tgtSub = document.getElementById('metricTargetSub');
-                const tagEl = document.getElementById('layerTagline');
-
-                if (chip) chip.className = data.isOsm ? 'layer-meta-badge badge-osm' : 'layer-meta-badge';
-                if (chipText) chipText.textContent = data.chipText;
-                if (covVal) covVal.textContent = data.coverageVal;
-                if (covSub) covSub.textContent = data.coverageSub;
-                if (scaleVal) scaleVal.textContent = data.scaleVal;
-                if (scaleSub) scaleSub.textContent = data.scaleSub;
-                if (fmtVal) fmtVal.textContent = data.formatVal;
-                if (fmtSub) fmtSub.textContent = data.formatSub;
-                if (tgtVal) tgtVal.textContent = data.targetVal;
-                if (tgtSub) tgtSub.textContent = data.targetSub;
-                if (tagEl) {
-                    tagEl.innerHTML = data.tagline;
-                    tagEl.className = data.isOsm ? 'layer-timeline-tag tag-osm' : 'layer-timeline-tag';
-                }
-
-                display.style.opacity = '1';
-                display.style.transform = 'translateY(0)';
-            }, 140);
-        }
 
         // ========================================================
         // 5. ЖИВОЙ ПОИСК РЕГИОНОВ КАТАЛОГА
