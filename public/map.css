@@ -1641,30 +1641,52 @@
                 padding: 9px 14px;
             }
 
-            /* ЧАСТЬ 1: Top-nav-buttons на мобильных */
+            /* ЧАСТЬ 2: Шапка — предотвращаем обрезание */
             .top-nav-buttons {
                 top: 8px;
                 left: 8px;
                 right: 8px;
                 display: flex;
-                flex-wrap: nowrap; /* Запрещаем перенос на новые строки */
-                justify-content: flex-start;
-                gap: 6px;
-                overflow-x: auto; /* Разрешаем горизонтальный скролл */
-                padding-bottom: 4px; /* Место для скроллбара */
-                -webkit-overflow-scrolling: touch;
-                scrollbar-width: none; /* Скрываем скроллбар в Firefox */
+                flex-wrap: nowrap;
+                justify-content: flex-start; 
+                gap: 4px;
+                overflow-x: auto;
+                padding: 4px 0;
+                scrollbar-width: none;
+                /* Центрируем контент, если он меньше ширины экрана */
+                margin: 0 auto; 
+                max-width: calc(100% - 16px);
             }
             .top-nav-buttons::-webkit-scrollbar {
-                display: none; /* Скрываем скроллбар в Chrome/Safari */
+                display: none;
             }
 
-            /* Уменьшаем размеры кнопок на мобилках, чтобы влезало больше */
+            /* На мобилке уменьшаем кнопки, чтобы влезло больше */
             .nav-top-btn {
-                padding: 8px 10px !important;
+                padding: 6px 10px !important;
                 font-size: 12px !important;
-                height: 36px !important;
-                flex-shrink: 0; /* Кнопки не сжимаются */
+                height: 34px !important;
+                border-radius: 8px !important;
+                flex-shrink: 0;
+            }
+
+            /* Бейдж студента делаем очень компактным */
+            .student-badge {
+                padding: 2px 6px !important;
+                height: 34px !important;
+                max-width: 110px !important;
+                gap: 4px !important;
+                flex-shrink: 0;
+            }
+            .badge-avatar {
+                width: 22px !important;
+                height: 22px !important;
+                font-size: 11px !important;
+            }
+            .badge-name, .badge-group {
+                max-width: 60px !important; /* Обрезаем длинные имена */
+                font-size: 10px !important;
+                line-height: 1.2 !important;
             }
 
             /* На экранах <= 480px (iPhone SE и меньше) оставляем ТОЛЬКО иконки */
@@ -1673,23 +1695,17 @@
                     display: none !important;
                 }
                 .nav-top-btn {
-                    padding: 8px 10px !important;
-                    min-width: 42px !important;
+                    padding: 6px 8px !important;
+                    min-width: 36px !important;
                     justify-content: center !important;
-                    font-size: 16px !important;
+                    font-size: 15px !important;
                 }
                 .help-circle-btn {
-                    width: 42px !important;
-                    height: 42px !important;
-                    min-width: 42px !important;
-                }
-                .student-badge {
-                    max-width: 120px !important;
-                    padding: 4px 6px !important;
-                }
-                .badge-name, .badge-group {
-                    max-width: 75px !important;
-                    font-size: 11px !important;
+                    width: 34px !important;
+                    height: 34px !important;
+                    min-width: 34px !important;
+                    font-size: 15px !important;
+                    flex-shrink: 0;
                 }
                 .badge-logout {
                     display: none !important; /* Убираем крестик, чтобы не тесниться */
@@ -1807,41 +1823,65 @@
                 font-weight: 800;
             }
 
-            /* Leaflet-контролы не должны перекрываться с bottom sheet */
-            .leaflet-bottom.leaflet-left {
-                bottom: calc(65vh + 12px) !important;
+            /* ЧАСТЬ 4: Сдвигаем Layer Control при развернутой панели */
+            body:not(.ui-collapsed) .leaflet-bottom.leaflet-left {
+                bottom: calc(65vh + 8px) !important;
                 left: 8px !important;
             }
+
+            /* А когда панель свернута — слои стоят внизу */
+            body.ui-collapsed .leaflet-bottom.leaflet-left {
+                bottom: 80px !important;
+                left: 8px !important;
+            }
+
             .leaflet-bottom.leaflet-right {
                 bottom: calc(65vh + 12px) !important;
                 right: 8px !important;
             }
-
-            /* Когда панель свёрнута — опускаем контролы вниз */
-            body.ui-collapsed .leaflet-bottom.leaflet-left {
-                bottom: 80px !important;
-            }
             body.ui-collapsed .leaflet-bottom.leaflet-right {
                 bottom: 80px !important;
+                right: 8px !important;
             }
 
-            /* ЧАСТЬ 4: Копирайт (Attribution) */
+            /* ЧАСТЬ 3: Убираем конфликт Layer Control и масштаба */
+            /* Скрываем линейку масштаба на мобильных, чтобы не мешала слоям */
+            .leaflet-control-scale {
+                display: none !important;
+            }
+
+            /* Делаем иконку слоёв аккуратной (без огромного белого фона) */
+            .leaflet-control-layers {
+                background: #FFFFFF !important;
+                border-radius: 8px !important;
+                border: 1px solid #CBD5E1 !important;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
+                margin-bottom: 8px !important;
+                margin-left: 8px !important;
+            }
+            .leaflet-control-layers-toggle {
+                width: 36px !important;
+                height: 36px !important;
+                background-size: 18px 18px !important;
+            }
+
+            /* ЧАСТЬ 5: Копирайт (attribution) внизу */
             /* Скрываем стандартный копирайт под свёрнутой панелью */
             body.ui-collapsed .leaflet-control-attribution {
                 display: none !important;
             }
 
-            /* Поднимаем копирайт над нижней панелью */
             .my-attribution {
-                bottom: 72px !important; /* Отступ над свёрнутой панелью */
-                font-size: 9px !important;
-                padding: 2px 8px !important;
-                border-radius: 8px 8px 0 0;
+                bottom: 60px !important; /* Над свёрнутой панелью */
+                font-size: 8px !important;
+                padding: 2px 6px !important;
+                background: rgba(255, 255, 255, 0.85) !important;
+                border-radius: 6px !important;
+                right: 8px !important;
             }
 
-            /* Когда панель развёрнута — прячем копирайт, чтобы не мешал кнопкам */
             body:not(.ui-collapsed) .my-attribution {
-                display: none !important;
+                display: none !important; /* Прячем, когда панель развернута */
             }
 
             /* Если открыта панель режима теста, тоже прячем */
@@ -1849,20 +1889,20 @@
                 display: none !important;
             }
 
-            /* ЧАСТЬ 3: Уменьшение маркеров-звёзд */
-            /* Уменьшаем иконки маркеров */
+            /* ЧАСТЬ 1: Уменьшаем маркеры-звёзды */
             .leaflet-marker-icon.leaflet-zoom-animated {
-                width: 24px !important;
-                height: 24px !important;
-                margin-left: -12px !important;
-                margin-top: -12px !important;
+                transform-origin: bottom center !important;
+                -webkit-transform: scale(0.55) !important;
+                transform: scale(0.55) !important;
+                scale: 0.55 !important; /* Уменьшаем на 45% */
+                margin-top: 0 !important;
+                margin-left: 0 !important;
             }
 
-            /* Внутри маркера Folium (иконка звезды) уменьшаем сам шрифт */
+            /* Внутренняя иконка (звезда) не должна вылезать */
             .leaflet-marker-icon i {
-                font-size: 14px !important;
-                line-height: 24px !important;
-                margin-top: 0 !important;
+                font-size: 18px !important;
+                line-height: 30px !important;
             }
 
             /* ЧАСТЬ 6: Модалки на мобильных — full screen */
