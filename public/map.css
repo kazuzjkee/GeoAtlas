@@ -1607,7 +1607,7 @@
         }
 
         /* По умолчанию (десктоп >= 1024px) бургер и мобильное меню скрыты */
-        .mobile-only-btn { display: none !important; }
+        .mobile-only-btn { display: none; }
         .mobile-nav-overlay { display: none; }
 
         /* АДАПТИВНОСТЬ: мобильные экраны и планшеты (< 1024px) */
@@ -1645,33 +1645,48 @@
                 padding: 9px 14px;
             }
 
-            /* Прячем старую шапку полностью */
+            /* Контейнер шапки */
             .top-nav-buttons {
                 display: flex !important;
-                justify-content: flex-end !important;
-                pointer-events: none; /* Клики проходят только по бургеру */
+                justify-content: flex-end !important; /* Прижимаем кнопку вправо */
+                top: 10px !important;
+                right: 10px !important;
+                left: auto !important; /* Убираем растягивание на всю ширину */
+                width: auto !important;
+                pointer-events: none; /* Отключаем клики по пустому месту */
+                z-index: 9999 !important;
                 gap: 0 !important;
                 padding: 0 !important;
             }
+
+            /* Прячем ВСЁ, кроме кнопки-бургера */
             .top-nav-buttons > *:not(#mobile-menu-btn) {
-                display: none !important; /* Прячем всё кроме бургера */
+                display: none !important;
             }
-            
-            /* Показываем бургер */
-            .mobile-only-btn {
-                display: inline-flex !important;
-                pointer-events: auto;
-                width: 44px !important;
-                height: 44px !important;
+
+            /* Сама кнопка-бургер */
+            #mobile-menu-btn.mobile-only-btn {
+                display: flex !important;
+                pointer-events: auto !important;
+                width: 48px !important;
+                height: 48px !important;
                 border-radius: 12px !important;
-                background: rgba(255, 255, 255, 0.95) !important;
-                backdrop-filter: blur(8px);
+                background: #FFFFFF !important; /* Белый фон */
                 border: 1px solid #CBD5E1 !important;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
-                align-items: center;
-                justify-content: center;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+                align-items: center !important;
+                justify-content: center !important;
+                color: #0F172A !important;
+                font-size: 22px !important;
                 cursor: pointer;
                 padding: 0 !important;
+            }
+
+            /* Тёмная тема для кнопки */
+            [data-theme="dark"] #mobile-menu-btn.mobile-only-btn {
+                background: #1E293B !important;
+                border-color: #334155 !important;
+                color: #F8FAFC !important;
             }
 
             /* Оверлей меню */
@@ -2116,6 +2131,12 @@
 
         /* ДЕСКТОП: >= 1024px — панель строго зафиксирована в развернутом виде, кнопка скрыта */
         @media (min-width: 1024px) {
+            .mobile-only-btn {
+                display: none !important;
+            }
+            .mobile-nav-overlay {
+                display: none !important;
+            }
             .mobile-collapse-trigger {
                 display: none !important;
             }
