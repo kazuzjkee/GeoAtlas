@@ -1285,6 +1285,361 @@ function closeExamModal() {
     if (m) m.style.display = 'none';
 }
 
+var _adaptiveData = null;
+var _adaptivePools = null;
+var _isAdaptiveQuiz = false;
+
+async function openAdaptiveModal() {
+    const m = document.getElementById('adaptive-modal');
+    if (!m) return;
+    m.style.display = 'flex';
+
+    const loadingState = document.getElementById('adaptive-loading-state');
+    const contentState = document.getElementById('adaptive-content-state');
+    if (loadingState) loadingState.style.display = 'block';
+    if (contentState) contentState.style.display = 'none';
+
+    const student = getCurrentStudentInfo();
+    if (!student || !student.email) {
+        if (contentState) {
+            contentState.innerHTML = `
+                <div style="text-align: center; padding: 12px;">
+                    <div style="font-size: 32px; margin-bottom: 8px;">⚠️</div>
+                    <div style="font-size: 13px; color: #92400E; font-weight: 600; margin-bottom: 4px;">
+                        Нужно войти в аккаунт
+                    </div>
+                    <div style="font-size: 11.5px; color: #64748B;">
+                        Адаптив работает только для авторизованных студентов
+                    </div>
+                </div>
+            `;
+        }
+        if (loadingState) loadingState.style.display = 'none';
+        if (contentState) contentState.style.display = 'block';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/student/heatmap?email=${encodeURIComponent(student.email)}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        _adaptiveData = await res.json();
+        renderAdaptivePreview(_adaptiveData, student);
+    } catch (e) {
+        if (contentState) {
+            contentState.innerHTML = `
+                <div style="text-align: center; padding: 12px;">
+                    <div style="font-size: 32px; margin-bottom: 8px;">📭</div>
+                    <div style="font-size: 13px; color: #475569; font-weight: 600;">
+                        Пока нет данных о ваших ошибках
+                    </div>
+                    <div style="font-size: 11.5px; color: #64748B; margin-top: 4px;">
+                        Пройдите 1-2 обычных теста, чтобы адаптив начал работать
+                    </div>
+                </div>
+            `;
+        }
+    } finally {
+        if (loadingState) loadingState.style.display = 'none';
+        if (contentState) contentState.style.display = 'block';
+    }
+}
+
+function closeAdaptiveModal() {
+    const m = document.getElementById('adaptive-modal');
+    if (m) m.style.display = 'none';
+}
+
+function renderAdaptivePreview(data, student) {
+    const byObject = data.by_object || {};
+    const totalTests = data.total_tests || 0;
+    const objectsCount = Object.keys(byObject).length;
+
+    // Строим пулы
+    const weak = [];
+    const medium = [];
+    const strong = [];
+
+    Object.entries(byObject).forEach(([name, obj]) => {
+        if (obj.type && obj.type !== 'district') return; // фильтр по районам
+        const acc = obj.accuracy || 0;
+        const entry = { name: name, accuracy: acc, errors: obj.errors || 0 };
+        if (acc < 60) weak.push(entry);
+        else if (acc < 85) medium.push(entry);
+        else strong.push(entry);
+    });
+
+    // Сортируем weak по возрастанию accuracy (самые плохие — первыми)
+    weak.sort((a, b) => a.accuracy - b.accuracy);
+
+    const content = document.getElementById('adaptive-content-state');
+    if (!content) return;
+
+    if (totalTests === 0 || objectsCount === 0) {
+        content.innerHTML = `
+            <div style="text-align: center; padding: 8px;">
+                <div style="font-size: 28px; margin-bottom: 8px;">📊</div>
+                <div style="font-size: 13px; color: #475569; font-weight: 600; margin-bottom: 4px;">
+                    У вас пока нет истории ответов
+                </div>
+                <div style="font-size: 11.5px; color: #64748B; line-height: 1.5;">
+                    Первый адаптивный тест будет обычным (все объекты равновероятно).
+                    После него алгоритм запомнит ваши ошибки и начнёт адаптироваться.
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    const top3Weak = weak.slice(0, 3).map(w => 
+        `<span style="display:inline-block;background:#FEE2E2;color:#991B1B;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;margin:2px 4px 2px 0;border:1px solid #FCA5A5;">${escapeHtml(w.name)}</span>`
+    ).join('');
+
+    content.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-size: 13px; font-weight: 700; color: #0F172A;">
+                🎯 Ваши приоритеты
+            </div>
+            <div style="font-size: 11px; color: #64748B;">
+                ${totalTests} тестов • ${objectsCount} объектов
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
+            <div style="background: #FEE2E2; border: 1px solid #FCA5A5; border-radius: 8px; padding: 8px; text-align: center;">
+                <div style="font-size: 18px; font-weight: 800; color: #991B1B;">${weak.length}</div>
+                <div style="font-size: 10px; color: #7F1D1D; font-weight: 600; margin-top: 2px;">слабых</div>
+            </div>
+            <div style="background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 8px; padding: 8px; text-align: center;">
+                <div style="font-size: 18px; font-weight: 800; color: #92400E;">${medium.length}</div>
+                <div style="font-size: 10px; color: #78350F; font-weight: 600; margin-top: 2px;">в процессе</div>
+            </div>
+            <div style="background: #DCFCE7; border: 1px solid #BBF7D0; border-radius: 8px; padding: 8px; text-align: center;">
+                <div style="font-size: 18px; font-weight: 800; color: #166534;">${strong.length}</div>
+                <div style="font-size: 10px; color: #14532D; font-weight: 600; margin-top: 2px;">освоено</div>
+            </div>
+        </div>
+
+        ${weak.length > 0 ? `
+            <div style="font-size: 11px; color: #64748B; margin-bottom: 4px;">
+                Топ проблемных объектов:
+            </div>
+            <div style="margin-bottom: 8px;">${top3Weak}</div>
+        ` : ''}
+
+        <div style="background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.2); border-radius: 8px; padding: 8px 10px; font-size: 11px; color: #1E40AF; line-height: 1.4;">
+            💡 <b>60%</b> вопросов — на слабые объекты, <b>30%</b> — на средние, <b>10%</b> — на освоенные (для закрепления).
+        </div>
+    `;
+}
+
+async function startAdaptiveTest() {
+    const student = getCurrentStudentInfo();
+    if (!student || !student.email) {
+        alert('Войдите в аккаунт');
+        return;
+    }
+
+    const typeSelect = document.getElementById('adaptive-type-select');
+    const countSelect = document.getElementById('adaptive-count-select');
+    const quizType = typeSelect ? typeSelect.value : 'district';
+    const count = countSelect ? parseInt(countSelect.value, 10) : 15;
+
+    closeAdaptiveModal();
+
+    // Готовим пулы
+    _isAdaptiveQuiz = true;
+    _adaptivePools = buildAdaptivePools(_adaptiveData, quizType);
+
+    // Вызываем существующую подготовку UI для типа
+    prepareQuizUI(quizType, `🎯 Адаптивный: ${quizType === 'district' ? 'Силуэты' : quizType === 'center' ? 'Центры' : 'Реки'}`, 
+                  quizType !== 'center', false);
+
+    // Генерируем вопросы с приоритетом на weak
+    generateAdaptiveQuestions(quizType, count);
+}
+
+function buildAdaptivePools(heatmapData, quizType) {
+    const pools = { weak: [], medium: [], strong: [] };
+    
+    // Дефолтное распределение 60/30/10
+    const byObject = (heatmapData && heatmapData.by_object) || {};
+    
+    // Группируем по accuracy
+    const allObjects = {};
+    Object.entries(byObject).forEach(([name, obj]) => {
+        if (obj.type && obj.type !== quizType) return;
+        allObjects[name] = obj.accuracy || 0;
+    });
+
+    // Собираем полный список доступных объектов для типа
+    let fullList = [];
+    if (quizType === 'district') {
+        fullList = (getDistrictsData() || []).map(d => d.name).filter(Boolean);
+    } else if (quizType === 'center') {
+        fullList = (getCentersData() || []).map(c => c.name).filter(Boolean);
+    } else if (quizType === 'river') {
+        fullList = (getRiversData() || []).map(r => r.name).filter(Boolean);
+    }
+
+    // Распихиваем по пулам
+    fullList.forEach(name => {
+        const acc = name in allObjects ? allObjects[name] : 100; // не встречался — считаем освоенным
+        if (acc < 60) pools.weak.push(name);
+        else if (acc < 85) pools.medium.push(name);
+        else pools.strong.push(name);
+    });
+
+    // Если weak пуст — добавляем из medium половину
+    if (pools.weak.length === 0 && pools.medium.length > 0) {
+        const half = Math.floor(pools.medium.length / 2);
+        pools.weak = pools.medium.slice(0, half);
+        pools.medium = pools.medium.slice(half);
+    }
+
+    // Если всё ещё пусто — берём strong как fallback
+    if (pools.weak.length === 0 && pools.strong.length > 0) {
+        const quarter = Math.ceil(pools.strong.length / 4);
+        pools.weak = pools.strong.slice(0, quarter);
+    }
+
+    console.log('[Adaptive] Pools:', {
+        weak: pools.weak.length,
+        medium: pools.medium.length,
+        strong: pools.strong.length
+    });
+
+    return pools;
+}
+
+function generateAdaptiveQuestions(quizType, count) {
+    quizData = [];
+    currentQuestion = 0;
+    score = 0;
+    maxPossibleScore = 0;
+
+    const pools = _adaptivePools || { weak: [], medium: [], strong: [] };
+    const totalAvailable = pools.weak.length + pools.medium.length + pools.strong.length;
+
+    if (totalAvailable < 2) {
+        alert('Недостаточно данных для адаптивного теста');
+        _isAdaptiveQuiz = false;
+        exitQuizDirectly();
+        return;
+    }
+
+    // Вычисляем целевое количество из каждого пула
+    let targetWeak = Math.round(count * 0.6);
+    let targetMedium = Math.round(count * 0.3);
+    let targetStrong = count - targetWeak - targetMedium;
+
+    // Корректируем если пул меньше цели
+    if (pools.weak.length < targetWeak) {
+        const diff = targetWeak - pools.weak.length;
+        targetWeak = pools.weak.length;
+        targetMedium += Math.ceil(diff * 0.75);
+        targetStrong += Math.floor(diff * 0.25);
+    }
+    if (pools.medium.length < targetMedium) {
+        const diff = targetMedium - pools.medium.length;
+        targetMedium = pools.medium.length;
+        targetStrong += diff;
+    }
+    if (pools.strong.length < targetStrong) {
+        targetStrong = pools.strong.length;
+    }
+
+    // Добираем недостающее из weak/medium если total < count
+    let shortfall = count - (targetWeak + targetMedium + targetStrong);
+    while (shortfall > 0 && (pools.weak.length > targetWeak || pools.medium.length > targetMedium)) {
+        if (pools.weak.length > targetWeak) { targetWeak++; shortfall--; }
+        else if (pools.medium.length > targetMedium) { targetMedium++; shortfall--; }
+    }
+
+    // Функция выбора объектов из пула
+    function pickFromPool(pool, n) {
+        const copy = [...pool];
+        shuffleArray(copy);
+        return copy.slice(0, n);
+    }
+
+    // Собираем выбранные имена
+    const selectedNames = [
+        ...pickFromPool(pools.weak, targetWeak),
+        ...pickFromPool(pools.medium, targetMedium),
+        ...pickFromPool(pools.strong, targetStrong)
+    ];
+
+    // Перемешиваем итоговый порядок
+    shuffleArray(selectedNames);
+
+    // Генерируем вопросы по типу
+    if (quizType === 'district') {
+        const valid = (getDistrictsData() || []).filter(d => d.name && d.name.trim());
+        selectedNames.forEach(name => {
+            if (!valid.find(d => d.name === name)) return;
+            const options = [name];
+            while (options.length < 4 && options.length < valid.length) {
+                const wrong = valid[Math.floor(Math.random() * valid.length)];
+                if (!options.includes(wrong.name)) options.push(wrong.name);
+            }
+            shuffleArray(options);
+            quizData.push({
+                type: 'district',
+                correctAnswer: name,
+                options: options,
+                districtName: name
+            });
+            maxPossibleScore += 1;
+        });
+    } else if (quizType === 'center') {
+        const valid = (getCentersData() || []).filter(c => c.name && c.name.trim());
+        selectedNames.forEach(name => {
+            const center = valid.find(c => c.name === name);
+            if (!center) return;
+            quizData.push({
+                type: 'center',
+                correctAnswer: name,
+                correctLat: center.lat,
+                correctLon: center.lon,
+                centerName: name
+            });
+            maxPossibleScore += 3;
+        });
+    } else if (quizType === 'river') {
+        const valid = (getRiversData() || []).filter(r => r.name && r.name.trim());
+        selectedNames.forEach(name => {
+            if (!valid.find(r => r.name === name)) return;
+            const options = [name];
+            while (options.length < 4 && options.length < valid.length) {
+                const wrong = valid[Math.floor(Math.random() * valid.length)];
+                if (!options.includes(wrong.name)) options.push(wrong.name);
+            }
+            shuffleArray(options);
+            quizData.push({
+                type: 'river',
+                correctAnswer: name,
+                options: options,
+                riverName: name
+            });
+            maxPossibleScore += 1;
+        });
+    }
+
+    if (quizData.length === 0) {
+        alert('Не удалось сгенерировать адаптивные вопросы');
+        _isAdaptiveQuiz = false;
+        exitQuizDirectly();
+        return;
+    }
+
+    totalQuestions = quizData.length;
+    showQuestion();
+}
+
+window.openAdaptiveModal = openAdaptiveModal;
+window.closeAdaptiveModal = closeAdaptiveModal;
+window.startAdaptiveTest = startAdaptiveTest;
+
 function startExamFromModal() {
     const cat = document.getElementById('exam-category-select') ? document.getElementById('exam-category-select').value : 'mixed';
     const cnt = document.getElementById('exam-count-select') ? parseInt(document.getElementById('exam-count-select').value) : 15;
@@ -4236,6 +4591,7 @@ function exitQuizDirectly() {
 
     currentQuiz = null;
     resetQuiz();
+    _isAdaptiveQuiz = false;
     setTimeout(setupDistrictClickListeners, 300);
 
     document.getElementById('quiz-mode').style.display = 'none';
@@ -4373,6 +4729,7 @@ function showResults() {
     saveResult(accuracy, wasExam, examToken, finalExamViolations, finalExamStatus);
     isExamMode = false;
     currentQuiz = null;
+    _isAdaptiveQuiz = false;
 }
 
 function closeResultsAndReturnToMenu() {
@@ -4423,6 +4780,7 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         accuracy: accuracy,
         time_spent: timeStr,
         is_exam: wasExam,
+        is_adaptive: !!_isAdaptiveQuiz,
         exam_token: token,
         violations: violations,
         exam_status: displayStatus,
@@ -4450,6 +4808,7 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         accuracy: accuracy,
         time_spent: timeStr,
         is_exam: wasExam,
+        is_adaptive: !!_isAdaptiveQuiz,
         exam_token: token,
         violations: violations,
         exam_status: displayStatus,
@@ -4690,6 +5049,8 @@ function resetQuiz() {
     selectedOption = null;
     updateScore();
     clearMarkers();
+    _isAdaptiveQuiz = false;
+    _adaptivePools = null;
 }
 
 function shuffleArray(array) {

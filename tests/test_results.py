@@ -44,3 +44,21 @@ def test_student_dashboard_ok(client):
     assert data["status"] == "ok"
     assert "stats" in data
     assert "regions" in data
+
+def test_save_result_adaptive(client):
+    payload = {
+        "email": "adapt@sfedu.ru", "name": "Адаптивный", "group": "G-01",
+        "quiz_type": "districts", "score": 9, "max_score": 10,
+        "accuracy": 90, "time_spent": "1 мин", "is_exam": False,
+        "is_adaptive": True,
+        "submission_id": "test_sub_adaptive"
+    }
+    res = client.post("/api/results/save", json=payload)
+    assert res.status_code == 200
+    assert res.json()["status"] == "ok"
+
+    import db
+    results = db.load_results()
+    saved = next((r for r in results if r["submission_id"] == "test_sub_adaptive"), None)
+    assert saved is not None
+    assert saved["is_adaptive"] is True

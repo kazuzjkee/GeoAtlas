@@ -890,6 +890,11 @@ let allResults = [];
                 modeBadge = `<span class="mode-badge" style="background:#ECFDF5; color:#059669; border:1px solid #A7F3D0;">🧩 Пазл</span>`;
             }
 
+            let adaptiveBadge = '';
+            if (r.is_adaptive) {
+                adaptiveBadge = `<span style="display:inline-block;background:#FCE7F3;color:#BE185D;border:1px solid #FBCFE8;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700;margin-left:6px;">🎯 Адаптив</span>`;
+            }
+
             let tokenHtml = '<span style="color: #94A3B8;">—</span>';
             if (r.exam_token && r.exam_token !== '-') {
                 tokenHtml = `
@@ -912,7 +917,7 @@ let allResults = [];
                     </td>
                     <td><span style="font-weight: 600; color: #334155;">${escapeHtml(r.group || '—')}</span></td>
                     <td><span style="color: #0369A1; font-weight: 600;">${escapeHtml(r.quiz_type || 'Общий')}</span></td>
-                    <td>${modeBadge}</td>
+                    <td>${modeBadge}${adaptiveBadge}</td>
                     <td>${statusBadge}</td>
                     <td>${tokenHtml}</td>
                     <td><b>${r.score}</b> / <span style="color: var(--text-muted);">${r.max_score}</span></td>

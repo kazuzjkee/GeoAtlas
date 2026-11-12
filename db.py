@@ -34,6 +34,7 @@ def init_db():
                     accuracy INTEGER,
                     time_spent TEXT,
                     is_exam INTEGER,
+                    is_adaptive INTEGER DEFAULT 0,
                     exam_token TEXT,
                     violations INTEGER,
                     exam_status TEXT,
@@ -74,6 +75,11 @@ def init_db():
                 );
             """)
             conn.commit()
+            try:
+                conn.execute("ALTER TABLE results ADD COLUMN is_adaptive INTEGER DEFAULT 0")
+                conn.commit()
+            except Exception:
+                pass  # колонка уже есть
         finally:
             conn.close()
 
@@ -88,6 +94,7 @@ def load_results() -> List[Dict[str, Any]]:
             for row in cur.fetchall():
                 d = dict(row)
                 d["is_exam"] = bool(d.get("is_exam"))
+                d["is_adaptive"] = bool(d.get("is_adaptive", 0))
                 d["max_score"] = d.get("max_score") or 0
                 d["accuracy"] = d.get("accuracy") or 0
                 try:
@@ -120,7 +127,7 @@ def save_result(result: Dict[str, Any]) -> Dict[str, Any]:
                         UPDATE results SET
                             date=?, email=?, name=?, grp=?, quiz_type=?,
                             score=?, max_score=?, accuracy=?, time_spent=?,
-                            is_exam=?, exam_token=?, violations=?, exam_status=?,
+                            is_exam=?, is_adaptive=?, exam_token=?, violations=?, exam_status=?,
                             session_id=?, teacher_id=?, mistakes_log=?,
                             client_timestamp=?
                         WHERE submission_id=?
@@ -135,6 +142,7 @@ def save_result(result: Dict[str, Any]) -> Dict[str, Any]:
                         result.get("accuracy", 0),
                         result.get("time_spent", ""),
                         1 if result.get("is_exam") else 0,
+                        1 if result.get("is_adaptive") else 0,
                         result.get("exam_token", ""),
                         result.get("violations", 0),
                         result.get("exam_status", "Сдано"),
@@ -150,10 +158,10 @@ def save_result(result: Dict[str, Any]) -> Dict[str, Any]:
             conn.execute("""
                 INSERT INTO results (
                     submission_id, date, email, name, grp, quiz_type,
-                    score, max_score, accuracy, time_spent, is_exam,
+                    score, max_score, accuracy, time_spent, is_exam, is_adaptive,
                     exam_token, violations, exam_status, session_id,
                     teacher_id, mistakes_log, client_timestamp, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 sub_id,
                 result.get("date", ""),
@@ -166,6 +174,7 @@ def save_result(result: Dict[str, Any]) -> Dict[str, Any]:
                 result.get("accuracy", 0),
                 result.get("time_spent", ""),
                 1 if result.get("is_exam") else 0,
+                1 if result.get("is_adaptive") else 0,
                 result.get("exam_token", ""),
                 result.get("violations", 0),
                 result.get("exam_status", "Сдано"),

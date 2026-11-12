@@ -322,6 +322,7 @@ class ResultSubmit(BaseModel):
     accuracy: int
     time_spent: str
     is_exam: bool = False
+    is_adaptive: bool = False
     exam_token: str = ""
     violations: int = 0
     exam_status: str = "Сдано"
@@ -508,6 +509,7 @@ def process_quiz_result(res: ResultSubmit) -> Dict[str, Any]:
         "accuracy": res.accuracy,
         "time_spent": res.time_spent,
         "is_exam": res.is_exam,
+        "is_adaptive": bool(res.is_adaptive),
         "exam_token": res.exam_token,
         "violations": res.violations,
         "exam_status": res.exam_status,

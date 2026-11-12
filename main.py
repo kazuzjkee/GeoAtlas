@@ -1494,6 +1494,14 @@ window.serverMapZoom = {self.zoom};
                 </div>
 
                 <div class="btn-group-vertical">
+                    <button onclick="openAdaptiveModal()" class="btn btn-block" 
+                            id="btn-open-adaptive" 
+                            style="background: linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%) !important; 
+                                   color: #FFFFFF !important; border: 1px solid rgba(255,255,255,0.15) !important; 
+                                   box-shadow: 0 4px 14px rgba(236,72,153,0.3) !important;">
+                        <span>🎯 Адаптивный тест</span>
+                    </button>
+
                     <button onclick="openExamModal()" class="btn btn-exam btn-block" id="btn-open-exam">
                         <span>📝 Экзамен</span>
                     </button>
@@ -1723,6 +1731,64 @@ window.serverMapZoom = {self.zoom};
                         <span>Больше не показывать при входе</span>
                     </label>
                     <button onclick="closeWelcomeModal()" class="btn btn-primary btn-start">Начать работу с картой</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="adaptive-modal" class="welcome-overlay" style="display: none;">
+            <div class="welcome-card" style="max-width: 520px;">
+                <div class="welcome-badge" style="background: linear-gradient(135deg, #EC4899, #8B5CF6); color: white;">🎯 Персональный подбор</div>
+                <h2 class="welcome-title mb-6">Адаптивный тест</h2>
+                <p class="welcome-subtitle mb-16">
+                    Алгоритм подберёт вопросы приоритетно на те объекты, где вы чаще всего ошибаетесь.
+                </p>
+
+                <div id="adaptive-preview-box" style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px; margin-bottom: 18px;">
+                    <div id="adaptive-loading-state" style="text-align: center; color: #64748B; font-size: 13px; padding: 12px;">
+                        ⏳ Анализируем вашу статистику...
+                    </div>
+                    <div id="adaptive-content-state" style="display: none;">
+                        <!-- Заполняется динамически -->
+                    </div>
+                </div>
+
+                <div class="form-group mb-14 text-left">
+                    <label style="font-weight: 700; font-size: 13px; color: #1E293B; display: block; margin-bottom: 6px;">
+                        Тип вопросов:
+                    </label>
+                    <select id="adaptive-type-select" class="exam-select">
+                        <option value="district">🗺️ Силуэты районов</option>
+                        <option value="center">📍 Административные центры</option>
+                        <option value="river">🌊 Реки</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-bottom: 14px;">
+                    <div class="form-group flex-1 text-left">
+                        <label style="font-weight: 700; font-size: 13px; color: #1E293B; display: block; margin-bottom: 6px;">
+                            Количество вопросов:
+                        </label>
+                        <select id="adaptive-count-select" class="exam-select">
+                            <option value="10">10 вопросов</option>
+                            <option value="15" selected>15 вопросов</option>
+                            <option value="20">20 вопросов</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="exam-rules-box" style="background: #F0FDF4; border-color: #BBF7D0;">
+                    <div style="font-size: 12px; color: #166534; line-height: 1.5;">
+                        <b>Как это работает:</b> вопросы выбираются из пулов weak/medium/strong 
+                        пропорционально 60/30/10. Чем чаще ошибаетесь на объекте — тем чаще 
+                        он попадается. Обычный тест — все объекты равновероятно.
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 18px;">
+                    <button onclick="closeAdaptiveModal()" class="btn btn-secondary" style="flex: 1; padding: 10px;">Отмена</button>
+                    <button onclick="startAdaptiveTest()" class="btn btn-primary" style="flex: 2; padding: 10px; font-size: 14px; background: linear-gradient(135deg, #EC4899, #8B5CF6) !important;">
+                        🚀 Начать адаптивный тест
+                    </button>
                 </div>
             </div>
         </div>
