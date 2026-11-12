@@ -729,6 +729,44 @@ function setupMobileBottomSheetSwipe() {
 window.setupMobileBottomSheetSwipe = setupMobileBottomSheetSwipe;
 window.togglePanelCollapse = togglePanelCollapse;
 
+function toggleMobileMenu() {
+    const overlay = document.getElementById('mobile-nav-overlay');
+    if (!overlay) return;
+    
+    const isActive = overlay.classList.contains('active');
+    
+    if (isActive) {
+        overlay.classList.remove('active');
+        setTimeout(() => { overlay.style.display = 'none'; }, 300);
+    } else {
+        // Синхронизируем данные профиля перед открытием
+        const student = getCurrentStudentInfo();
+        const profileBox = document.getElementById('mobile-nav-profile-container');
+        const authBtn = document.getElementById('mobile-nav-auth-btn');
+        
+        if (student) {
+            if (profileBox) {
+                profileBox.style.display = 'flex';
+                const nameEl = document.getElementById('mobile-nav-name');
+                const groupEl = document.getElementById('mobile-nav-group');
+                if (nameEl) nameEl.textContent = student.name;
+                if (groupEl) groupEl.textContent = student.group;
+            }
+            if (authBtn) authBtn.style.display = 'none';
+        } else {
+            if (profileBox) profileBox.style.display = 'none';
+            if (authBtn) authBtn.style.display = 'flex';
+        }
+
+        overlay.style.display = 'flex';
+        // Небольшая задержка для срабатывания CSS transition
+        requestAnimationFrame(() => {
+            overlay.classList.add('active');
+        });
+    }
+}
+window.toggleMobileMenu = toggleMobileMenu;
+
 function clearMarkers() {
     if (clickMarker) { try { clickMarker.remove(); } catch(e) {} clickMarker = null; }
     if (resultMarker) { try { resultMarker.remove(); } catch(e) {} resultMarker = null; }
@@ -5193,6 +5231,23 @@ function updateStudentHeader() {
         if (profileBox) {
             profileBox.style.setProperty('display', 'none', 'important');
             profileBox.classList.add('hidden');
+        }
+    }
+
+    // Синхронизируем мобильное меню
+    const mobileProfile = document.getElementById('mobile-nav-profile-container');
+    const mobileAuth = document.getElementById('mobile-nav-auth-btn');
+    if (mobileProfile && mobileAuth) {
+        if (student) {
+            mobileProfile.style.display = 'flex';
+            mobileAuth.style.display = 'none';
+            const mn = document.getElementById('mobile-nav-name');
+            const mg = document.getElementById('mobile-nav-group');
+            if (mn) mn.textContent = student.name || 'Студент';
+            if (mg) mg.textContent = student.group || 'Группа';
+        } else {
+            mobileProfile.style.display = 'none';
+            mobileAuth.style.display = 'flex';
         }
     }
 }

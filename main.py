@@ -1425,6 +1425,9 @@ window.serverMapZoom = {self.zoom};
         </div>
 
         <div class="top-nav-buttons" id="top-nav-panel">
+            <button id="mobile-menu-btn" class="nav-top-btn mobile-only-btn" onclick="toggleMobileMenu()" aria-label="Открыть меню">
+                <span style="font-size: 20px;">☰</span>
+            </button>
             <a href="index.html" class="btn btn-secondary nav-top-btn" title="Вернуться к выбору региона"><span>🏠</span> <span>На главную</span></a>
             <button class="btn btn-secondary nav-top-btn reset-map-btn" onclick="resetMapView()" title="Показать всю карту">
                 <span>🌍</span> <span>Вся карта</span>
@@ -1448,6 +1451,50 @@ window.serverMapZoom = {self.zoom};
             </div>
             <button class="btn btn-secondary nav-top-btn leaderboard-top-btn" onclick="showLeaderboard()" title="Глобальная таблица лидеров и профиль"><span>🏆</span> <span>Рейтинг</span></button>
             <button class="btn btn-secondary help-circle-btn" onclick="openWelcomeModal()" title="О проекте и справка">?</button>
+        </div>
+
+        <div id="mobile-nav-overlay" class="mobile-nav-overlay" style="display: none;">
+            <div class="mobile-nav-menu">
+                <div class="mobile-nav-header">
+                    <div class="mobile-nav-title">Навигация</div>
+                    <button onclick="toggleMobileMenu()" class="mobile-nav-close">×</button>
+                </div>
+                
+                <div class="mobile-nav-profile" id="mobile-nav-profile-container" style="display: none;">
+                    <div class="mobile-nav-avatar">🎓</div>
+                    <div class="mobile-nav-user-info">
+                        <div class="mobile-nav-name" id="mobile-nav-name">Студент</div>
+                        <div class="mobile-nav-group" id="mobile-nav-group">Группа</div>
+                    </div>
+                    <button onclick="logoutStudent()" class="mobile-nav-logout" title="Выйти">🚪</button>
+                </div>
+
+                <div class="mobile-nav-list">
+                    <a href="index.html" class="mobile-nav-item">
+                        <span class="nav-icon">🏠</span> На главную
+                    </a>
+                    <button onclick="resetMapView(); toggleMobileMenu();" class="mobile-nav-item">
+                        <span class="nav-icon">🌍</span> Вся карта
+                    </button>
+                    <button onclick="openDuelModal(); toggleMobileMenu();" class="mobile-nav-item">
+                        <span class="nav-icon">⚔️</span> Дуэль
+                    </button>
+                    <button onclick="window.open('/admin', '_blank')" class="mobile-nav-item">
+                        <span class="nav-icon">👨‍🏫</span> Кабинет преподавателя
+                    </button>
+                    
+                    <div id="mobile-nav-auth-btn" class="mobile-nav-item" style="cursor:pointer;" onclick="goToMainAuth()">
+                        <span class="nav-icon">🎓</span> Войти через главное меню
+                    </div>
+
+                    <button onclick="showLeaderboard(); toggleMobileMenu();" class="mobile-nav-item">
+                        <span class="nav-icon">🏆</span> Рейтинг
+                    </button>
+                    <button onclick="openWelcomeModal(); toggleMobileMenu();" class="mobile-nav-item">
+                        <span class="nav-icon">❓</span> О проекте и справка
+                    </button>
+                </div>
+            </div>
         </div>
 
         <div id="quiz-controls" class="app-card">
