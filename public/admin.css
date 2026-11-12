@@ -1425,3 +1425,260 @@
                 transform: translateY(0);
             }
         }
+
+        /* ========================================================
+           GEOATLAS DARK THEME OVERRIDES FOR ADMIN PANEL
+           ======================================================== */
+        [data-theme="dark"] .admin-tabs-bar {
+            background: #111C33;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .admin-tab-btn {
+            color: #94A3B8;
+        }
+        [data-theme="dark"] .admin-tab-btn:hover {
+            background: #1E293B;
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .section-card {
+            background: #111C33;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .section-header {
+            background: #0F172A;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .toolbar {
+            background: #111C33;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .search-input {
+            background: #0F172A;
+            border-color: #334155;
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .pill-btn {
+            background: #111C33;
+            border-color: #334155;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .pill-btn:hover {
+            background: #1E293B;
+            color: #F8FAFC;
+            border-color: #475569;
+        }
+        [data-theme="dark"] .pill-counter {
+            background: rgba(255, 255, 255, 0.1);
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] table.journal-table th {
+            background: #0B1120;
+            color: #94A3B8;
+            border-bottom-color: #1E293B;
+        }
+        [data-theme="dark"] table.journal-table td {
+            color: #F8FAFC;
+            border-bottom-color: #1E293B;
+        }
+        [data-theme="dark"] table.journal-table tr:hover {
+            background: #1E293B;
+        }
+        [data-theme="dark"] .mode-exam {
+            background: #1E293B;
+            color: #CBD5E1;
+            border-color: #334155;
+        }
+        [data-theme="dark"] .mode-quiz {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34D399;
+            border-color: rgba(16, 185, 129, 0.35);
+        }
+        [data-theme="dark"] .token-badge {
+            background: rgba(255, 255, 255, 0.05);
+            color: #CBD5E1;
+            border-color: #334155;
+        }
+        [data-theme="dark"] .acc-high {
+            background: rgba(16, 185, 129, 0.18);
+            color: #34D399;
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+        [data-theme="dark"] .acc-mid {
+            background: rgba(245, 158, 11, 0.18);
+            color: #FBBF24;
+            border-color: rgba(245, 158, 11, 0.4);
+        }
+        [data-theme="dark"] .acc-low {
+            background: rgba(239, 68, 68, 0.18);
+            color: #F87171;
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+        [data-theme="dark"] .status-green {
+            background: rgba(16, 185, 129, 0.18);
+            color: #34D399;
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+        [data-theme="dark"] .status-yellow {
+            background: rgba(245, 158, 11, 0.18);
+            color: #FBBF24;
+            border-color: rgba(245, 158, 11, 0.4);
+        }
+        [data-theme="dark"] .status-red {
+            background: rgba(239, 68, 68, 0.18);
+            color: #F87171;
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+        [data-theme="dark"] .group-chip {
+            background: #0F172A;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .group-chip-name {
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .lms-group-card {
+            background: #111C33;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .lms-group-name {
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .lms-roster-wrap {
+            background: #0F172A;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .lms-roster-header {
+            color: #94A3B8;
+        }
+        [data-theme="dark"] .student-pill {
+            background: #1E293B;
+            border-color: #334155;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .lms-card-actions {
+            border-top-color: #1E293B;
+        }
+        [data-theme="dark"] .form-label {
+            color: #94A3B8;
+        }
+        [data-theme="dark"] .form-select,
+        [data-theme="dark"] .form-input {
+            background: #0F172A;
+            border-color: #334155;
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .dispatcher-bottom-bar {
+            background: #0F172A;
+            border-top-color: #1E293B;
+        }
+        [data-theme="dark"] .dispatcher-info-note {
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .lms-modal-window {
+            background: #111C33;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .lms-modal-body {
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .student-checklist {
+            background: #0F172A;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .student-check-item {
+            color: #CBD5E1;
+            border-bottom-color: #1E293B;
+        }
+        [data-theme="dark"] .student-check-item:hover {
+            background: #1E293B;
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .lms-modal-footer {
+            background: #0F172A;
+            border-top-color: #1E293B;
+        }
+        [data-theme="dark"] .executive-dashboard-section {
+            background: #111C33 !important;
+            border-color: #1E293B !important;
+        }
+        [data-theme="dark"] .exec-metric-card {
+            background: #0F172A !important;
+            border-color: #1E293B !important;
+        }
+        [data-theme="dark"] .exec-chart-card {
+            background: #0F172A !important;
+            border-color: #1E293B !important;
+        }
+        [data-theme="dark"] #exec-grades-legend-summary,
+        [data-theme="dark"] #exec-activity-legend-summary {
+            color: #94A3B8 !important;
+            border-top-color: #1E293B !important;
+        }
+        [data-theme="dark"] .error-analytics-section {
+            background: #111C33;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .mistake-item {
+            background: #0F172A;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .mistake-item:hover {
+            background: #1E293B;
+            border-color: #334155;
+        }
+        [data-theme="dark"] .mistake-item-name {
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .mistake-bar-track {
+            background: #1E293B;
+        }
+        [data-theme="dark"] .analytics-empty-state {
+            background: #0F172A;
+            border-color: #334155;
+            color: #94A3B8;
+        }
+        [data-theme="dark"] .upload-naming-rules {
+            background: #0F172A;
+            border-color: #1E293B;
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .naming-rules-title {
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .naming-rules-list li {
+            color: #CBD5E1;
+        }
+        [data-theme="dark"] .naming-rules-list code {
+            background: rgba(37, 99, 235, 0.15);
+            color: #93C5FD;
+            border-color: rgba(37, 99, 235, 0.4);
+        }
+        [data-theme="dark"] .map-dropzone {
+            background: #0F172A;
+            border-color: #334155;
+        }
+        [data-theme="dark"] .map-dropzone:hover,
+        [data-theme="dark"] .map-dropzone.dragover {
+            background: #111C33;
+            border-color: #3B82F6;
+        }
+        [data-theme="dark"] .dropzone-title {
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .dropzone-subtitle {
+            color: #94A3B8;
+        }
+        [data-theme="dark"] .dropzone-selected-file {
+            background: rgba(37, 99, 235, 0.15);
+            border-color: rgba(37, 99, 235, 0.4);
+            color: #93C5FD;
+        }
+        [data-theme="dark"] .student-badge {
+            background: #1E293B;
+            border-color: #334155;
+        }
+        [data-theme="dark"] .badge-name {
+            color: #F8FAFC;
+        }
+        [data-theme="dark"] .badge-group {
+            color: #93C5FD;
+        }
