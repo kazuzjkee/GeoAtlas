@@ -5510,6 +5510,23 @@ window.addEventListener('load', function() {
     setupMobileBottomSheetSwipe();
     updateStudentHeader();
 
+    // Сворачиваем слои на мобильных
+    function collapseLayersOnMobile() {
+        if (window.innerWidth < 1024) {
+            const layersControl = document.querySelector('.leaflet-control-layers');
+            if (layersControl && layersControl.classList.contains('leaflet-control-layers-expanded')) {
+                const toggle = layersControl.querySelector('.leaflet-control-layers-toggle');
+                if (toggle) {
+                    toggle.click();
+                } else {
+                    layersControl.classList.remove('leaflet-control-layers-expanded');
+                }
+            }
+        }
+    }
+    collapseLayersOnMobile();
+    setTimeout(collapseLayersOnMobile, 350);
+
     function checkMapRenderedAndHideLoader() {
         const map = getMapObject();
         if (map && (document.querySelector('.leaflet-tile-pane') || document.querySelector('.leaflet-overlay-pane'))) {

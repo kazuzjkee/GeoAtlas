@@ -2292,9 +2292,17 @@ window.serverMapZoom = {self.zoom};
             html += my_attribution_html
 
         CHUNK_SIZE = 1024 * 1024
-        with open(filename, 'w', encoding='utf-8') as f:
-            for i in range(0, len(html), CHUNK_SIZE):
-                f.write(html[i:i + CHUNK_SIZE])
+        for attempt in range(3):
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    for i in range(0, len(html), CHUNK_SIZE):
+                        f.write(html[i:i + CHUNK_SIZE])
+                break
+            except OSError:
+                if attempt == 2:
+                    raise
+                import time
+                time.sleep(0.3)
 
         meta_filename = os.path.join(out_dir, f"{self.slug}_meta.json")
         try:
