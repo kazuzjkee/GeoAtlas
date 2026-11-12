@@ -1667,33 +1667,32 @@
                 flex-shrink: 0; /* Кнопки не сжимаются */
             }
 
-            /* На экранах <= 420px (iPhone SE и меньше) оставляем ТОЛЬКО иконки */
-            @media (max-width: 420px) {
+            /* На экранах <= 480px (iPhone SE и меньше) оставляем ТОЛЬКО иконки */
+            @media (max-width: 480px) {
                 .nav-top-btn > span:not(:first-child) {
-                    display: none; /* Скрываем текст, оставляем эмодзи */
+                    display: none !important;
                 }
                 .nav-top-btn {
-                    padding: 8px !important;
-                    min-width: 40px !important;
-                    justify-content: center;
+                    padding: 8px 10px !important;
+                    min-width: 42px !important;
+                    justify-content: center !important;
+                    font-size: 16px !important;
                 }
                 .help-circle-btn {
-                    width: 36px !important;
-                    height: 36px !important;
-                    flex-shrink: 0;
+                    width: 42px !important;
+                    height: 42px !important;
+                    min-width: 42px !important;
                 }
-                /* Бейдж студента делаем компактнее */
                 .student-badge {
-                    max-width: 130px !important;
+                    max-width: 120px !important;
                     padding: 4px 6px !important;
-                    flex-shrink: 0;
                 }
                 .badge-name, .badge-group {
-                    max-width: 80px !important;
+                    max-width: 75px !important;
                     font-size: 11px !important;
                 }
                 .badge-logout {
-                    display: none; /* Прячем крестик, чтобы не мешал */
+                    display: none !important; /* Убираем крестик, чтобы не тесниться */
                 }
             }
 
@@ -1826,26 +1825,44 @@
                 bottom: 80px !important;
             }
 
-            /* Скрываем копирайт (attribution) под свёрнутой панелью, чтобы не было каши */
-            body.ui-collapsed .leaflet-control-attribution,
-            body.ui-collapsed .my-attribution {
+            /* ЧАСТЬ 4: Копирайт (Attribution) */
+            /* Скрываем стандартный копирайт под свёрнутой панелью */
+            body.ui-collapsed .leaflet-control-attribution {
                 display: none !important;
             }
 
-            /* ЧАСТЬ 4: Маркеры на карте */
-            /* Уменьшаем маркеры-звездочки */
-            .leaflet-marker-icon.leaflet-zoom-animated.fa-star,
-            .awesome-marker {
-                transform-origin: bottom center;
-                scale: 0.75; /* Уменьшает иконку на 25% */
+            /* Поднимаем копирайт над нижней панелью */
+            .my-attribution {
+                bottom: 72px !important; /* Отступ над свёрнутой панелью */
+                font-size: 9px !important;
+                padding: 2px 8px !important;
+                border-radius: 8px 8px 0 0;
             }
 
-            /* Или, если используется divIcon (кружочки), уменьшаем их */
-            .leaflet-marker-icon {
+            /* Когда панель развёрнута — прячем копирайт, чтобы не мешал кнопкам */
+            body:not(.ui-collapsed) .my-attribution {
+                display: none !important;
+            }
+
+            /* Если открыта панель режима теста, тоже прячем */
+            body.exam-mode .my-attribution {
+                display: none !important;
+            }
+
+            /* ЧАСТЬ 3: Уменьшение маркеров-звёзд */
+            /* Уменьшаем иконки маркеров */
+            .leaflet-marker-icon.leaflet-zoom-animated {
                 width: 24px !important;
                 height: 24px !important;
                 margin-left: -12px !important;
                 margin-top: -12px !important;
+            }
+
+            /* Внутри маркера Folium (иконка звезды) уменьшаем сам шрифт */
+            .leaflet-marker-icon i {
+                font-size: 14px !important;
+                line-height: 24px !important;
+                margin-top: 0 !important;
             }
 
             /* ЧАСТЬ 6: Модалки на мобильных — full screen */

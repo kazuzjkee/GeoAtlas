@@ -1425,18 +1425,18 @@ window.serverMapZoom = {self.zoom};
         </div>
 
         <div class="top-nav-buttons" id="top-nav-panel">
-            <a href="index.html" class="btn btn-secondary nav-top-btn" title="Вернуться к выбору региона"><span>🏠 На главную</span></a>
+            <a href="index.html" class="btn btn-secondary nav-top-btn" title="Вернуться к выбору региона"><span>🏠</span> <span>На главную</span></a>
             <button class="btn btn-secondary nav-top-btn reset-map-btn" onclick="resetMapView()" title="Показать всю карту">
-                <span>🌍 Вся карта</span>
+                <span>🌍</span> <span>Вся карта</span>
             </button>
             <button class="btn btn-secondary nav-top-btn duel-top-btn" onclick="openDuelModal()" title="Мультиплеер 1 на 1 в реальном времени">
-                <span>⚔️ Дуэль</span>
+                <span>⚔️</span> <span>Дуэль</span>
             </button>
             <button class="btn btn-secondary nav-top-btn admin-btn" onclick="window.open('/admin', '_blank')" title="Панель преподавателя">
-                <span>👨‍🏫 Кабинет</span>
+                <span>👨‍🏫</span> <span>Кабинет</span>
             </button>
             <button id="auth-top-btn" class="btn btn-primary nav-top-btn auth-btn" onclick="goToMainAuth()" title="Авторизация через главное меню">
-                <span>🎓 Войти через Главное меню</span>
+                <span>🎓</span> <span>Войти через Главное меню</span>
             </button>
             <div id="student-profile-badge" class="student-badge" style="display: none;" onclick="openStudentProfileModal()" title="Личный кабинет и витрина достижений">
                 <div class="badge-avatar">🎓</div>
@@ -1446,7 +1446,7 @@ window.serverMapZoom = {self.zoom};
                 </div>
                 <button onclick="event.stopPropagation(); logoutStudent()" class="badge-logout" title="Выйти">&times;</button>
             </div>
-            <button class="btn btn-secondary nav-top-btn leaderboard-top-btn" onclick="showLeaderboard()" title="Глобальная таблица лидеров и профиль">🏆 Рейтинг</button>
+            <button class="btn btn-secondary nav-top-btn leaderboard-top-btn" onclick="showLeaderboard()" title="Глобальная таблица лидеров и профиль"><span>🏆</span> <span>Рейтинг</span></button>
             <button class="btn btn-secondary help-circle-btn" onclick="openWelcomeModal()" title="О проекте и справка">?</button>
         </div>
 
@@ -2235,7 +2235,7 @@ window.serverMapZoom = {self.zoom};
             self.add_choropleth_layer()
         if not getattr(self, '_economy_added', False):
             self.add_economy_layer()
-        folium.LayerControl(collapsed=False, position='bottomleft').add_to(self.map)
+        folium.LayerControl(collapsed=True, position='bottomleft').add_to(self.map)
         self.add_quiz_controls()
         self.add_legend()
         self.add_fullscreen()
