@@ -1403,6 +1403,7 @@ window.serverMapZoom = {self.zoom};
         self.map.get_root().header.add_child(folium.Element(
             '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">\n'
             '<meta name="theme-color" content="#2563EB">\n'
+            '<meta name="mobile-web-app-capable" content="yes">\n'
             '<meta name="apple-mobile-web-app-capable" content="yes">\n'
             '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n'
         ))
@@ -1412,6 +1413,7 @@ window.serverMapZoom = {self.zoom};
         quiz_html = f'''
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
         <meta name="theme-color" content="#2563EB">
+        <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <link rel="stylesheet" href="/public/map.css">
