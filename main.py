@@ -1401,13 +1401,19 @@ window.serverMapZoom = {self.zoom};
         brand_sub_title = branding_data.get('sub_title') or branding_data.get('org_name') or 'Институт наук о Земле ЮФУ'
 
         self.map.get_root().header.add_child(folium.Element(
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">\n'
             '<meta name="theme-color" content="#2563EB">\n'
+            '<meta name="apple-mobile-web-app-capable" content="yes">\n'
+            '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n'
         ))
 
         self.map.get_root().html.add_child(folium.Element(f"<script>{dynamic_js}\n{quiz_js}</script>"))
 
         quiz_html = f'''
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
         <meta name="theme-color" content="#2563EB">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <link rel="stylesheet" href="/public/map.css">
         <!-- OVERLAY LOADER ПЕРВИЧНОЙ ЗАГРУЗКИ КАРТЫ -->
         <div id="map-loader" class="map-loader-overlay">

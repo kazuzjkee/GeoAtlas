@@ -659,15 +659,75 @@ function setBasemapVisible(isVisible) {
 function togglePanelCollapse() {
     const panel = document.getElementById('quiz-controls');
     const btn = document.getElementById('panel-collapse-btn');
-    if (panel) {
-        const isCollapsed = panel.classList.toggle('collapsed');
-        document.body.classList.toggle('ui-collapsed', isCollapsed);
-        if (btn) {
-            btn.setAttribute('aria-expanded', (!isCollapsed).toString());
-            btn.title = isCollapsed ? 'Развернуть панель атласа' : 'Свернуть панель к карте';
+    if (!panel) return;
+    const isCollapsed = panel.classList.toggle('collapsed');
+    document.body.classList.toggle('ui-collapsed', isCollapsed);
+    if (btn) {
+        btn.setAttribute('aria-expanded', (!isCollapsed).toString());
+        btn.title = isCollapsed ? 'Развернуть панель атласа' : 'Свернуть панель к карте';
+    }
+    // Триггерим ресайз Leaflet чтобы контролы встали правильно
+    const map = getMapObject();
+    if (map) setTimeout(() => map.invalidateSize(), 320);
+}
+
+// Инициализация свайпа по ручке и заголовку
+function setupMobileBottomSheetSwipe() {
+    const panel = document.getElementById('quiz-controls');
+    const header = panel ? panel.querySelector('.panel-header') : null;
+    if (!panel || !header) return;
+    if (header._swipeBound) return;
+    header._swipeBound = true;
+
+    let startY = 0;
+    let startTime = 0;
+    let isDragging = false;
+
+    function onDown(e) {
+        if (window.innerWidth > 1023) return;
+        const touch = e.touches ? e.touches[0] : e;
+        startY = touch.clientY;
+        startTime = Date.now();
+        isDragging = true;
+    }
+
+    function onMove(e) {
+        if (!isDragging) return;
+        const touch = e.touches ? e.touches[0] : e;
+        const dy = touch.clientY - startY;
+        if (Math.abs(dy) > 10 && e.cancelable) {
+            e.preventDefault();
         }
     }
+
+    function onUp(e) {
+        if (!isDragging) return;
+        isDragging = false;
+        const touch = e.changedTouches ? e.changedTouches[0] : e;
+        const dy = touch.clientY - startY;
+        const dt = Date.now() - startTime;
+        // Порог: свайп > 40px или быстрый flick (>0.5px/ms)
+        const isFastFlick = dt < 300 && Math.abs(dy) > 30;
+        if (dy < -40 || (isFastFlick && dy < 0)) {
+            panel.classList.remove('collapsed');
+            document.body.classList.remove('ui-collapsed');
+        } else if (dy > 40 || (isFastFlick && dy > 0)) {
+            panel.classList.add('collapsed');
+            document.body.classList.add('ui-collapsed');
+        }
+        const map = getMapObject();
+        if (map) setTimeout(() => map.invalidateSize(), 320);
+    }
+
+    header.addEventListener('touchstart', onDown, { passive: true });
+    header.addEventListener('touchmove', onMove, { passive: false });
+    header.addEventListener('touchend', onUp, { passive: true });
+    header.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
 }
+window.setupMobileBottomSheetSwipe = setupMobileBottomSheetSwipe;
+window.togglePanelCollapse = togglePanelCollapse;
 
 function clearMarkers() {
     if (clickMarker) { try { clickMarker.remove(); } catch(e) {} clickMarker = null; }
@@ -2776,6 +2836,9 @@ function handlePuzzlePointerDown(e, districtId) {
 }
 
 function onWindowPointerMove(e) {
+    if (e.pointerType === 'touch' && e.cancelable) {
+        e.preventDefault();
+    }
     if (!pointerDragPiece || !pointerDragStartPt) return;
 
         if (window._isHtml5Dragging) return;
@@ -5444,6 +5507,7 @@ window.addEventListener('load', function() {
     setupQuizHotkeys();
     resetMapView();
     setTimeout(setupDistrictClickListeners, 400);
+    setupMobileBottomSheetSwipe();
     updateStudentHeader();
 
     function checkMapRenderedAndHideLoader() {
