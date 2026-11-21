@@ -73,6 +73,27 @@ def init_db():
                     data TEXT,
                     updated_at REAL
                 );
+
+                CREATE TABLE IF NOT EXISTS teachers (
+                    teacher_id TEXT PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    full_name TEXT,
+                    organization TEXT,
+                    department TEXT,
+                    role TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS branding (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS active_session (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    session_data TEXT NOT NULL,
+                    updated_at REAL
+                );
             """)
             conn.commit()
             try:
@@ -438,6 +459,226 @@ def get_student_mistakes_heatmap(email: str, region: Optional[str] = None) -> Di
         "last_updated": time.strftime("%d.%m.%Y %H:%M", time.localtime())
     }
 
+# ---------- BRANDING & CONFIG ----------
+
+DEFAULT_BRANDING = {
+    "org_name": "Институт наук о Земле ЮФУ",
+    "org_short": "ЮФУ",
+    "brand_title": "GeoAtlas",
+    "brand_tag": "SFEDU GIS",
+    "sub_title": "Электронная ведомость проверочных работ, контрольных срезов и мониторинг успеваемости",
+    "logo_emoji": "🎓",
+    "logo_url": "",
+    "allowed_email_domain": "sfedu.ru",
+    "primary_color": "#2563EB",
+    "primary_hover": "#1D4ED8",
+    "secondary_color": "#0284C7",
+    "accent_color": "#7C3AED",
+    "footer_text": "Институт наук о Земле ЮФУ • Кафедра физической географии, экологии и охраны природы",
+    "university_short": "ЮФУ",
+    "university_name": "Институт наук о Земле ЮФУ",
+    "portal_title": "GeoAtlas"
+}
+
+def load_branding_db() -> Dict[str, Any]:
+    with _lock:
+        conn = _conn()
+        try:
+            cur = conn.execute("SELECT key, value FROM branding")
+            out = {}
+            for row in cur.fetchall():
+                k = row["key"]
+                v = row["value"]
+                try:
+                    out[k] = json.loads(v)
+                except Exception:
+                    out[k] = v
+            if not out:
+                for k, v in DEFAULT_BRANDING.items():
+                    val_str = json.dumps(v, ensure_ascii=False) if not isinstance(v, str) else v
+                    conn.execute("INSERT OR REPLACE INTO branding (key, value) VALUES (?, ?)", (k, val_str))
+                conn.commit()
+                return DEFAULT_BRANDING.copy()
+            res = DEFAULT_BRANDING.copy()
+            res.update(out)
+            if "org_short" in res and "university_short" not in res:
+                res["university_short"] = res["org_short"]
+            elif "university_short" in res and "org_short" not in res:
+                res["org_short"] = res["university_short"]
+            if "org_name" in res and "university_name" not in res:
+                res["university_name"] = res["org_name"]
+            elif "university_name" in res and "org_name" not in res:
+                res["org_name"] = res["university_name"]
+            if "brand_title" in res and "portal_title" not in res:
+                res["portal_title"] = res["brand_title"]
+            elif "portal_title" in res and "brand_title" not in res:
+                res["brand_title"] = res["portal_title"]
+            return res
+        finally:
+            conn.close()
+
+def save_branding_db(data: Dict[str, Any]) -> None:
+    with _lock:
+        conn = _conn()
+        try:
+            for k, v in data.items():
+                val_str = json.dumps(v, ensure_ascii=False) if not isinstance(v, str) else v
+                conn.execute("INSERT OR REPLACE INTO branding (key, value) VALUES (?, ?)", (k, val_str))
+            conn.commit()
+        finally:
+            conn.close()
+
+# ---------- TEACHERS ----------
+
+DEFAULT_TEACHERS = [
+    {
+        "teacher_id": "teacher-ivanov",
+        "username": "prof_ivanov",
+        "password_hash": "6f0424d3ac26d28a4326294b3a8d580934f06f603067fb397234caf44952684c",
+        "full_name": "Проф. Иванов И. И.",
+        "organization": "Институт наук о Земле ЮФУ",
+        "department": "Кафедра физической географии",
+        "role": "teacher"
+    },
+    {
+        "teacher_id": "teacher-petrov",
+        "username": "prof_petrov",
+        "password_hash": "d43801ed6e81b4819cb58151905e8ea24dfe483710c99425c4e63bb3b20d5c3f",
+        "full_name": "Доц. Петров П. П.",
+        "organization": "Экономический факультет ЮФУ",
+        "department": "Кафедра экономической географии",
+        "role": "teacher"
+    },
+    {
+        "teacher_id": "dean-geo",
+        "username": "dean_geo",
+        "password_hash": "26192eefa0331ca09ed90b188972f5c678b0140e3ed1ed0804dbaaa164b5cfaf",
+        "full_name": "Декан наук о Земле ЮФУ",
+        "organization": "Институт наук о Земле ЮФУ",
+        "department": "Деканат геолого-географического факультета",
+        "role": "dean"
+    },
+    {
+        "teacher_id": "teacher-admin",
+        "username": "admin",
+        "password_hash": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918",
+        "full_name": "Главный администратор",
+        "organization": "Южный федеральный университет",
+        "department": "Центр цифровых образовательных технологий",
+        "role": "dean"
+    },
+    {
+        "teacher_id": "teacher-smirnov",
+        "username": "prof_geo",
+        "password_hash": "1205ca9652c34025de31248c15fbf1506be77c22fb7c8e129321fe4a534f3f08",
+        "full_name": "Проф. Смирнов А. В.",
+        "organization": "Институт наук о Земле ЮФУ",
+        "department": "Кафедра физической географии",
+        "role": "teacher"
+    },
+    {
+        "teacher_id": "teacher-kuznetsova",
+        "username": "prof_eco",
+        "password_hash": "e285965f8e5c677a00a73b6dfa08c2e99e6cf58520dd95e19c39ba9bcfa3a700",
+        "full_name": "Доц. Кузнецова М. И.",
+        "organization": "Экономический факультет ЮФУ",
+        "department": "Кафедра экономической географии",
+        "role": "teacher"
+    },
+    {
+        "teacher_id": "sfedu-admin",
+        "username": "sfedu_admin",
+        "password_hash": "81ca427e9d9e82149815dd15876388c60c11c29a86e1e582636b448de6c11d50",
+        "full_name": "Деканат наук о Земле",
+        "organization": "Институт наук о Земле ЮФУ",
+        "department": "Деканат",
+        "role": "dean"
+    }
+]
+
+def load_teachers_db() -> List[Dict[str, Any]]:
+    with _lock:
+        conn = _conn()
+        try:
+            cur = conn.execute("SELECT * FROM teachers ORDER BY teacher_id ASC")
+            rows = [dict(r) for r in cur.fetchall()]
+            if not rows:
+                for t in DEFAULT_TEACHERS:
+                    conn.execute("""
+                        INSERT OR REPLACE INTO teachers (
+                            teacher_id, username, password_hash, full_name, organization, department, role
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        t["teacher_id"], t["username"], t["password_hash"],
+                        t.get("full_name", ""), t.get("organization", ""),
+                        t.get("department", ""), t.get("role", "teacher")
+                    ))
+                conn.commit()
+                cur = conn.execute("SELECT * FROM teachers ORDER BY teacher_id ASC")
+                rows = [dict(r) for r in cur.fetchall()]
+            return rows
+        finally:
+            conn.close()
+
+def save_teacher_db(teacher: Dict[str, Any]) -> None:
+    pw_hash = teacher.get("password_hash", "")
+    if not pw_hash and teacher.get("password"):
+        import hashlib
+        pw_hash = hashlib.sha256(teacher["password"].encode("utf-8")).hexdigest()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute("""
+                INSERT OR REPLACE INTO teachers (
+                    teacher_id, username, password_hash, full_name, organization, department, role
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                teacher.get("teacher_id"),
+                teacher.get("username"),
+                pw_hash,
+                teacher.get("full_name", ""),
+                teacher.get("organization", ""),
+                teacher.get("department", ""),
+                teacher.get("role", "teacher")
+            ))
+            conn.commit()
+        finally:
+            conn.close()
+
+# ---------- ACTIVE EXAM SESSION ----------
+
+def load_active_session_db() -> Optional[Dict[str, Any]]:
+    with _lock:
+        conn = _conn()
+        try:
+            cur = conn.execute("SELECT session_data FROM active_session WHERE id = 1")
+            row = cur.fetchone()
+            if not row or not row["session_data"]:
+                return None
+            data = json.loads(row["session_data"])
+            if not data or not isinstance(data, dict):
+                return None
+            return data
+        except Exception:
+            return None
+        finally:
+            conn.close()
+
+def save_active_session_db(data: Optional[Dict[str, Any]]) -> None:
+    with _lock:
+        conn = _conn()
+        try:
+            if not data:
+                conn.execute("DELETE FROM active_session WHERE id = 1")
+            else:
+                conn.execute("""
+                    INSERT OR REPLACE INTO active_session (id, session_data, updated_at)
+                    VALUES (1, ?, ?)
+                """, (json.dumps(data, ensure_ascii=False), time.time()))
+            conn.commit()
+        finally:
+            conn.close()
+
 # ---------- MIGRATION ----------
 
 def migrate_legacy_json(base_dir: str):
@@ -447,6 +688,9 @@ def migrate_legacy_json(base_dir: str):
         has_results = conn.execute("SELECT COUNT(*) as c FROM results").fetchone()["c"]
         has_groups = conn.execute("SELECT COUNT(*) as c FROM groups").fetchone()["c"]
         has_sessions = conn.execute("SELECT COUNT(*) as c FROM sessions_history").fetchone()["c"]
+        has_teachers = conn.execute("SELECT COUNT(*) as c FROM teachers").fetchone()["c"]
+        has_branding = conn.execute("SELECT COUNT(*) as c FROM branding").fetchone()["c"]
+        has_active = conn.execute("SELECT COUNT(*) as c FROM active_session").fetchone()["c"]
     finally:
         conn.close()
 
@@ -481,3 +725,59 @@ def migrate_legacy_json(base_dir: str):
                         record_session_history(s)
             except Exception:
                 pass
+
+    # Migrate teachers.json
+    p_teachers = _os.path.join(base_dir, "teachers.json")
+    if _os.path.exists(p_teachers):
+        try:
+            if has_teachers == 0:
+                with open(p_teachers, "r", encoding="utf-8") as f:
+                    teachers_data = json.load(f)
+                    if isinstance(teachers_data, list):
+                        seen_ids = set()
+                        for t in teachers_data:
+                            t_id = t.get("teacher_id")
+                            uname = t.get("username", "")
+                            if not t_id or t_id in seen_ids:
+                                t_id = f"teacher-{uname}" if uname else f"teacher-{int(time.time()*1000)}"
+                                t["teacher_id"] = t_id
+                            seen_ids.add(t_id)
+                            save_teacher_db(t)
+            bak = p_teachers + ".bak"
+            if _os.path.exists(bak):
+                _os.remove(bak)
+            _os.rename(p_teachers, bak)
+        except Exception:
+            pass
+
+    # Migrate branding.json
+    p_branding = _os.path.join(base_dir, "branding.json")
+    if _os.path.exists(p_branding):
+        try:
+            if has_branding == 0:
+                with open(p_branding, "r", encoding="utf-8") as f:
+                    branding_data = json.load(f)
+                    if isinstance(branding_data, dict):
+                        save_branding_db(branding_data)
+            bak = p_branding + ".bak"
+            if _os.path.exists(bak):
+                _os.remove(bak)
+            _os.rename(p_branding, bak)
+        except Exception:
+            pass
+
+    # Migrate active_session.json
+    p_active = _os.path.join(base_dir, "active_session.json")
+    if _os.path.exists(p_active):
+        try:
+            if has_active == 0:
+                with open(p_active, "r", encoding="utf-8") as f:
+                    active_data = json.load(f)
+                    if isinstance(active_data, dict) and active_data:
+                        save_active_session_db(active_data)
+            bak = p_active + ".bak"
+            if _os.path.exists(bak):
+                _os.remove(bak)
+            _os.rename(p_active, bak)
+        except Exception:
+            pass

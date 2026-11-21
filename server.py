@@ -24,7 +24,9 @@ import collections
 import hashlib
 import db
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db.init_db()
+db.migrate_legacy_json(BASE_DIR)
 
 RATE_LIMIT_WINDOW = 60
 RATE_LIMIT_MAX = 3
@@ -55,7 +57,6 @@ app = FastAPI(title="GeoAtlas — Учебно-картографический 
 security = HTTPBasic()
 security_optional = HTTPBasic(auto_error=False)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MAPS_DIR = os.path.join(BASE_DIR, "public", "maps")
 os.makedirs(MAPS_DIR, exist_ok=True)
 app.mount("/public", StaticFiles(directory=os.path.join(BASE_DIR, "public")), name="public")
@@ -96,63 +97,9 @@ async def security_headers(request: Request, call_next):
 AUTH_SESSIONS_FILE = "auth_sessions.json"
 RESULTS_FILE = "quiz_results.json"
 GROUPS_FILE = "groups.json"
-ACTIVE_SESSION_FILE = "active_session.json"
-TEACHERS_FILE = "teachers.json"
 SESSIONS_HISTORY_FILE = "sessions_history.json"
-BRANDING_FILE = "branding.json"
 
-DEFAULT_BRANDING = {
-    "org_name": "Институт наук о Земле ЮФУ",
-    "org_short": "ЮФУ",
-    "brand_title": "GeoAtlas",
-    "brand_tag": "SFEDU GIS",
-    "sub_title": "Электронная ведомость проверочных работ, контрольных срезов и мониторинг успеваемости",
-    "logo_emoji": "🎓",
-    "logo_url": "",
-    "allowed_email_domain": "@sfedu.ru",
-    "primary_color": "#2563EB",
-    "primary_hover": "#1D4ED8",
-    "secondary_color": "#0284C7",
-    "accent_color": "#7C3AED",
-    "footer_text": "Институт наук о Земле ЮФУ • Кафедра физической географии, экологии и охраны природы"
-}
-
-def load_branding() -> Dict[str, Any]:
-    res = DEFAULT_BRANDING.copy()
-    if os.path.exists(BRANDING_FILE):
-        try:
-            with open(BRANDING_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                res.update(data)
-        except Exception:
-            pass
-    
-    # Обеспечиваем взаимную совместимость синонимов
-    if "org_short" in res and "university_short" not in res:
-        res["university_short"] = res["org_short"]
-    elif "university_short" in res and "org_short" not in res:
-        res["org_short"] = res["university_short"]
-
-    if "org_name" in res and "university_name" not in res:
-        res["university_name"] = res["org_name"]
-    elif "university_name" in res and "org_name" not in res:
-        res["org_name"] = res["university_name"]
-
-    if "brand_title" in res and "portal_title" not in res:
-        res["portal_title"] = res["brand_title"]
-    elif "portal_title" in res and "brand_title" not in res:
-        res["brand_title"] = res["portal_title"]
-
-    return res
-
-def save_branding(data: Dict[str, Any]) -> None:
-    current = load_branding()
-    current.update(data)
-    try:
-        with open(BRANDING_FILE, "w", encoding="utf-8") as f:
-            json.dump(current, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.error("Ошибка сохранения branding.json: %s", e)
+DEFAULT_BRANDING = db.DEFAULT_BRANDING
 
 def load_auth_sessions() -> Dict[str, Any]:
     return {}
@@ -160,109 +107,14 @@ def load_auth_sessions() -> Dict[str, Any]:
 def save_auth_sessions(sessions: Dict[str, Any]) -> None:
     pass
 
-DEFAULT_TEACHERS = [
-    {
-        "teacher_id": "teacher-ivanov",
-        "username": "prof_ivanov",
-        "password": "ivanov_pass_2026",
-        "full_name": "Проф. Иванов И. И.",
-        "organization": "Институт наук о Земле ЮФУ",
-        "department": "Кафедра физической географии",
-        "role": "teacher"
-    },
-    {
-        "teacher_id": "teacher-petrov",
-        "username": "prof_petrov",
-        "password": "petrov_pass_2026",
-        "full_name": "Доц. Петров П. П.",
-        "organization": "Экономический факультет ЮФУ",
-        "department": "Кафедра экономической географии",
-        "role": "teacher"
-    },
-    {
-        "teacher_id": "dean-geo",
-        "username": "dean_geo",
-        "password": "dean_pass_2026",
-        "full_name": "Декан наук о Земле ЮФУ",
-        "organization": "Институт наук о Земле ЮФУ",
-        "department": "Деканат геолого-географического факультета",
-        "role": "dean"
-    },
-    {
-        "teacher_id": "teacher-admin",
-        "username": "admin",
-        "password": "admin",
-        "full_name": "Главный администратор",
-        "organization": "Южный федеральный университет",
-        "department": "Центр цифровых образовательных технологий",
-        "role": "dean"
-    },
-    {
-        "teacher_id": "teacher-ivanov",
-        "username": "prof_geo",
-        "password": "geo_password_2026",
-        "full_name": "Проф. Смирнов А. В.",
-        "organization": "Институт наук о Земле ЮФУ",
-        "department": "Кафедра физической географии",
-        "role": "teacher"
-    },
-    {
-        "teacher_id": "teacher-petrov",
-        "username": "prof_eco",
-        "password": "eco_password_2026",
-        "full_name": "Доц. Кузнецова М. И.",
-        "organization": "Экономический факультет ЮФУ",
-        "department": "Кафедра экономической географии",
-        "role": "teacher"
-    },
-    {
-        "teacher_id": "dean-geo",
-        "username": "sfedu_admin",
-        "password": "geodean2026",
-        "full_name": "Деканат наук о Земле",
-        "organization": "Институт наук о Земле ЮФУ",
-        "department": "Деканат",
-        "role": "dean"
-    }
-]
+DEFAULT_TEACHERS = db.DEFAULT_TEACHERS
 
 def is_dean_or_admin(teacher: Dict[str, Any]) -> bool:
     return (
         teacher.get("role") in ["dean", "admin"]
         or teacher.get("username") in ["dean_geo", "admin", "sfedu_admin"]
-        or teacher.get("teacher_id") in ["dean-geo", "teacher-admin"]
+        or teacher.get("teacher_id") in ["dean-geo", "teacher-admin", "sfedu-admin"]
     )
-
-def load_teachers() -> List[Dict[str, Any]]:
-    data = None
-    if os.path.exists(TEACHERS_FILE):
-        try:
-            with open(TEACHERS_FILE, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-                if isinstance(loaded, list) and len(loaded) > 0:
-                    data = loaded
-        except Exception:
-            pass
-    if data is None:
-        data = [dict(t) for t in DEFAULT_TEACHERS]
-        save_teachers(data)
-
-    migrated = False
-    for t in data:
-        if "password_hash" not in t and "password" in t:
-            t["password_hash"] = _hash_pw(t["password"])
-            del t["password"]
-            migrated = True
-    if migrated:
-        save_teachers(data)
-    return data
-
-def save_teachers(teachers: List[Dict[str, Any]]) -> None:
-    try:
-        with open(TEACHERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(teachers, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.error("Ошибка сохранения teachers: %s", e)
 
 def load_sessions_history() -> List[Dict[str, Any]]:
     return db.load_sessions_history()
@@ -394,21 +246,8 @@ def save_groups_to_file(groups_data: List[Dict[str, Any]]) -> None:
     for g in groups_data:
         db.save_group(g)
 
-def load_active_session() -> Optional[Dict[str, Any]]:
-    if os.path.exists(ACTIVE_SESSION_FILE):
-        try:
-            with open(ACTIVE_SESSION_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return None
-    return None
-
-def save_active_session(session_data: Optional[Dict[str, Any]]) -> None:
-    with open(ACTIVE_SESSION_FILE, "w", encoding="utf-8") as f:
-        json.dump(session_data, f, ensure_ascii=False, indent=2)
-
 def check_admin(credentials: HTTPBasicCredentials = Depends(security)) -> Dict[str, Any]:
-    teachers = load_teachers()
+    teachers = db.load_teachers_db()
     for t in teachers:
         stored = t.get("password", "")
         stored_hash = t.get("password_hash", "")
@@ -424,7 +263,7 @@ def check_admin(credentials: HTTPBasicCredentials = Depends(security)) -> Dict[s
 def check_admin_optional(credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)) -> Optional[Dict[str, Any]]:
     if not credentials:
         return None
-    teachers = load_teachers()
+    teachers = db.load_teachers_db()
     for t in teachers:
         stored = t.get("password", "")
         stored_hash = t.get("password_hash", "")
@@ -442,7 +281,7 @@ def send_code(req: AuthRequest, request: Request) -> Dict[str, Any]:
     if not check_rate_limit(f"send:{client_ip}") or not check_rate_limit(f"send:{req.email.lower()}"):
         raise HTTPException(status_code=429, detail="Слишком много запросов. Подождите минуту.")
     email = req.email.strip().lower()
-    branding = load_branding()
+    branding = db.load_branding_db()
     allowed_domain = (branding.get("allowed_email_domain") or "").strip().lower()
     if allowed_domain:
         domain_suffix = allowed_domain if allowed_domain.startswith("@") else f"@{allowed_domain}"
@@ -481,7 +320,7 @@ def process_quiz_result(res: ResultSubmit) -> Dict[str, Any]:
     assigned_teacher_id = res.teacher_id or "teacher-geo-01"
 
     if res.session_id:
-        active_sess = load_active_session()
+        active_sess = db.load_active_session_db()
         if active_sess and (active_sess.get("sessionId") == res.session_id or active_sess.get("session_id") == res.session_id):
             assigned_teacher_id = active_sess.get("teacher_id", assigned_teacher_id)
         else:
@@ -648,13 +487,13 @@ def launch_exam_session(req: LaunchSessionRequest, teacher: Dict[str, Any] = Dep
         "teacher_name": teacher.get("full_name", teacher.get("username", "Преподаватель")),
         "organization": teacher.get("organization", "")
     }
-    save_active_session(session_data)
+    db.save_active_session_db(session_data)
     record_session_history(session_data)
     return {"status": "ok", "session": session_data, "server_time": now_ms}
 
 @app.get("/api/exam/active-session")
 def get_active_exam_session(teacher: Optional[Dict[str, Any]] = Depends(check_admin_optional)) -> Dict[str, Any]:
-    session = load_active_session()
+    session = db.load_active_session_db()
     now_ms = int(time.time() * 1000)
     if not session or session.get("status") in ["stopped", "completed"]:
         return {"session": None, "current_server_time": now_ms, "remaining_seconds": 0}
@@ -669,7 +508,7 @@ def get_active_exam_session(teacher: Optional[Dict[str, Any]] = Depends(check_ad
 
     if remaining_sec <= 0 and session.get("status") == "active":
         session["status"] = "completed"
-        save_active_session(session)
+        db.save_active_session_db(session)
         record_session_history(session)
         return {"session": None, "current_server_time": now_ms, "remaining_seconds": 0}
 
@@ -680,11 +519,11 @@ def get_active_exam_session(teacher: Optional[Dict[str, Any]] = Depends(check_ad
 
 @app.post("/api/exam/stop")
 def stop_exam_session(teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[str, str]:
-    session = load_active_session()
+    session = db.load_active_session_db()
     if session:
         if is_dean_or_admin(teacher) or session.get("teacher_id") == teacher.get("teacher_id"):
             session["status"] = "stopped"
-            save_active_session(session)
+            db.save_active_session_db(session)
             record_session_history(session)
     return {"status": "ok"}
 
@@ -695,8 +534,8 @@ def admin_panel(teacher: Dict[str, Any] = Depends(check_admin)):
     is_super = is_dean_or_admin(teacher)
     all_results = load_results()
     all_groups = load_groups()
-    active_session = load_active_session()
-    all_teachers = load_teachers()
+    active_session = db.load_active_session_db()
+    all_teachers = db.load_teachers_db()
 
     results = all_results if is_super else [r for r in all_results if r.get("teacher_id", "teacher-ivanov") == t_id]
     groups = all_groups if is_super else [g for g in all_groups if g.get("teacher_id", "teacher-ivanov") == t_id]
@@ -714,7 +553,7 @@ def admin_panel(teacher: Dict[str, Any] = Depends(check_admin)):
         session_json = json.dumps(teacher_session, ensure_ascii=False)
         teacher_json = json.dumps(teacher, ensure_ascii=False)
         all_teachers_json = json.dumps(all_teachers, ensure_ascii=False)
-        branding_json = json.dumps(load_branding(), ensure_ascii=False)
+        branding_json = json.dumps(db.load_branding_db(), ensure_ascii=False)
 
         rendered = template.replace("__SERVER_RESULTS_JSON__", results_json)
         rendered = rendered.replace("__SERVER_GROUPS_JSON__", groups_json)
@@ -730,12 +569,12 @@ def admin_panel(teacher: Dict[str, Any] = Depends(check_admin)):
 
 @app.get("/api/branding")
 def get_branding_endpoint() -> Dict[str, Any]:
-    return load_branding()
+    return db.load_branding_db()
 
 @app.post("/api/branding")
 def update_branding_endpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
-    save_branding(payload)
-    return {"status": "ok", "branding": load_branding()}
+    db.save_branding_db(payload)
+    return {"status": "ok", "branding": db.load_branding_db()}
 
 @app.get("/api/student/dashboard")
 def get_student_dashboard(email: Optional[str] = None, name: Optional[str] = None) -> Dict[str, Any]:
@@ -1233,7 +1072,7 @@ window.serverMapCenter = {json.dumps(info['center'])};
 window.serverMapZoom = {info['zoom']};
 </script>"""
 
-    branding = load_branding()
+    branding = db.load_branding_db()
     brand_primary = branding.get("primary_color", "#2563EB")
     brand_hover = branding.get("primary_hover", "#1D4ED8")
     brand_accent = branding.get("accent_color", "#7C3AED")

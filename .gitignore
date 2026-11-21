@@ -13,4 +13,5 @@ quiz_data/
 # Конфиденциальные файлы или ключи
 secret_config.json
 *.key
+*.bak
 .pytest_cache/
