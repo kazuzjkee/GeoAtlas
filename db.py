@@ -3,9 +3,10 @@ import json
 import sqlite3
 import threading
 import time
+import tempfile
 from typing import Any, Dict, List, Optional
 
-DATA_DIR = os.environ.get("GEOATLAS_DATA_DIR", "/tmp")
+DATA_DIR = os.environ.get("GEOATLAS_DATA_DIR", tempfile.gettempdir())
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_FILE = os.path.join(DATA_DIR, "geoatlas.db")
 _lock = threading.Lock()
@@ -675,39 +676,53 @@ def migrate_legacy_json(base_dir: str):
     finally:
         conn.close()
 
-    if has_results == 0:
-        p = _os.path.join(base_dir, "quiz_results.json")
-        if _os.path.exists(p):
-            try:
-                with open(p, "r", encoding="utf-8") as f:
+    p_results = _os.path.join(base_dir, "quiz_results.json")
+    if _os.path.exists(p_results):
+        try:
+            if has_results == 0:
+                with open(p_results, "r", encoding="utf-8") as f:
                     for r in json.load(f):
                         if not r.get("submission_id"):
                             r["submission_id"] = f"legacy_{int(time.time()*1000)}_{abs(hash(str(r))) % 100000}"
                         save_result(r)
+        except Exception:
+            pass
+        finally:
+            try:
+                _os.remove(p_results)
             except Exception:
                 pass
 
-    if has_groups == 0:
-        p = _os.path.join(base_dir, "groups.json")
-        if _os.path.exists(p):
-            try:
-                with open(p, "r", encoding="utf-8") as f:
+    p_groups = _os.path.join(base_dir, "groups.json")
+    if _os.path.exists(p_groups):
+        try:
+            if has_groups == 0:
+                with open(p_groups, "r", encoding="utf-8") as f:
                     for g in json.load(f):
                         save_group(g)
+        except Exception:
+            pass
+        finally:
+            try:
+                _os.remove(p_groups)
             except Exception:
                 pass
 
-    if has_sessions == 0:
-        p = _os.path.join(base_dir, "sessions_history.json")
-        if _os.path.exists(p):
-            try:
-                with open(p, "r", encoding="utf-8") as f:
+    p_sessions = _os.path.join(base_dir, "sessions_history.json")
+    if _os.path.exists(p_sessions):
+        try:
+            if has_sessions == 0:
+                with open(p_sessions, "r", encoding="utf-8") as f:
                     for s in json.load(f):
                         record_session_history(s)
+        except Exception:
+            pass
+        finally:
+            try:
+                _os.remove(p_sessions)
             except Exception:
                 pass
 
-    # Migrate teachers.json
     p_teachers = _os.path.join(base_dir, "teachers.json")
     if _os.path.exists(p_teachers):
         try:
@@ -724,14 +739,14 @@ def migrate_legacy_json(base_dir: str):
                                 t["teacher_id"] = t_id
                             seen_ids.add(t_id)
                             save_teacher_db(t)
-            bak = p_teachers + ".bak"
-            if _os.path.exists(bak):
-                _os.remove(bak)
-            _os.rename(p_teachers, bak)
         except Exception:
             pass
+        finally:
+            try:
+                _os.remove(p_teachers)
+            except Exception:
+                pass
 
-    # Migrate branding.json
     p_branding = _os.path.join(base_dir, "branding.json")
     if _os.path.exists(p_branding):
         try:
@@ -740,14 +755,14 @@ def migrate_legacy_json(base_dir: str):
                     branding_data = json.load(f)
                     if isinstance(branding_data, dict):
                         save_branding_db(branding_data)
-            bak = p_branding + ".bak"
-            if _os.path.exists(bak):
-                _os.remove(bak)
-            _os.rename(p_branding, bak)
         except Exception:
             pass
+        finally:
+            try:
+                _os.remove(p_branding)
+            except Exception:
+                pass
 
-    # Migrate active_session.json
     p_active = _os.path.join(base_dir, "active_session.json")
     if _os.path.exists(p_active):
         try:
@@ -756,9 +771,10 @@ def migrate_legacy_json(base_dir: str):
                     active_data = json.load(f)
                     if isinstance(active_data, dict) and active_data:
                         save_active_session_db(active_data)
-            bak = p_active + ".bak"
-            if _os.path.exists(bak):
-                _os.remove(bak)
-            _os.rename(p_active, bak)
         except Exception:
             pass
+        finally:
+            try:
+                _os.remove(p_active)
+            except Exception:
+                pass

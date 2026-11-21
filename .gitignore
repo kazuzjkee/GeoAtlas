@@ -15,3 +15,11 @@ secret_config.json
 *.key
 *.bak
 .pytest_cache/
+main_*.py
+*_copy.py
+auth_sessions.json
+duel_rooms.json
+groups.json
+quiz_results.json
+sessions_history.json
+

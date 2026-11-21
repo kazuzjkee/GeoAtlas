@@ -1624,7 +1624,7 @@ class DuelRoom:
                         self.winner_name = "Ничья"
                         self.winner_reason = "Боевая ничья!"
 
-DUEL_DATA_DIR = os.environ.get("DUEL_DATA_DIR", "/tmp")
+DUEL_DATA_DIR = os.environ.get("DUEL_DATA_DIR", tempfile.gettempdir())
 os.makedirs(DUEL_DATA_DIR, exist_ok=True)
 DUEL_ROOMS_FILE = os.path.join(DUEL_DATA_DIR, "duel_rooms.json")
 active_duel_rooms: Dict[str, DuelRoom] = {}
