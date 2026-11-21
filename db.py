@@ -150,7 +150,7 @@ def save_result(result: Dict[str, Any]) -> Dict[str, Any]:
                             score=?, max_score=?, accuracy=?, time_spent=?,
                             is_exam=?, is_adaptive=?, exam_token=?, violations=?, exam_status=?,
                             session_id=?, teacher_id=?, mistakes_log=?,
-                            client_timestamp=?
+                            client_timestamp=?, created_at=?
                         WHERE submission_id=?
                     """, (
                         result.get("date", ""),
@@ -171,6 +171,7 @@ def save_result(result: Dict[str, Any]) -> Dict[str, Any]:
                         result.get("teacher_id", ""),
                         json.dumps(result.get("mistakes_log", []), ensure_ascii=False),
                         result.get("client_timestamp", 0),
+                        time.time(),
                         sub_id
                     ))
                     conn.commit()

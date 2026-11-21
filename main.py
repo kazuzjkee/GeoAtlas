@@ -1394,13 +1394,11 @@ window.serverMapZoom = {self.zoom};
             quiz_js = f.read()
 
         branding_data = {}
-        branding_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'branding.json')
-        if os.path.exists(branding_path):
-            try:
-                with open(branding_path, 'r', encoding='utf-8') as f:
-                    branding_data = json.load(f)
-            except Exception:
-                pass
+        try:
+            import db
+            branding_data = db.load_branding_db()
+        except Exception as e:
+            print(f"⚠️ Не удалось загрузить брендинг из БД: {e}")
         brand_org_short = branding_data.get('org_short') or branding_data.get('university_short') or 'ЮФУ'
         brand_sub_title = branding_data.get('sub_title') or branding_data.get('org_name') or 'Институт наук о Земле ЮФУ'
 
