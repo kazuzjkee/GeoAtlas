@@ -1402,9 +1402,7 @@ def get_service_worker():
         )
     raise HTTPException(status_code=404, detail="sw.js не найден")
 
-# ========================================================
-# ⚔️ DUEL MULTIPLAYER 1V1 (WEBSOCKETS & REST POLLING)
-# ========================================================
+# Duel multiplayer (WebSockets & REST polling)
 
 class DuelPlayer:
     def __init__(self, player_id: str, name: str, group: str = "", email: str = "", is_host: bool = False):

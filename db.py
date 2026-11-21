@@ -100,11 +100,11 @@ def init_db():
                 conn.execute("ALTER TABLE results ADD COLUMN is_adaptive INTEGER DEFAULT 0")
                 conn.commit()
             except Exception:
-                pass  # колонка уже есть
+                pass
         finally:
             conn.close()
 
-# ---------- RESULTS ----------
+# Results
 
 def load_results() -> List[Dict[str, Any]]:
     with _lock:
@@ -211,7 +211,7 @@ def save_result(result: Dict[str, Any]) -> Dict[str, Any]:
         finally:
             conn.close()
 
-# ---------- GROUPS ----------
+# Groups
 
 def load_groups() -> List[Dict[str, Any]]:
     with _lock:
@@ -265,7 +265,7 @@ def delete_group(group_id: str) -> None:
         finally:
             conn.close()
 
-# ---------- AUTH ----------
+# Auth
 
 def save_auth_session(email: str, record: Dict[str, Any]) -> None:
     with _lock:
@@ -314,7 +314,7 @@ def cleanup_expired_auth() -> None:
         finally:
             conn.close()
 
-# ---------- SESSIONS HISTORY ----------
+# Sessions History
 
 def load_sessions_history() -> List[Dict[str, Any]]:
     with _lock:
@@ -349,17 +349,10 @@ def record_session_history(session_data: Dict[str, Any]) -> None:
         finally:
             conn.close()
 
-# ---------- HEATMAP ----------
+# Heatmap Analytics
 
 def get_student_mistakes_heatmap(email: str, region: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Агрегирует все ошибки студента по объектам.
-    Возвращает:
-    - by_object: {object_name: {errors, total_attempts, accuracy, last_date}}
-    - by_type: {district|river|center|neighbor|puzzle: {errors, total_attempts}}
-    - total_tests: общее число тестов
-    - last_updated: ISO timestamp
-    """
+    """Агрегирует статистику ошибок студента по объектам и категориям."""
     email_clean = (email or "").strip().lower()
     if not email_clean:
         return {"by_object": {}, "by_type": {}, "total_tests": 0}
@@ -367,7 +360,6 @@ def get_student_mistakes_heatmap(email: str, region: Optional[str] = None) -> Di
     with _lock:
         conn = _conn()
         try:
-            # Загружаем все результаты студента
             cur = conn.execute(
                 "SELECT quiz_type, mistakes_log, accuracy, date, session_id "
                 "FROM results WHERE LOWER(email) = ? ORDER BY created_at ASC",
@@ -382,10 +374,6 @@ def get_student_mistakes_heatmap(email: str, region: Optional[str] = None) -> Di
     total_tests = len(rows)
     last_date = ""
 
-    # Пул всех известных объектов (для подсчёта "сколько раз спрашивали")
-    # Восстанавливаем из mistakes_log + предполагаем, что каждый тест спрашивал 
-    # примерно 15 объектов (стандарт), из которых ошибки — в mistakes_log.
-    # Это эвристика: точнее посчитать нельзя без сохранения всех вопросов.
     for row in rows:
         quiz_type = str(row["quiz_type"] or "").lower()
         date_str = str(row["date"] or "")
@@ -393,7 +381,6 @@ def get_student_mistakes_heatmap(email: str, region: Optional[str] = None) -> Di
         if date_str:
             last_date = date_str
 
-        # Парсим mistakes_log (JSON-массив строк — имён объектов)
         try:
             mistakes = json.loads(row["mistakes_log"] or "[]")
             if not isinstance(mistakes, list):
@@ -401,7 +388,6 @@ def get_student_mistakes_heatmap(email: str, region: Optional[str] = None) -> Di
         except Exception:
             mistakes = []
 
-        # Определяем тип теста
         if "река" in quiz_type or "river" in quiz_type or "гидро" in quiz_type:
             q_type = "river"
         elif "центр" in quiz_type or "center" in quiz_type:
@@ -413,13 +399,11 @@ def get_student_mistakes_heatmap(email: str, region: Optional[str] = None) -> Di
         else:
             q_type = "district"
 
-        # Инициализируем счётчик типа
         if q_type not in by_type:
             by_type[q_type] = {"errors": 0, "total_tests": 0}
         by_type[q_type]["total_tests"] += 1
         by_type[q_type]["errors"] += len(mistakes)
 
-        # Каждая ошибка увеличивает счётчик объекта
         for obj_name in mistakes:
             name = str(obj_name).strip()
             if not name:
@@ -436,10 +420,6 @@ def get_student_mistakes_heatmap(email: str, region: Optional[str] = None) -> Di
             if row["session_id"]:
                 by_object[name]["sessions"].add(row["session_id"])
 
-    # Рассчитываем accuracy для каждого объекта
-    # Эвристика: если объект встретился в N сессиях, из них ошибочно — 
-    # min(errors, N). accuracy = (N - errors) / N * 100.
-    # Для базовой оценки достаточно, точнее — при накоплении данных.
     result_objects = {}
     for name, data in by_object.items():
         sessions_count = max(len(data["sessions"]), data["errors"])
@@ -460,7 +440,7 @@ def get_student_mistakes_heatmap(email: str, region: Optional[str] = None) -> Di
         "last_updated": time.strftime("%d.%m.%Y %H:%M", time.localtime())
     }
 
-# ---------- BRANDING & CONFIG ----------
+# Branding & Configuration
 
 DEFAULT_BRANDING = {
     "org_name": "Институт наук о Земле ЮФУ",
@@ -529,7 +509,7 @@ def save_branding_db(data: Dict[str, Any]) -> None:
         finally:
             conn.close()
 
-# ---------- TEACHERS ----------
+# Teachers
 
 DEFAULT_TEACHERS = [
     {
@@ -646,7 +626,7 @@ def save_teacher_db(teacher: Dict[str, Any]) -> None:
         finally:
             conn.close()
 
-# ---------- ACTIVE EXAM SESSION ----------
+# Active Exam Session
 
 def load_active_session_db() -> Optional[Dict[str, Any]]:
     with _lock:
@@ -680,7 +660,7 @@ def save_active_session_db(data: Optional[Dict[str, Any]]) -> None:
         finally:
             conn.close()
 
-# ---------- MIGRATION ----------
+# Legacy Migration
 
 def migrate_legacy_json(base_dir: str):
     import os as _os

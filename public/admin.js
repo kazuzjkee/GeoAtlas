@@ -54,7 +54,7 @@ let allResults = [];
     ];
 
     function initData() {
-        // 0. Загрузка профиля преподавателя и списка преподавателей (B2B SaaS Мультитенантность)
+        // Загрузка профиля преподавателя
         try {
             const teacherRaw = document.getElementById('server-teacher-data')?.textContent.trim();
             if (teacherRaw && teacherRaw !== '__SERVER_TEACHER_JSON__') {
@@ -89,7 +89,7 @@ let allResults = [];
             }
         }
 
-        // 1. Загрузка результатов с сервера
+        // Загрузка результатов тестирования
         let serverResultsLoaded = false;
         try {
             const raw = document.getElementById('server-results-data').textContent.trim();
@@ -128,7 +128,7 @@ let allResults = [];
             } catch (e) {}
         }
 
-        // 2. Загрузка групп с сервера
+        // Загрузка учебных групп
         let serverGroupsLoaded = false;
         try {
             const grpRaw = document.getElementById('server-groups-data')?.textContent.trim();
@@ -149,10 +149,9 @@ let allResults = [];
             localStorage.setItem('sfeduGroups', JSON.stringify(allGroups));
         }
 
-        // 3. Формирование каталога всех известных студентов
         buildKnownStudentsRoster();
 
-        // 4. Загрузка активной сессии
+        // Загрузка параметров активной сессии
         try {
             const sessRaw = document.getElementById('server-session-data')?.textContent.trim();
             if (sessRaw && sessRaw !== '__SERVER_SESSION_JSON__') {
@@ -330,9 +329,7 @@ let allResults = [];
         updateMistakesAnalytics();
     }
 
-    // ==========================================
-    // УПРАВЛЕНИЕ УЧЕБНЫМИ ГРУППАМИ (LMS GROUPS)
-    // ==========================================
+    // LMS groups management
     function renderGroupsManager() {
         const container = document.getElementById('lms-groups-container');
         const countLabel = document.getElementById('groups-count-label');
@@ -556,9 +553,7 @@ let allResults = [];
         }
     }
 
-    // ==========================================
-    // КОНФИГУРАТОР СЕССИИ (TEST DISPATCHER)
-    // ==========================================
+    // Test dispatcher
     function renderDispatcherGroups() {
         const select = document.getElementById('dispatch-group-select');
         if (!select) return;
@@ -654,9 +649,7 @@ let allResults = [];
         if (banner) banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    // ==========================================
-    // МОНИТОРИНГ АКТИВНОЙ СЕССИИ (LIVE MONITOR)
-    // ==========================================
+    // Live session monitor
     function checkActiveSessionLoop() {
         if (!activeSession) {
             // Проверяем, не появилась ли активная сессия на сервере
@@ -815,9 +808,7 @@ let allResults = [];
         }
     }
 
-    // ==========================================
-    // ФИЛЬТРАЦИЯ И ЖУРНАЛ РЕЗУЛЬТАТОВ
-    // ==========================================
+    // Results journal and filters
     function setFilter(filterType) {
         activeFilter = filterType;
         ['all', 'exams', 'quizzes', 'violations'].forEach(f => {
@@ -956,9 +947,7 @@ let allResults = [];
 
     window.addEventListener('DOMContentLoaded', initData);
 
-    // ==========================================
-    // ЛОГИКА DRAG-AND-DROP И ЗАГРУЗКИ КАРТ (ZIP)
-    // ==========================================
+    // Map upload dropzone
     let selectedMapFile = null;
     let lastUploadedMapUrl = '';
 
@@ -1175,9 +1164,7 @@ let allResults = [];
     window.addEventListener('DOMContentLoaded', initDropzoneEvents);
 
 
-    // ==========================================
-    // УПРАВЛЕНИЕ КАРТАМИ (CRUD)
-    // ==========================================
+    // Maps CRUD
     async function loadMapsList() {
         const tbody = document.getElementById('maps-table-body');
         const emptyBox = document.getElementById('maps-empty-placeholder');
@@ -1284,9 +1271,7 @@ let allResults = [];
     window.addEventListener('DOMContentLoaded', loadMapsList);
 
 
-    // ==========================================
-    // 🏛️ EXECUTIVE DASHBOARD (ДЕКАНАТ ЮФУ)
-    // ==========================================
+    // Executive dashboard
     function initExecutiveDashboard() {
         const section = document.getElementById('executive-dashboard-section');
         if (section) section.style.display = 'block';
@@ -1337,9 +1322,7 @@ let allResults = [];
         renderExecutiveCharts(allResults);
     }
 
-    // ==========================================
-    // 📊 ВИЗУАЛИЗАЦИЯ ДАННЫХ ДЕКАНАТА (CHART.JS)
-    // ==========================================
+    // Executive analytics charts
     let execGradesChartInstance = null;
     let execActivityChartInstance = null;
 
@@ -1350,7 +1333,7 @@ let allResults = [];
         }
         const safeResults = results || allResults || [];
 
-        // 1. КРУГОВАЯ ДИАГРАММА: РАСПРЕДЕЛЕНИЕ ОЦЕНОК
+        // Распределение оценок
         const pieCanvas = document.getElementById('exec-grades-pie-chart');
         if (pieCanvas) {
             let countExcellent = 0;     // 90%+
@@ -1435,7 +1418,7 @@ let allResults = [];
             }
         }
 
-        // 2. ЛИНЕЙНЫЙ ГРАФИК: ДИНАМИКА АКТИВНОСТИ ПО ДНЯМ (ЗА ПОСЛЕДНИЕ 7 ДНЕЙ)
+        // Динамика активности по дням
         const lineCanvas = document.getElementById('exec-activity-line-chart');
         if (lineCanvas) {
             const dateCounts = {};
@@ -1582,9 +1565,7 @@ let allResults = [];
     }
     window.onExecutiveTeacherFilterChange = onExecutiveTeacherFilterChange;
 
-    // ==========================================
-    // 📄 ГЕНЕРАЦИЯ EXECUTIVE PDF-ОТЧЕТА (html2pdf)
-    // ==========================================
+    // PDF report export
     function generateExecutivePDFReport() {
         if (typeof html2pdf === 'undefined') {
             alert('Библиотека html2pdf.js еще инициализируется. Пожалуйста, повторите попытку через 2 секунды.');
@@ -1749,9 +1730,7 @@ let allResults = [];
     }
     window.generateExecutivePDFReport = generateExecutivePDFReport;
 
-    // ==========================================
-    // 📑 УПРАВЛЕНИЕ ВКЛАДКАМИ АДМИН-ПАНЕЛИ (TABS)
-    // ==========================================
+    // Admin tabs navigation
     const ADMIN_VALID_TABS = ['tab-testing', 'tab-journal', 'tab-overview', 'tab-maps', 'tab-branding'];
 
     function switchAdminTab(tabId) {
@@ -1802,9 +1781,7 @@ let allResults = [];
     }
     window.addEventListener('DOMContentLoaded', initAdminTabs);
 
-    // ==========================================
-    // ⚙️ БРЕНДИРОВАНИЕ (WHITE-LABEL)
-    // ==========================================
+    // White-label branding
     let currentBrandConfig = {
         org_name: "Институт наук о Земле ЮФУ",
         org_short: "ЮФУ",

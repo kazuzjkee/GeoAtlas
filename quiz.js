@@ -4955,26 +4955,26 @@ function saveResult(accuracy, wasExam = false, token = '', violations = 0, examS
         });
     }
 
-    // --- ТРИГГЕРЫ ДОСТИЖЕНИЙ ---
-    // ⚡ «Спидранер»: сдать быстрее половины отведенного времени при точности > 80%
+    // Проверка условий достижений
+    // Speedrunner: сдача быстрее половины лимита времени при точности > 80%
     const totalAllowedTime = wasExam ? ((window.currentSyncTimeLimit || 10) * 60) : (totalQuestions * 20);
     if (totalAllowedTime > 0 && timeSec <= (totalAllowedTime / 2) && accuracy > 80) {
         unlockAchievement('speedrunner');
     }
 
-    // 🌊 «Гидролог»: 100% в викторине по рекам
+    // Hydrologist: 100% точность в викторине по рекам
     const isRiverQuiz = (currentQuiz === 'river' || (examCategory && examCategory.toLowerCase().includes('рек')) || (currentQuiz && currentQuiz.toLowerCase().includes('рек')));
     if (isRiverQuiz && accuracy === 100) {
         unlockAchievement('hydrologist');
     }
 
-    // 🧠 «Гео-Эрудит»: максимальный балл в Комплексном экзамене
+    // Geo-erudite: максимальный балл в комплексном экзамене
     const isMixedExam = wasExam && (examCategory === 'mixed' || String(examCategory).toLowerCase().includes('комплекс'));
     if (isMixedExam && accuracy === 100) {
         unlockAchievement('geo_erudite');
     }
 
-    // 🛡️ «Стальные нервы»: сдать экзамен на 100% без единого срабатывания Anti-Cheat
+    // Steel nerves: 100% точность без нарушений Anti-Cheat
     if (wasExam && accuracy === 100 && violations === 0) {
         unlockAchievement('steel_nerves');
     }
@@ -5506,9 +5506,7 @@ function setupQuizHotkeys() {
     });
 }
 
-// ==========================================
-// 🎨 WHITE-LABEL BRANDING LOADER
-// ==========================================
+// White-label branding
 async function initMapBranding() {
     let brand = null;
     try {
@@ -5837,9 +5835,7 @@ async function checkAndApplySyncExamSession() {
 }
 
 
-// ==========================================
-// 🏆 РАСШИРЕННАЯ ГЕЙМИФИКАЦИЯ: ДОСТИЖЕНИЯ
-// ==========================================
+// Achievements
 var GEOATLAS_ACHIEVEMENTS = [
     {
         id: 'first_steps',
@@ -6268,10 +6264,7 @@ function closeStudentProfileModal() {
     document.body.style.overflow = '';
 }
 
-// ========================================================
-// 🔥 КАРТА СЛАБЫХ МЕСТ (STUDENT MISTAKES HEATMAP)
-// ========================================================
-
+// Student mistakes heatmap
 var _heatmapOriginalStyles = [];
 var _heatmapActive = false;
 window._heatmapByObject = {};
@@ -6546,7 +6539,7 @@ function startHeatmapMode(byObjectJson) {
     _heatmapActive = true;
     _heatmapOriginalStyles = [];
 
-    // 1. Перекрашиваем районы через map.eachLayer
+    // Перекрашиваем полигоны в соответствии с точностью ответов
     const mapLayers = [];
     map.eachLayer(layer => {
         if (layer.feature && layer.feature.properties) {
@@ -6614,10 +6607,7 @@ function startHeatmapMode(byObjectJson) {
         } catch(e) {}
     });
 
-    // 2. Показываем легенду
     renderHeatmapLegend(byObject);
-
-    // 3. Уведомление
     showHeatmapToast();
 }
 
@@ -6769,10 +6759,7 @@ window.startHeatmapMode = startHeatmapMode;
 window.exitHeatmapMode = exitHeatmapMode;
 window.showHeatmapPopup = showHeatmapPopup;
 
-// ========================================================
-// 📡 ОФЛАЙН-РЕЖИМ (OFFLINE & GRACEFUL DEGRADATION ENGINE)
-// ========================================================
-
+// Offline sync and storage
 function showNetworkNotificationToast(type, message) {
     let container = document.getElementById('geoatlas-network-toast-container');
     if (!container) {
@@ -6983,10 +6970,7 @@ if (typeof window !== 'undefined') {
     setTimeout(checkActiveQuizDraft, 1200);
 }
 
-// ========================================================
-// ⚔️ DUEL MULTIPLAYER (1 ON 1 PvP SYSTEM)
-// ========================================================
-
+// Duel multiplayer (1v1)
 var DuelManager = {
     active: false,
     ws: null,

@@ -2291,9 +2291,7 @@ window.serverMapZoom = {self.zoom};
         self.add_legend()
         self.add_fullscreen()
         self.map.save(filename)
-        print(f"\n{'='*60}")
         print(f"Карта успешно создана: {filename}")
-        print(f"{'='*60}")
 
         with open(filename, 'r', encoding='utf-8') as f:
             html = f.read()
@@ -2400,9 +2398,7 @@ def build_configured_region(region_key, open_browser=False):
 
 def main():
     import sys
-    print("=" * 65)
-    print("  🚀 GEOATLAS: ГИБРИДНЫЙ КАРТОГРАФИЧЕСКИЙ ДВИЖОК")
-    print("=" * 65)
+    print("GeoAtlas: генерация картографических пакетов")
 
     args = [a for a in sys.argv[1:] if not a.startswith('-')]
     flags = [a for a in sys.argv[1:] if a.startswith('-')]
@@ -2419,23 +2415,23 @@ def main():
         generated_files.append((REGIONS_CONFIG[key]['title'], out))
 
     elif target is None and not do_all:
-        print("\n⚙️  Запуск в стандартном режиме: генерация 3 ключевых карт (Ростов, Краснодар, РФ)...")
+        print("Генерация базовых карт (Ростовская область, Краснодарский край, РФ)...")
         for key in ['rostov', 'krasnodar', 'russia']:
             try:
                 out = build_configured_region(key, open_browser=False)
                 generated_files.append((REGIONS_CONFIG[key]['title'], out))
             except Exception as e:
-                print(f" ❌ Ошибка при сборке {key}: {e}")
+                print(f"Ошибка при сборке {key}: {e}")
 
     else:
         if do_all:
-            print("\n⚙️  Генерация ключевых детальных карт...")
+            print("Генерация базовых карт...")
             for key in ['rostov', 'krasnodar', 'russia']:
                 try:
                     out = build_configured_region(key, open_browser=False)
                     generated_files.append((REGIONS_CONFIG[key]['title'], out))
                 except Exception as e:
-                    print(f" ❌ Ошибка при сборке {key}: {e}")
+                    print(f"Ошибка при сборке {key}: {e}")
 
         base_shp_dir = os.path.join(BASE_DIR, 'Py_Geo', 'shape', 'russia_unified')
         districts_shp = os.path.join(base_shp_dir, 'districts.shp')
@@ -2444,7 +2440,7 @@ def main():
         cities_shp = os.path.join(base_shp_dir, 'cities.shp')
 
         if os.path.exists(districts_shp):
-            print("\n📦 Загрузка единых SHP-файлов для автоматической нарезки регионов...")
+            print("Загрузка слоев для автоматической нарезки регионов...")
             districts = gpd.read_file(districts_shp)
             rivers = gpd.read_file(rivers_shp) if os.path.exists(rivers_shp) else None
             lakes = gpd.read_file(lakes_shp) if os.path.exists(lakes_shp) else None
@@ -2498,9 +2494,7 @@ def main():
                 except Exception as e:
                     print(f" ❌ Ошибка: {e}")
 
-    print("\n" + "=" * 65)
-    print(f"  🎉 УСПЕШНО СГЕНЕРИРОВАНО КАРТ: {len(generated_files)}")
-    print("=" * 65)
+    print(f"\nГенерация завершена. Всего карт: {len(generated_files)}")
     return generated_files
 
 if __name__ == "__main__":
