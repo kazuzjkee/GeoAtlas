@@ -1,5 +1,15 @@
 var _root = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this);
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 var QUESTION_TIME_LIMIT = 20;
 
 class ExamProctorClass {
@@ -397,16 +407,6 @@ function getRegionName(key) {
 function getResultsStorageKey() {
     const reg = window.currentRegionKey || resolveRegionKey(window.location.pathname) || 'rostov';
     return `${reg}_quiz_results`;
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 }
 
 async function loadRegionData(regionKey) {
@@ -2142,7 +2142,7 @@ function startPuzzleMode() {
 
     setupPuzzleDropZone();
 
-    showPuzzleFloatingMessage(`⭐ Опорный район: «${puzzleAnchorDistrict.name}» зафиксирован! Присоединяйте соседние районы к нему.`, '#0284C7');
+    showPuzzleFloatingMessage(`⭐ Опорный район: «${escapeHtml(puzzleAnchorDistrict.name)}» зафиксирован! Присоединяйте соседние районы к нему.`, '#0284C7');
 }
 
 function hideAllMapLayersForPuzzle() {
@@ -2955,7 +2955,7 @@ function processPuzzleDropPlacement(targetDistrict, latlng) {
     if (!targetDistrict || !latlng) return;
 
     if (puzzlePlacedDistricts.has(targetDistrict.id)) {
-        showPuzzleFloatingMessage(`ℹ️ Район «${targetDistrict.name}» уже установлен на карте!`, '#0284C7');
+        showPuzzleFloatingMessage(`ℹ️ Район «${escapeHtml(targetDistrict.name)}» уже установлен на карте!`, '#0284C7');
         return;
     }
 
@@ -2972,16 +2972,16 @@ function processPuzzleDropPlacement(targetDistrict, latlng) {
 
     if (!directHit && (!nearTarget || landedInsideOther)) {
         if (landedInsideOther) {
-            triggerPuzzleMismatch(targetDistrict, `❌ Вы сбросили «${targetDistrict.name}» на место района «${landedInsideOther.name}». Найдите его собственное расположение!`);
+            triggerPuzzleMismatch(targetDistrict, `❌ Вы сбросили «${escapeHtml(targetDistrict.name)}» на место района «${escapeHtml(landedInsideOther.name)}». Найдите его собственное расположение!`);
         } else {
-            triggerPuzzleMismatch(targetDistrict, `❌ Геометрический промах! Район «${targetDistrict.name}» находится в другом месте.`);
+            triggerPuzzleMismatch(targetDistrict, `❌ Геометрический промах! Район «${escapeHtml(targetDistrict.name)}» находится в другом месте.`);
         }
         return;
     }
 
         const isNeighbor = isDistrictNeighborOfPlaced(targetDistrict);
     if (!isNeighbor) {
-        triggerPuzzleMismatch(targetDistrict, `⚠️ Топологический запрет! Район «${targetDistrict.name}» не граничит ни с одним из уже собранных районов ядра. Сначала присоедините его соседей!`);
+        triggerPuzzleMismatch(targetDistrict, `⚠️ Топологический запрет! Район «${escapeHtml(targetDistrict.name)}» не граничит ни с одним из уже собранных районов ядра. Сначала присоедините его соседей!`);
         return;
     }
 
@@ -2991,7 +2991,7 @@ function processPuzzleDropPlacement(targetDistrict, latlng) {
 function placePuzzleDistrict(district) {
         placeDistrictOnMap(district, false);
 
-    showPuzzleFloatingMessage(`🧲 Отлично! «${district.name}» пристыкован к ядру региона!`, '#10B981');
+    showPuzzleFloatingMessage(`🧲 Отлично! «${escapeHtml(district.name)}» пристыкован к ядру региона!`, '#10B981');
 
     puzzleUnplacedQueue = puzzleUnplacedQueue.filter(p => p.id !== district.id);
     updatePuzzleProgress();
@@ -3019,7 +3019,7 @@ function triggerPuzzleMismatch(targetDistrict, message = null) {
                 targetName: targetDistrict.name,
                 correctAnswer: targetDistrict.name,
                 studentAnswer: 'Неверный слот',
-                explanation: `Район «${targetDistrict.name}» был помещен не в свой контур.`,
+                explanation: `Район «${escapeHtml(targetDistrict.name)}» был помещен не в свой контур.`,
                 questionIndex: currentSessionMistakesDetails.length + 1
             });
         }
@@ -3041,7 +3041,7 @@ function triggerPuzzleMismatch(targetDistrict, message = null) {
         setTimeout(() => trayCard.classList.remove('shake'), 450);
     }
 
-    const defaultMsg = `❌ Неверно! Район «${targetDistrict.name}» не пристыкован.`;
+    const defaultMsg = `❌ Неверно! Район «${escapeHtml(targetDistrict.name)}» не пристыкован.`;
     showPuzzleFloatingMessage(message || defaultMsg, '#DC2626');
     updatePuzzleProgress();
 }
@@ -3205,7 +3205,7 @@ function hintPuzzleSlot() {
             map.panTo([puzzleActivePiece.centroid[0], puzzleActivePiece.centroid[1]], { animate: true, duration: 0.5 });
         }
 
-        showPuzzleFloatingMessage(`💡 Район «${puzzleActivePiece.name}» временно подсвечен золотым контуром!`, '#D97706');
+        showPuzzleFloatingMessage(`💡 Район «${escapeHtml(puzzleActivePiece.name)}» временно подсвечен золотым контуром!`, '#D97706');
 
         setTimeout(() => {
             try { map.removeLayer(hintLayer); } catch(e) {}

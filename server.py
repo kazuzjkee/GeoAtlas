@@ -95,6 +95,17 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    
+    # CSP: запрещает загрузку скриптов с левых доменов
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: https://*.basemaps.cartocdn.com https://*.arcgisonline.com; "
+        "connect-src 'self' wss: https://api.openrouteservice.org; "
+        "frame-ancestors 'self';"
+    )
     return response
 
 AUTH_SESSIONS_FILE = "auth_sessions.json"

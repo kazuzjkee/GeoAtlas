@@ -358,17 +358,17 @@ let allResults = [];
                 : '<span style="font-size: 11px; color: var(--text-muted);">Состав группы пуст</span>';
 
             html += `
-                <div class="lms-group-card" id="card-${grp.id}">
+                <div class="lms-group-card" id="card-${escapeHtml(grp.id)}">
                     <div class="lms-card-header">
                         <div class="lms-group-name">
                             <span>🎓</span>
                             <span>${escapeHtml(grp.name)}</span>
                         </div>
                         <div style="display: flex; gap: 4px;">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="openEditGroupModal('${grp.id}')" title="Редактировать состав группы">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="openEditGroupModal('${escapeHtml(grp.id)}')" title="Редактировать состав группы">
                                 ✏️
                             </button>
-                            <button type="button" class="btn btn-danger btn-sm" onclick="deleteGroup('${grp.id}')" title="Удалить группу">
+                            <button type="button" class="btn btn-danger btn-sm" onclick="deleteGroup('${escapeHtml(grp.id)}')" title="Удалить группу">
                                 🗑️
                             </button>
                         </div>
@@ -387,7 +387,7 @@ let allResults = [];
                     </div>
 
                     <div class="lms-card-actions">
-                        <button type="button" class="btn btn-primary btn-sm btn-block" onclick="prepareTestForGroup('${grp.id}')">
+                        <button type="button" class="btn btn-primary btn-sm btn-block" onclick="prepareTestForGroup('${escapeHtml(grp.id)}')">
                             <span>🚀</span> <span>Настроить тест для группы</span>
                         </button>
                     </div>
@@ -566,7 +566,7 @@ let allResults = [];
         let html = '';
         allGroups.forEach(grp => {
             const count = (grp.students || []).length;
-            html += `<option value="${grp.id}">${escapeHtml(grp.name)} (${count} студ.)</option>`;
+            html += `<option value="${escapeHtml(grp.id)}">${escapeHtml(grp.name)} (${count} студ.)</option>`;
         });
 
         select.innerHTML = html;
@@ -754,7 +754,7 @@ let allResults = [];
 
             if (submission) {
                 statusBadge = `<span class="status-badge status-green">✓ Сдано (${submission.accuracy}%)</span>`;
-                scoreStr = `<b>${submission.score}</b> / ${submission.max_score}`;
+                scoreStr = `<b>${escapeHtml(submission.score)}</b> / ${escapeHtml(submission.max_score)}`;
                 violationsStr = (submission.violations > 0)
                     ? `<span style="color:#EF4444; font-weight:700;">⚠️ ${submission.violations} уход(а)</span>`
                     : `<span style="color:#10B981; font-weight:700;">0 нарушений</span>`;
@@ -920,7 +920,7 @@ let allResults = [];
                     <td>${modeBadge}${adaptiveBadge}</td>
                     <td>${statusBadge}</td>
                     <td>${tokenHtml}</td>
-                    <td><b>${r.score}</b> / <span style="color: var(--text-muted);">${r.max_score}</span></td>
+                    <td><b>${escapeHtml(r.score)}</b> / <span style="color: var(--text-muted);">${escapeHtml(r.max_score)}</span></td>
                     <td><span class="acc-pill ${accClass}">${acc}%</span></td>
                     <td style="color: var(--text-muted); font-size: 12px;">⏱ ${escapeHtml(r.time_spent || '—')}</td>
                 </tr>
@@ -952,16 +952,6 @@ let allResults = [];
                 toast.style.display = 'none';
             }, 2500);
         }
-    }
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
     }
 
     window.addEventListener('DOMContentLoaded', initData);
@@ -1626,7 +1616,7 @@ let allResults = [];
                     <td style="padding: 6px 8px;">${escapeHtml(r.group || '-')}</td>
                     <td style="padding: 6px 8px;">${escapeHtml(r.quiz_type || 'Общий')}</td>
                     <td style="padding: 6px 8px; text-align: center; color: ${statusClass}; font-weight: bold;">${escapeHtml(r.exam_status || (r.is_exam ? 'Сдано' : 'Пройдено'))}</td>
-                    <td style="padding: 6px 8px; text-align: center; font-weight: bold;">${r.score} / ${r.max_score}</td>
+                    <td style="padding: 6px 8px; text-align: center; font-weight: bold;">${escapeHtml(r.score)} / ${escapeHtml(r.max_score)}</td>
                     <td style="padding: 6px 8px; text-align: center; font-weight: bold; color: ${r.accuracy >= 70 ? '#059669' : '#DC2626'};">${r.accuracy}%</td>
                     <td style="padding: 6px 8px; text-align: center;">${r.violations || 0}</td>
                     <td style="padding: 6px 8px; text-align: center; color: #6B7280;">${escapeHtml(r.date || '-')}</td>
