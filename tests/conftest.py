@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 os.environ["GEOATLAS_DATA_DIR"] = "/tmp/geoatlas_test"
 os.environ["DUEL_DATA_DIR"] = "/tmp/geoatlas_test_duel"
+os.environ["ENVIRONMENT"] = "development"
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, JSONResponse
@@ -301,7 +304,14 @@ def send_code(req: AuthRequest, request: Request) -> Dict[str, Any]:
     })
     db.cleanup_expired_auth()
     logger.info("Авторизация: сгенерирован код подтверждения для %s", email)
-    return {"status": "ok", "message": "Код подтверждения отправлен", "dev_code": code}
+    is_dev = os.environ.get("ENVIRONMENT") == "development"
+
+    response_data = {"status": "ok", "message": "Код подтверждения отправлен"}
+    if is_dev:
+        response_data["dev_code"] = code
+        logger.info(f"DEV MODE: Код для {email} = {code}")
+
+    return response_data
 
 @app.post("/api/auth/verify-code")
 def verify_code(req: VerifyRequest, request: Request) -> Dict[str, Any]:

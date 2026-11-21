@@ -248,7 +248,11 @@ REGIONS_CONFIG = {
 
 ACTIVE_REGION = 'russia'
 
-CARTO_KEY = os.environ.get('CARTO_KEY', 'cb1_3wsm_1_6bdccfe40c07a69c4fce7b68')
+from dotenv import load_dotenv
+load_dotenv()
+CARTO_KEY = os.environ.get('CARTO_KEY')
+if not CARTO_KEY:
+    raise ValueError("CARTO_KEY не задан в .env!")
 
 STYLES = {
     'districts': {
