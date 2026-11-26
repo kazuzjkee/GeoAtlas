@@ -2,7 +2,8 @@ name: geoatlas
 
 services:
   geoatlas:
-    build: .
+    image: ghcr.io/kazuzjkee/geoatlas:main
+    pull_policy: always
     container_name: geoatlas_app
     ports:
       - "8067:8000"

@@ -16,3 +16,8 @@ geoatlas_data/
 *.db-shm
 *.sqlite*
 .pytest_cache/
+quiz_data/
+*.bak
+*.key
+secret_config.json
+*.log
