@@ -10,6 +10,150 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
+(function initGeoAtlasLeafletHooks() {
+    if (typeof window === 'undefined' || !window.L || window._geoatlasLeafletHooksInitialized) return;
+    window._geoatlasLeafletHooksInitialized = true;
+    window._geoatlasLayerControls = window._geoatlasLayerControls || [];
+
+    const FALLBACK_PROVIDERS = [
+        {
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+            options: {
+                attribution: 'Tiles &copy; Esri &mdash; World Street Map',
+                minZoom: 0,
+                maxZoom: 18,
+                _isGeoAtlasFallback: true
+            }
+        },
+        {
+            url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+            options: {
+                attribution: '&copy; OpenStreetMap contributors',
+                subdomains: 'abc',
+                minZoom: 0,
+                maxZoom: 19,
+                _isGeoAtlasFallback: true
+            }
+        }
+    ];
+
+    window._geoatlasAttachTileFallback = function(layer) {
+        if (!layer || layer._geoatlasFallbackBound || (layer.options && layer.options._isGeoAtlasFallback)) return;
+        layer._geoatlasFallbackBound = true;
+
+        let tileLoaded = false;
+        let tileErrors = 0;
+
+        function activateFallback(reason) {
+            if (layer._geoatlasFallbackTriggered) return;
+            const map = layer._map || (typeof getMapObject === 'function' ? getMapObject() : null);
+            if (!map) return;
+
+            layer._geoatlasFallbackTriggered = true;
+            console.warn('[GeoAtlas] Основная подложка недоступна (' + reason + '), переключение на резервный провайдер.');
+
+            function tryProvider(idx) {
+                if (idx >= FALLBACK_PROVIDERS.length) return;
+                const cfg = FALLBACK_PROVIDERS[idx];
+                const fbLayer = L.tileLayer(cfg.url, cfg.options);
+                let fbLoaded = false;
+                let fbErrors = 0;
+
+                fbLayer.on('tileload', function() { fbLoaded = true; });
+                fbLayer.on('tileerror', function() {
+                    if (fbLoaded) return;
+                    fbErrors++;
+                    if (fbErrors >= 4) {
+                        fbErrors = -9999;
+                        try { map.removeLayer(fbLayer); } catch (e) {}
+                        tryProvider(idx + 1);
+                    }
+                });
+
+                try {
+                    if (window._geoatlasActiveFallbackLayer && map.hasLayer(window._geoatlasActiveFallbackLayer)) {
+                        map.removeLayer(window._geoatlasActiveFallbackLayer);
+                    }
+                    if (map.hasLayer(layer)) {
+                        map.removeLayer(layer);
+                    }
+                    fbLayer.addTo(map);
+                    if (typeof fbLayer.setZIndex === 'function') fbLayer.setZIndex(0);
+                    window._geoatlasActiveFallbackLayer = fbLayer;
+                } catch (e) {
+                    console.warn('[GeoAtlas] Не удалось активировать резервную подложку:', e);
+                }
+            }
+
+            tryProvider(0);
+        }
+
+        layer.on('add', function() {
+            const rawUrl = this._url || '';
+            if (window.location.protocol === 'file:' && rawUrl.startsWith('/')) {
+                setTimeout(function() { activateFallback('file:// protocol'); }, 0);
+                return;
+            }
+            tileLoaded = false;
+            tileErrors = 0;
+        });
+
+        layer.on('tileload', function() {
+            tileLoaded = true;
+        });
+
+        layer.on('tileerror', function() {
+            if (tileLoaded || layer._geoatlasFallbackTriggered) return;
+            tileErrors++;
+            if (tileErrors >= 4) {
+                activateFallback('tile load error');
+            }
+        });
+    };
+
+    if (L.Map && L.Map.addInitHook) {
+        L.Map.addInitHook(function() {
+            window._leaflet_map = this;
+            this.on('baselayerchange', function(ev) {
+                if (window._geoatlasActiveFallbackLayer && ev && ev.layer !== window._geoatlasActiveFallbackLayer) {
+                    try {
+                        if (this.hasLayer(window._geoatlasActiveFallbackLayer)) {
+                            this.removeLayer(window._geoatlasActiveFallbackLayer);
+                        }
+                    } catch (e) {}
+                    window._geoatlasActiveFallbackLayer = null;
+                }
+                if (ev && ev.layer) {
+                    ev.layer._geoatlasFallbackTriggered = false;
+                }
+            });
+        });
+    }
+
+    if (L.TileLayer && L.TileLayer.addInitHook) {
+        L.TileLayer.addInitHook(function() {
+            window._geoatlasAttachTileFallback(this);
+        });
+    }
+
+    if (L.Control && L.Control.Layers && L.Control.Layers.addInitHook) {
+        L.Control.Layers.addInitHook(function() {
+            window._geoatlasLayerControls.push(this);
+            this.options.collapsed = window.innerWidth < 1024;
+
+            if (!this._geoatlasOrigCollapse) {
+                this._geoatlasOrigCollapse = this.collapse;
+                this.collapse = function() {
+                    if (window.innerWidth >= 1024) {
+                        return typeof this.expand === 'function' ? this.expand() : this;
+                    }
+                    return this._geoatlasOrigCollapse.apply(this, arguments);
+                };
+            }
+        });
+    }
+})();
+
 var QUESTION_TIME_LIMIT = 20;
 
 class ExamProctorClass {
@@ -5207,15 +5351,20 @@ function updateStudentHeader() {
     const student = getCurrentStudentInfo();
     const authBtn = document.getElementById('auth-top-btn');
     const profileBox = document.getElementById('student-profile-badge');
+    const isDesktop = window.innerWidth >= 1024;
 
     if (student) {
         if (authBtn) {
-            authBtn.style.setProperty('display', 'none', 'important');
             authBtn.classList.add('hidden');
+            authBtn.style.removeProperty('display');
         }
         if (profileBox) {
-            profileBox.style.setProperty('display', 'flex', 'important');
             profileBox.classList.remove('hidden');
+            if (isDesktop) {
+                profileBox.style.setProperty('display', 'flex', 'important');
+            } else {
+                profileBox.style.removeProperty('display');
+            }
             profileBox.style.cursor = 'pointer';
             profileBox.onclick = openStudentProfileModal;
             const nameEl = document.getElementById('student-badge-name');
@@ -5225,12 +5374,16 @@ function updateStudentHeader() {
         }
     } else {
         if (authBtn) {
-            authBtn.style.setProperty('display', 'inline-flex', 'important');
             authBtn.classList.remove('hidden');
+            if (isDesktop) {
+                authBtn.style.setProperty('display', 'inline-flex', 'important');
+            } else {
+                authBtn.style.removeProperty('display');
+            }
         }
         if (profileBox) {
-            profileBox.style.setProperty('display', 'none', 'important');
             profileBox.classList.add('hidden');
+            profileBox.style.removeProperty('display');
         }
     }
 
@@ -5563,22 +5716,91 @@ window.addEventListener('load', function() {
     setupMobileBottomSheetSwipe();
     updateStudentHeader();
 
-    // Сворачиваем слои на мобильных
-    function collapseLayersOnMobile() {
-        if (window.innerWidth < 1024) {
+    // Синхронизируем адаптивную панель слоёв карты (ПК >= 1024px: раскрыта; планшет/мобильные < 1024px: компактна)
+    let lastDesktopViewport = window.innerWidth >= 1024;
+    function syncResponsiveLayerControl(forceMobileCollapse) {
+        const isDesktop = window.innerWidth >= 1024;
+        const controls = window._geoatlasLayerControls || [];
+
+        if (isDesktop) {
+            document.body.classList.remove('ui-collapsed');
+            const sidePanel = document.getElementById('quiz-controls');
+            if (sidePanel) sidePanel.classList.remove('collapsed');
+            const mobileOverlay = document.getElementById('mobile-nav-overlay');
+            if (mobileOverlay && mobileOverlay.classList.contains('active')) {
+                mobileOverlay.classList.remove('active');
+                mobileOverlay.style.display = 'none';
+            }
+        }
+
+        const map = getMapObject();
+        if (map && typeof map.invalidateSize === 'function') {
+            map.invalidateSize({ animate: false });
+        }
+
+        if (controls.length > 0) {
+            controls.forEach(ctrl => {
+                try {
+                    if (isDesktop) {
+                        ctrl.options.collapsed = false;
+                        if (ctrl._map && typeof ctrl.expand === 'function') {
+                            ctrl.expand();
+                        } else if (ctrl._container) {
+                            ctrl._container.classList.add('leaflet-control-layers-expanded');
+                        }
+                        if (ctrl._section) {
+                            ctrl._section.style.height = null;
+                            ctrl._section.classList.remove('leaflet-control-layers-scrollbar');
+                        }
+                    } else {
+                        ctrl.options.collapsed = true;
+                        if (ctrl._map && !ctrl._geoatlasMobileClickBound) {
+                            ctrl._geoatlasMobileClickBound = true;
+                            ctrl._map.on('click', function() {
+                                if (window.innerWidth < 1024) {
+                                    ctrl.collapse();
+                                }
+                            });
+                        }
+                        if (forceMobileCollapse && typeof ctrl.collapse === 'function') {
+                            ctrl.collapse();
+                        }
+                    }
+                } catch (e) {}
+            });
+        } else {
             const layersControl = document.querySelector('.leaflet-control-layers');
-            if (layersControl && layersControl.classList.contains('leaflet-control-layers-expanded')) {
-                const toggle = layersControl.querySelector('.leaflet-control-layers-toggle');
-                if (toggle) {
-                    toggle.click();
-                } else {
+            if (layersControl) {
+                if (isDesktop) {
+                    layersControl.classList.add('leaflet-control-layers-expanded');
+                } else if (forceMobileCollapse) {
                     layersControl.classList.remove('leaflet-control-layers-expanded');
                 }
             }
         }
     }
-    collapseLayersOnMobile();
-    setTimeout(collapseLayersOnMobile, 350);
+
+    syncResponsiveLayerControl(true);
+    setTimeout(function() { syncResponsiveLayerControl(!lastDesktopViewport); }, 350);
+
+    let resizeLayerTimer = null;
+    window.addEventListener('resize', function() {
+        const nowDesktop = window.innerWidth >= 1024;
+        const crossedBreakpoint = nowDesktop !== lastDesktopViewport;
+        lastDesktopViewport = nowDesktop;
+        if (crossedBreakpoint) {
+            updateStudentHeader();
+            syncResponsiveLayerControl(!nowDesktop);
+        } else if (nowDesktop) {
+            syncResponsiveLayerControl(false);
+        }
+        clearTimeout(resizeLayerTimer);
+        resizeLayerTimer = setTimeout(function() {
+            if (window.innerWidth >= 1024) {
+                syncResponsiveLayerControl(false);
+            }
+        }, 160);
+    });
 
     function checkMapRenderedAndHideLoader() {
         const map = getMapObject();

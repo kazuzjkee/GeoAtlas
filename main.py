@@ -250,9 +250,7 @@ ACTIVE_REGION = 'russia'
 
 from dotenv import load_dotenv
 load_dotenv()
-CARTO_KEY = os.environ.get('CARTO_KEY')
-if not CARTO_KEY:
-    raise ValueError("CARTO_KEY не задан в .env!")
+CARTO_KEY = os.environ.get('CARTO_KEY', '').strip()
 
 STYLES = {
     'districts': {
@@ -637,11 +635,19 @@ class InteractiveAtlas:
             self.map.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
 
         folium.TileLayer(
-            tiles=f'https://basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}.png?key={CARTO_KEY}',
+            tiles='/tiles/carto/voyager/{z}/{x}/{y}.png',
             name='Carto Voyager',
             attr='© OpenStreetMap contributors, © CARTO',
             control=True,
             show=True
+        ).add_to(self.map)
+
+        folium.TileLayer(
+            tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+            name='Карта улиц (Esri)',
+            attr='Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), and the GIS User Community',
+            control=True,
+            show=False
         ).add_to(self.map)
 
         folium.TileLayer(
@@ -653,7 +659,7 @@ class InteractiveAtlas:
         ).add_to(self.map)
 
         folium.TileLayer(
-            tiles=f'https://basemaps.cartocdn.com/rastertiles/dark_all/{{z}}/{{x}}/{{y}}.png?key={CARTO_KEY}',
+            tiles='/tiles/carto/dark_all/{z}/{x}/{y}.png',
             name='Темная тема (Carto)',
             attr='© OpenStreetMap contributors, © CARTO',
             control=True,
@@ -1412,13 +1418,16 @@ window.serverMapZoom = {self.zoom};
 
         self.map.get_root().html.add_child(folium.Element(f"<script>{dynamic_js}\n{quiz_js}</script>"))
 
+        css_file = os.path.join(BASE_DIR, 'public', 'map.css')
+        css_ver = int(os.path.getmtime(css_file)) if os.path.exists(css_file) else 1
+
         quiz_html = f'''
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
         <meta name="theme-color" content="#2563EB">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <link rel="stylesheet" href="/public/map.css">
+        <link rel="stylesheet" href="/public/map.css?v={css_ver}">
         <!-- OVERLAY LOADER ПЕРВИЧНОЙ ЗАГРУЗКИ КАРТЫ -->
         <div id="map-loader" class="map-loader-overlay">
             <div class="map-loader-content">
@@ -2153,17 +2162,17 @@ window.serverMapZoom = {self.zoom};
 
     def add_legend(self):
         legend_html = f'''
-        <div style="
+        <div class="map-legend-panel" style="
             position: fixed;
-            top: 14px; left: 60px;
+            top: 64px; left: 60px;
             width: 220px;
             background: #FFFFFF;
             border: 1px solid #CBD5E1;
-            z-index: 9999;
+            z-index: 990;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             font-size: 13px;
             padding: 12px;
-            border-radius: 6px;
+            border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             color: #334155;
         ">
@@ -2286,7 +2295,7 @@ window.serverMapZoom = {self.zoom};
             self.add_choropleth_layer()
         if not getattr(self, '_economy_added', False):
             self.add_economy_layer()
-        folium.LayerControl(collapsed=True, position='bottomleft').add_to(self.map)
+        folium.LayerControl(collapsed=False, position='bottomleft').add_to(self.map)
         self.add_quiz_controls()
         self.add_legend()
         self.add_fullscreen()

@@ -3,7 +3,7 @@ load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import zipfile
@@ -25,6 +25,11 @@ import io
 import re
 import collections
 import hashlib
+import threading
+import urllib.request
+import urllib.error
+import urllib.parse
+import ssl
 import db
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -96,16 +101,22 @@ async def security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     
-    # CSP: запрещает загрузку скриптов с левых доменов
+    # CSP: запрещает загрузку скриптов с левых доменов, но разрешает тайловые подложки и CDN-ассеты карты
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
-        "font-src 'self' https://fonts.gstatic.com; "
-        "img-src 'self' data: https://*.basemaps.cartocdn.com https://*.arcgisonline.com; "
-        "connect-src 'self' wss: https://api.openrouteservice.org; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://code.jquery.com https://maxcdn.bootstrapcdn.com https://netdna.bootstrapcdn.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com https://netdna.bootstrapcdn.com; "
+        "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com https://netdna.bootstrapcdn.com; "
+        "img-src 'self' data: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://*.arcgisonline.com https://*.openstreetmap.org https://*.openstreetmap.fr https://*.opentopomap.org https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com https://netdna.bootstrapcdn.com; "
+        "connect-src 'self' wss: ws: https://api.openrouteservice.org https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://*.arcgisonline.com https://*.openstreetmap.org https://*.openstreetmap.fr https://*.opentopomap.org; "
         "frame-ancestors 'self';"
     )
+
+    path = request.url.path
+    if path == "/sw.js":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    elif path.endswith(".html") or path == "/" or path in ("/quiz.js", "/public/map.css", "/public/admin.css", "/public/admin.js"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response
 
 AUTH_SESSIONS_FILE = "auth_sessions.json"
@@ -1118,6 +1129,27 @@ window.GEOATLAS_BRANDING = {json.dumps(branding, ensure_ascii=False)};
     html = re.sub(r'<script id="server-region-context"[^>]*>[\s\S]*?</script>\s*<script>[\s\S]*?window\.SERVER_REGION_CONTEXT[\s\S]*?</script>', '', html)
     html = re.sub(r'<style id="server-branding-style">[\s\S]*?</style>\s*<script id="server-branding-context">[\s\S]*?</script>', '', html)
 
+    # Переписываем устаревшие прямые ссылки Carto с ключом на серверный прокси (без утечки CARTO_KEY в HTML)
+    html = re.sub(
+        r'https://(?:[a-d]\.|[a-z]+\.)?basemaps\.cartocdn\.com/rastertiles/(voyager|dark_all|light_all)/\{z\}/\{x\}/\{y\}\.png(?:\?key=[^"\'\s]+)?',
+        r'/tiles/carto/\1/{z}/{x}/{y}.png',
+        html
+    )
+    # Обеспечиваем стартовое раскрытое состояние для ПК (адаптивность регулируется JS)
+    html = re.sub(
+        r'("position"\s*:\s*"bottomleft"\s*,\s*)"collapsed"\s*:\s*true',
+        r'\1"collapsed": false',
+        html
+    )
+    # Добавляем актуальную версию map.css для сброса кэша браузера/SW после обновления
+    map_css_path = os.path.join(BASE_DIR, "public", "map.css")
+    css_ver = int(os.path.getmtime(map_css_path)) if os.path.exists(map_css_path) else 1
+    html = re.sub(
+        r'href=["\']/public/map\.css(?:\?v=[^"\']*)?["\']',
+        f'href="/public/map.css?v={css_ver}"',
+        html
+    )
+
     full_injected = f"{brand_script}\n{context_script}"
 
     if "<body" in html:
@@ -1985,6 +2017,83 @@ async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id:
         })
     except Exception as e:
         player.ws = None
+
+_CARTO_ALLOWED_STYLES = {"voyager", "dark_all", "light_all"}
+_CARTO_SUBDOMAINS = ("a", "b", "c", "d")
+_CARTO_INVALID_KEY_SHA256 = {
+    "69be4aecf9f814ba45d585801a5aa41e79b16fc88eafec5b1954a9f06a69e6be",
+    "cc3f31364a735d9a8179af36b3db7617cdff8bdb0248654ebcc3df91607abedc",
+}
+_TILE_CACHE: "collections.OrderedDict[tuple, bytes]" = collections.OrderedDict()
+_TILE_CACHE_LOCK = threading.Lock()
+_TILE_CACHE_MAX = 512
+
+@app.get("/tiles/carto/{style}/{z}/{x}/{y}.png", response_model=None)
+def proxy_carto_tile(style: str, z: int, x: int, y: int):
+    if style not in _CARTO_ALLOWED_STYLES:
+        raise HTTPException(status_code=400, detail="Unsupported tile style")
+    if z < 0 or z > 20:
+        raise HTTPException(status_code=400, detail="Invalid zoom")
+    max_coord = 1 << z
+    if x < 0 or x >= max_coord or y < 0 or y >= max_coord:
+        raise HTTPException(status_code=400, detail="Invalid tile coordinates")
+
+    carto_key = os.environ.get("CARTO_KEY", "").strip()
+    if not carto_key:
+        raise HTTPException(status_code=503, detail="CARTO_KEY is not configured")
+
+    cache_key = (style, z, x, y)
+    with _TILE_CACHE_LOCK:
+        cached = _TILE_CACHE.get(cache_key)
+        if cached is not None:
+            _TILE_CACHE.move_to_end(cache_key)
+            return Response(
+                content=cached,
+                media_type="image/png",
+                headers={"Cache-Control": "public, max-age=86400"}
+            )
+
+    start_idx = (x + y) % len(_CARTO_SUBDOMAINS)
+    last_err = None
+    data = None
+    for attempt in range(2):
+        sub = _CARTO_SUBDOMAINS[(start_idx + attempt) % len(_CARTO_SUBDOMAINS)]
+        upstream_url = (
+            f"https://{sub}.basemaps.cartocdn.com/rastertiles/{style}/{z}/{x}/{y}.png"
+            f"?key={urllib.parse.quote(carto_key, safe='')}"
+        )
+        try:
+            req = urllib.request.Request(
+                upstream_url,
+                headers={"User-Agent": "GeoAtlas/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                ctype = (resp.headers.get("Content-Type") or "").lower()
+                candidate = resp.read()
+                if resp.status != 200 or not candidate or ("image/" not in ctype and not candidate.startswith(b"\x89PNG")):
+                    raise HTTPException(status_code=502, detail="Invalid upstream tile response")
+                if hashlib.sha256(candidate).hexdigest() in _CARTO_INVALID_KEY_SHA256:
+                    raise HTTPException(status_code=502, detail="CARTO API key rejected")
+                data = candidate
+                break
+        except HTTPException:
+            raise
+        except Exception as e:
+            last_err = e
+
+    if data is None:
+        raise HTTPException(status_code=502, detail=f"Upstream tile error: {last_err}")
+
+    with _TILE_CACHE_LOCK:
+        _TILE_CACHE[cache_key] = data
+        if len(_TILE_CACHE) > _TILE_CACHE_MAX:
+            _TILE_CACHE.popitem(last=False)
+
+    return Response(
+        content=data,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"}
+    )
 
 @app.get("/{slug}", response_model=None)
 def get_slug_route(slug: str):

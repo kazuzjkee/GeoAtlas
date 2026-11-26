@@ -1,13 +1,12 @@
 // ========================================================
 // GeoAtlas Service Worker (Offline Support & PWA Cache)
 // ========================================================
-const CACHE_NAME = 'geoatlas-offline-v1';
+const CACHE_NAME = 'geoatlas-offline-v3';
 
 const STATIC_PRECACHE_URLS = [
     '/',
     '/index.html',
     '/quiz.js',
-    '/branding.json',
     '/public/theme.js',
     '/public/map.css',
     '/public/admin.css',
@@ -48,9 +47,13 @@ self.addEventListener('fetch', (event) => {
     const req = event.request;
     const url = new URL(req.url);
 
-    // Skip non-GET requests (POST, PUT, DELETE) and WebSocket upgrades
+    if (url.origin !== self.location.origin) {
+        return;
+    }
+
     if (req.method !== 'GET') return;
     if (url.protocol === 'ws:' || url.protocol === 'wss:') return;
+    if (url.pathname.startsWith('/tiles/')) return;
 
     // For API calls: Network-only, return graceful offline JSON if no network
     if (url.pathname.startsWith('/api/')) {
@@ -68,9 +71,9 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // For static files, HTML and assets: Network-first with Cache fallback
+    // For static files, HTML and assets: Network-first bypassing stale HTTP disk cache
     event.respondWith(
-        fetch(req)
+        fetch(new Request(req, { cache: 'no-cache' }))
             .then((networkResponse) => {
                 if (networkResponse && networkResponse.status === 200) {
                     const responseClone = networkResponse.clone();
