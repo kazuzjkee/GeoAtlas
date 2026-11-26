@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 geopandas
 shapely
 folium

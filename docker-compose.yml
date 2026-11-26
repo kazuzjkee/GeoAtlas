@@ -13,5 +13,8 @@ services:
       - GEOATLAS_DATA_DIR=/app/data
       - DUEL_DATA_DIR=/app/data
     volumes:
-      - ./geoatlas_data:/app/data
+      - geoatlas_data:/app/data
     restart: unless-stopped
+
+volumes:
+  geoatlas_data:

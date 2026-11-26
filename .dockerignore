@@ -8,3 +8,11 @@ Py_Geo/
 node_modules/
 .venv/
 venv/
+.env
+.env.*
+geoatlas_data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite*
+.pytest_cache/

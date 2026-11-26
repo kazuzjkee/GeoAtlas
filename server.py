@@ -1915,18 +1915,23 @@ async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id:
                 player.ready = bool(data.get("ready", True))
                 await room.broadcast({"type": "player_ready_changed", "player_id": player_id, "ready": player.ready, "room": room.to_dict()})
 
-                if len(room.players) == 2 and all(p.ready for p in room.players.values()):
+                if room.status in ("waiting", "ready") and len(room.players) == 2 and all(p.ready for p in room.players.values()):
                     room.status = "countdown"
-                    await room.broadcast({"type": "countdown", "seconds": 3, "room": room.to_dict()})
-                    await asyncio.sleep(1)
-                    await room.broadcast({"type": "countdown", "seconds": 2, "room": room.to_dict()})
-                    await asyncio.sleep(1)
-                    await room.broadcast({"type": "countdown", "seconds": 1, "room": room.to_dict()})
-                    await asyncio.sleep(1)
-                    room.status = "playing"
-                    room.start_time = time.time()
-                    save_duel_rooms_to_disk()
-                    await room.broadcast({"type": "game_start", "room": room.to_dict()})
+
+                    async def _run_countdown():
+                        for sec in (3, 2, 1):
+                            if room.status != "countdown":
+                                return
+                            await room.broadcast({"type": "countdown", "seconds": sec, "room": room.to_dict()})
+                            await asyncio.sleep(1)
+                        if room.status != "countdown":
+                            return
+                        room.status = "playing"
+                        room.start_time = time.time()
+                        save_duel_rooms_to_disk()
+                        await room.broadcast({"type": "game_start", "room": room.to_dict()})
+
+                    asyncio.create_task(_run_countdown())
 
             elif msg_type == "answer_center":
                 pts = int(data.get("points", 0))
