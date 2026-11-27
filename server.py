@@ -2394,6 +2394,20 @@ def join_duel_room(req: DuelJoinRequest) -> Dict[str, Any]:
     }
 
 
+def _sync_center_round_timeout_if_elapsed(room: DuelRoom) -> bool:
+    """Advances expired center rounds even when clients operate purely via HTTP polling."""
+    if (
+        room.status == "playing"
+        and room.mode == "center"
+        and room.round_started_at is not None
+        and (time.time() - room.round_started_at) >= room.round_duration
+    ):
+        _advance_center_round_sync(room, timed_out=True)
+        save_duel_rooms_to_disk()
+        return True
+    return False
+
+
 @app.get("/api/duel/state/{room_id}")
 def get_duel_room_state(room_id: str, player_id: Optional[str] = None) -> Dict[str, Any]:
     code = room_id.strip().upper()
@@ -2404,6 +2418,7 @@ def get_duel_room_state(room_id: str, player_id: Optional[str] = None) -> Dict[s
     if player_id and player_id in room.players:
         room.players[player_id].last_ping = time.time()
 
+    _sync_center_round_timeout_if_elapsed(room)
     return {"status": "ok", "room": room.to_dict()}
 
 
@@ -2414,6 +2429,7 @@ def handle_duel_action(room_id: str, req: DuelActionRequest) -> Dict[str, Any]:
     if not room:
         raise HTTPException(status_code=404, detail=f"Комната '{code}' не найдена")
 
+    _sync_center_round_timeout_if_elapsed(room)
     player = room.players.get(req.player_id)
     if not player:
         raise HTTPException(status_code=404, detail="Игрок не найден в комнате")

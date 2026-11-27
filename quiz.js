@@ -7352,7 +7352,13 @@ function clearDuelQueryParams() {
     } catch (e) {}
 }
 
+// Централизованный переключатель транспорта дуэлей:
+// false -> постоянная HTTP-синхронизация (без запросов к /ws/duel/...);
+// true  -> WebSocket с автоматическим HTTP fallback.
+var DUEL_WEBSOCKET_ENABLED = false;
+
 var DuelManager = {
+    WEBSOCKET_ENABLED: DUEL_WEBSOCKET_ENABLED,
     active: false,
     ws: null,
     pollTimer: null,
@@ -7815,7 +7821,10 @@ var DuelManager = {
         this._gameplayStarted = false;
         this._activeRound = -1;
         this.isWsConnected = false;
-        this._connState = 'connecting';
+        this._pollingActive = false;
+        this._pollInFlight = false;
+        this._readySent = false;
+        this._connState = (DUEL_WEBSOCKET_ENABLED && this.WEBSOCKET_ENABLED) ? 'connecting' : 'polling';
         this._wsFailures = 0;
         this._httpFailures = 0;
         this._httpConfirmed = false;
@@ -7829,10 +7838,12 @@ var DuelManager = {
     },
 
     clearAllTimers() {
+        this._pollingActive = false;
+        this._pollInFlight = false;
         if (this._wsTimeout) { clearTimeout(this._wsTimeout); this._wsTimeout = null; }
         if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
         if (this._pingTimer) { clearInterval(this._pingTimer); this._pingTimer = null; }
-        if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+        if (this.pollTimer) { clearTimeout(this.pollTimer); clearInterval(this.pollTimer); this.pollTimer = null; }
         if (this._roundTimerInterval) { clearInterval(this._roundTimerInterval); this._roundTimerInterval = null; }
         if (this._lobbyPollInterval) { clearInterval(this._lobbyPollInterval); this._lobbyPollInterval = null; }
         if (window._centerNextQuestionTimer) { clearTimeout(window._centerNextQuestionTimer); window._centerNextQuestionTimer = null; }
@@ -7888,8 +7899,8 @@ var DuelManager = {
         const regionTitle = typeof getRegionName === 'function' ? getRegionName(this.region) : this.region;
         const inviteUrl = `${window.location.origin}/map/${this.region}?duel=${encodeURIComponent(this.roomId)}`;
         const wsBadge = this.isWsConnected
-            ? '<span style="color:#34D399;">🟢 Соединение активно</span>'
-            : '<span style="color:#FBBF24;">🟡 Синхронизация с сервером...</span>';
+            ? '<span style="color:#34D399;">🟢 WebSocket подключён</span>'
+            : '<span style="color:#FBBF24;">🟡 Работа через HTTP-синхронизацию</span>';
 
         el.innerHTML = `
             <div style="background:#0B1120;border:2px solid rgba(59,130,246,0.65);border-radius:22px;padding:28px;text-align:center;max-width:480px;width:100%;color:#F8FAFC;box-shadow:0 25px 60px rgba(0,0,0,0.85);">
@@ -8052,6 +8063,12 @@ var DuelManager = {
 
     connectWebSocket() {
         if (this.hasFinished || !this.active) return;
+        if (!DUEL_WEBSOCKET_ENABLED || !this.WEBSOCKET_ENABLED) {
+            this.isWsConnected = false;
+            this.updateConnectionBadge('polling');
+            this.fallbackToPolling();
+            return;
+        }
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return;
         }
@@ -8166,18 +8183,54 @@ var DuelManager = {
     },
 
     fallbackToPolling() {
-        if (this.pollTimer || this.hasFinished) return;
-        this.sendAction({ type: 'ready', ready: true });
-        this.pollTimer = setInterval(async () => {
-            if (!this.active || this.hasFinished) return;
-            await this.fetchRoomState();
-            if (this.roomState && (this.roomState.status === 'waiting' || this.roomState.status === 'ready') && !this._gameplayStarted) {
-                const me = (this.roomState.players || []).find(p => p.player_id === this.playerId);
-                if (me && !me.ready) {
-                    this.sendAction({ type: 'ready', ready: true });
-                }
+        if (this._pollingActive || this.pollTimer || this.hasFinished || !this.active) return;
+        this._pollingActive = true;
+        this.updateConnectionBadge('polling');
+
+        if (!this._readySent) {
+            this._readySent = true;
+            this.sendAction({ type: 'ready', ready: true });
+        }
+
+        const scheduleNextPoll = () => {
+            if (!this._pollingActive || !this.active || this.hasFinished || this.isWsConnected) {
+                this.pollTimer = null;
+                this._pollingActive = false;
+                return;
             }
-        }, 1000);
+            const status = this.roomState ? this.roomState.status : 'waiting';
+            const playerCount = (this.roomState && Array.isArray(this.roomState.players)) ? this.roomState.players.length : 1;
+            let delayMs = 1000;
+            if (this._httpFailures > 0) {
+                delayMs = Math.min(4000, 1000 * Math.pow(2, Math.min(2, this._httpFailures)));
+            } else if (status === 'waiting' && playerCount < 2) {
+                delayMs = 1500;
+            }
+            this.pollTimer = setTimeout(async () => {
+                if (!this._pollingActive || !this.active || this.hasFinished || this.isWsConnected) {
+                    this.pollTimer = null;
+                    this._pollingActive = false;
+                    return;
+                }
+                if (!this._pollInFlight) {
+                    this._pollInFlight = true;
+                    try {
+                        await this.fetchRoomState();
+                        if (this.roomState && (this.roomState.status === 'waiting' || this.roomState.status === 'ready') && !this._gameplayStarted) {
+                            const me = (this.roomState.players || []).find(p => p.player_id === this.playerId);
+                            if (me && !me.ready) {
+                                this.sendAction({ type: 'ready', ready: true });
+                            }
+                        }
+                    } finally {
+                        this._pollInFlight = false;
+                    }
+                }
+                scheduleNextPoll();
+            }, delayMs);
+        };
+
+        scheduleNextPoll();
     },
 
     sendAction(actionData) {
@@ -8509,7 +8562,7 @@ var DuelManager = {
                         <div class="duel-vs-badge" id="hud-round-badge">${initialBadge}</div>
                         <div class="duel-vs-badge" id="hud-round-timer" style="border-color:#3B82F6;background:rgba(59,130,246,0.15);color:#93C5FD;">⏱ --</div>
                     </div>
-                    <div id="hud-conn-status" style="font-size:10px;color:#34D399;font-weight:700;">🟢 В сети</div>
+                    <div id="hud-conn-status" style="font-size:10px;color:#FBBF24;font-weight:700;">🟡 Работа через HTTP-синхронизацию</div>
                     <button onclick="DuelManager.surrenderDuel()" class="duel-surrender-btn" title="Сдаться (техническое поражение)">🏳️ Сдаться</button>
                 </div>
 
@@ -8528,7 +8581,7 @@ var DuelManager = {
             </div>
             <div id="duel-live-event-banner" class="duel-event-banner"></div>
         `;
-        this.updateConnectionBadge(this._connState || 'connecting');
+        this.updateConnectionBadge(this._connState || ((DUEL_WEBSOCKET_ENABLED && this.WEBSOCKET_ENABLED) ? 'connecting' : 'polling'));
     },
 
     updateConnectionBadge(state) {
@@ -9106,9 +9159,12 @@ window.checkActiveQuizDraft = checkActiveQuizDraft;
 window.saveActiveQuizDraft = saveActiveQuizDraft;
 window.clearActiveQuizDraft = clearActiveQuizDraft;
 
-// Автопроверка параметров URL для дуэли
+// Автопроверка параметров URL для дуэли и очистка таймеров при уходе со страницы
 if (typeof window !== 'undefined') {
     window.addEventListener('load', () => {
         DuelManager.initFromUrl();
+    });
+    window.addEventListener('pagehide', () => {
+        DuelManager.clearAllTimers();
     });
 }
