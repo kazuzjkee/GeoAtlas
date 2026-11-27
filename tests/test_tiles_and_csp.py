@@ -7,6 +7,11 @@ def test_security_csp_allows_basemap_and_cdn(client):
     assert "https://*.arcgisonline.com" in csp
     assert "https://*.openstreetmap.org" in csp
     assert "https://cdn.jsdelivr.net" in csp
+    assert "wss://geoatlas.sfedu.ru" in csp
+    assert "ws:" in csp
+    assert "'self'" in csp
+    assert "https://api.openrouteservice.org" in csp
+    assert "connect-src *" not in csp
 
 
 def test_carto_tile_proxy_validation(client):

@@ -332,7 +332,7 @@ async def security_headers(request: Request, call_next):
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com https://netdna.bootstrapcdn.com; "
         "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com https://netdna.bootstrapcdn.com; "
         "img-src 'self' data: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://*.arcgisonline.com https://*.openstreetmap.org https://*.openstreetmap.fr https://*.opentopomap.org https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com https://netdna.bootstrapcdn.com; "
-        "connect-src 'self' wss: ws: https://api.openrouteservice.org https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://*.arcgisonline.com https://*.openstreetmap.org https://*.openstreetmap.fr https://*.opentopomap.org; "
+        "connect-src 'self' wss://geoatlas.sfedu.ru wss: ws: https://api.openrouteservice.org https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://*.arcgisonline.com https://*.openstreetmap.org https://*.openstreetmap.fr https://*.opentopomap.org; "
         "frame-ancestors 'self';"
     )
 
