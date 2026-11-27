@@ -14,6 +14,7 @@ _lock = threading.Lock()
 def _conn():
     c = sqlite3.connect(DB_FILE, timeout=10.0)
     c.row_factory = sqlite3.Row
+    c.execute("PRAGMA busy_timeout=10000;")
     return c
 
 def init_db():
@@ -93,6 +94,12 @@ def init_db():
                 CREATE TABLE IF NOT EXISTS active_session (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
                     session_data TEXT NOT NULL,
+                    updated_at REAL
+                );
+
+                CREATE TABLE IF NOT EXISTS site_stats (
+                    key TEXT PRIMARY KEY,
+                    value INTEGER NOT NULL DEFAULT 0,
                     updated_at REAL
                 );
             """)
@@ -778,3 +785,46 @@ def migrate_legacy_json(base_dir: str):
                 _os.remove(p_active)
             except Exception:
                 pass
+
+
+def get_site_stat(key: str = "site_visits") -> int:
+    """Returns persisted integer metric value (0 if not initialized yet)."""
+    with _lock:
+        conn = _conn()
+        try:
+            row = conn.execute(
+                "SELECT value FROM site_stats WHERE key = ?",
+                (key,),
+            ).fetchone()
+            return int(row["value"]) if row and row["value"] is not None else 0
+        finally:
+            conn.close()
+
+
+def increment_site_stat(key: str = "site_visits") -> int:
+    """Atomically increments a persisted SQLite counter and returns the updated total."""
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT INTO site_stats (key, value, updated_at)
+                VALUES (?, 1, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = site_stats.value + 1,
+                    updated_at = excluded.updated_at
+                """,
+                (key, time.time()),
+            )
+            row = conn.execute(
+                "SELECT value FROM site_stats WHERE key = ?",
+                (key,),
+            ).fetchone()
+            conn.commit()
+            return int(row["value"]) if row else 1
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()

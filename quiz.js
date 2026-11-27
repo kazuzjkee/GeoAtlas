@@ -6344,14 +6344,18 @@ async function openStudentProfileModal() {
 
     modal.style.display = 'flex';
 
+    const isRussiaEnabled = Boolean(window.GEOATLAS_FEATURES && window.GEOATLAS_FEATURES.russia_map_enabled);
+    const loadingRegions = {
+        rostov: { name: 'Ростовская область', tag: 'Пилотный полигон ЮФО • 55 районов', icon: '🌻', avg_accuracy: 85, tests_count: 1, status: 'Загрузка...' },
+        krasnodar: { name: 'Краснодарский край', tag: 'Кубань и Черноморье • 44 округа', icon: '🍇', avg_accuracy: 92, tests_count: 1, status: 'Загрузка...' }
+    };
+    if (isRussiaEnabled) {
+        loadingRegions.russia = { name: 'Российская Федерация', tag: 'Общероссийский срез • 89 субъектов', icon: '🇷🇺', avg_accuracy: 78, tests_count: 0, status: 'Загрузка...' };
+    }
     renderQuizDashboardContent(modal, {
         student: { name: studentName, group: studentGroup, email: studentEmail },
         stats: { total_tests: '...', avg_accuracy: '...', integrity: 100 },
-        regions: {
-            rostov: { name: 'Ростовская область', tag: 'Пилотный полигон ЮФО • 55 районов', icon: '🌻', avg_accuracy: 85, tests_count: 1, status: 'Загрузка...' },
-            krasnodar: { name: 'Краснодарский край', tag: 'Кубань и Черноморье • 44 округа', icon: '🍇', avg_accuracy: 92, tests_count: 1, status: 'Загрузка...' },
-            russia: { name: 'Российская Федерация', tag: 'Общероссийский срез • 89 субъектов', icon: '🇷🇺', avg_accuracy: 78, tests_count: 0, status: 'Загрузка...' }
-        },
+        regions: loadingRegions,
         recent_history: [],
         loading: true
     });
@@ -6367,14 +6371,17 @@ async function openStudentProfileModal() {
         console.warn('Dashboard fetch fallback to local:', e);
     }
 
+    const fallbackRegions = {
+        rostov: { name: 'Ростовская область', tag: 'Пилотный полигон ЮФО • 55 районов', icon: '🌻', avg_accuracy: 85, tests_count: 1, status: 'Освоено (Хорошо)' },
+        krasnodar: { name: 'Краснодарский край', tag: 'Кубань и Черноморье • 44 округа', icon: '🍇', avg_accuracy: 92, tests_count: 1, status: 'Освоено (Отлично)' }
+    };
+    if (isRussiaEnabled) {
+        fallbackRegions.russia = { name: 'Российская Федерация', tag: 'Общероссийский срез • 89 субъектов', icon: '🇷🇺', avg_accuracy: 78, tests_count: 0, status: 'В процессе изучения' };
+    }
     renderQuizDashboardContent(modal, {
         student: { name: studentName, group: studentGroup, email: studentEmail },
         stats: { total_tests: 1, avg_accuracy: 92, integrity: 100 },
-        regions: {
-            rostov: { name: 'Ростовская область', tag: 'Пилотный полигон ЮФО • 55 районов', icon: '🌻', avg_accuracy: 85, tests_count: 1, status: 'Освоено (Хорошо)' },
-            krasnodar: { name: 'Краснодарский край', tag: 'Кубань и Черноморье • 44 округа', icon: '🍇', avg_accuracy: 92, tests_count: 1, status: 'Освоено (Отлично)' },
-            russia: { name: 'Российская Федерация', tag: 'Общероссийский срез • 89 субъектов', icon: '🇷🇺', avg_accuracy: 78, tests_count: 0, status: 'В процессе изучения' }
-        },
+        regions: fallbackRegions,
         recent_history: [],
         loading: false
     });
@@ -6419,6 +6426,7 @@ function renderQuizDashboardContent(modal, data) {
     });
 
     const regionsData = data.regions || {};
+    const isRussiaEnabled = Boolean(window.GEOATLAS_FEATURES && window.GEOATLAS_FEATURES.russia_map_enabled);
     const regionList = [
         {
             key: 'rostov',
@@ -6437,8 +6445,10 @@ function renderQuizDashboardContent(modal, data) {
             url: 'krasnodar_quiz_map.html',
             gradient: 'linear-gradient(90deg, #F59E0B, #10B981)',
             data: regionsData.krasnodar || { avg_accuracy: 92, tests_count: 1, status: 'Освоено (Отлично)' }
-        },
-        {
+        }
+    ];
+    if (isRussiaEnabled) {
+        regionList.push({
             key: 'russia',
             name: 'Российская Федерация',
             tag: 'Общероссийский срез • 89 субъектов',
@@ -6446,8 +6456,8 @@ function renderQuizDashboardContent(modal, data) {
             url: 'russia_quiz_map.html',
             gradient: 'linear-gradient(90deg, #6366F1, #38BDF8)',
             data: regionsData.russia || { avg_accuracy: 78, tests_count: 0, status: 'В процессе изучения' }
-        }
-    ];
+        });
+    }
 
     let regionsHtml = regionList.map(r => {
         const reg = r.data;
@@ -7486,7 +7496,7 @@ var DuelManager = {
                             <option value="rostov" ${currentReg === 'rostov' ? 'selected' : ''}>🌾 Ростовская область</option>
                             <option value="krasnodar" ${currentReg === 'krasnodar' ? 'selected' : ''}>🌻 Краснодарский край (Кубань)</option>
                             <option value="adygey" ${currentReg === 'adygey' ? 'selected' : ''}>🏔️ Республика Адыгея</option>
-                            <option value="russia" ${currentReg === 'russia' ? 'selected' : ''}>🇷🇺 Российская Федерация (Субъекты)</option>
+                            ${(window.GEOATLAS_FEATURES && window.GEOATLAS_FEATURES.russia_map_enabled) ? `<option value="russia" ${currentReg === 'russia' ? 'selected' : ''}>🇷🇺 Российская Федерация (Субъекты)</option>` : ''}
                         </select>
                     </div>
 

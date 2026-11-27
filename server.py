@@ -37,6 +37,219 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db.init_db()
 db.migrate_legacy_json(BASE_DIR)
 
+# Centralized feature flag: set RUSSIA_MAP_ENABLED = True (or env RUSSIA_MAP_ENABLED=true)
+# to re-enable the Russian Federation map and its UI/API surface.
+RUSSIA_MAP_ENABLED = False
+if os.environ.get("RUSSIA_MAP_ENABLED", "").strip().lower() in ("1", "true", "yes", "on"):
+    RUSSIA_MAP_ENABLED = True
+
+_RUSSIA_UNAVAILABLE_MSG = "Карта России временно находится в разработке. Скоро она станет доступна."
+_RUSSIA_EXACT_TOKENS = {
+    "russia",
+    "russia_quiz_map",
+    "russia_meta",
+    "rf",
+    "rus",
+    "россия",
+    "рф",
+    "российская федерация",
+}
+
+
+def is_russia_map_target(value: Optional[str]) -> bool:
+    """Returns True if a route, region id, filename, or query refers to the Russian Federation map."""
+    if not value:
+        return False
+    decoded = urllib.parse.unquote(str(value)).strip().lower()
+    path_only = decoded.split("?", 1)[0].replace("\\", "/").rstrip("/")
+    basename = os.path.basename(path_only)
+    if basename in ("russia_quiz_map.html", "russia_meta.json"):
+        return True
+    stem = basename
+    for suffix in ("_quiz_map.html", "_meta.json", ".html", ".json"):
+        if stem.endswith(suffix):
+            stem = stem[:-len(suffix)]
+            break
+    return stem in _RUSSIA_EXACT_TOKENS or path_only.strip("/") in _RUSSIA_EXACT_TOKENS
+
+
+def render_russia_unavailable_page(status_code: int = 503) -> HTMLResponse:
+    """Renders a user-friendly status page when the Russia map is temporarily disabled."""
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoAtlas — Карта России в разработке</title>
+    <script src="/public/theme.js"></script>
+    <style>
+        :root {{
+            --bg: #F8FAFC;
+            --surface: #FFFFFF;
+            --border: #E2E8F0;
+            --text-main: #0F172A;
+            --text-muted: #475569;
+            --primary: #2563EB;
+            --primary-hover: #1D4ED8;
+        }}
+        [data-theme="dark"] {{
+            --bg: #0B1120;
+            --surface: #111C33;
+            --border: #1E293B;
+            --text-main: #F8FAFC;
+            --text-muted: #CBD5E1;
+        }}
+        * {{ box-sizing: border-box; }}
+        body {{
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: var(--bg);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }}
+        .notice-card {{
+            max-width: 560px;
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 36px 32px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.14);
+        }}
+        .notice-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 999px;
+            background: rgba(245, 158, 11, 0.14);
+            color: #D97706;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }}
+        [data-theme="dark"] .notice-badge {{ color: #FBBF24; }}
+        h1 {{
+            margin: 0 0 12px 0;
+            font-size: 23px;
+            line-height: 1.3;
+            font-weight: 800;
+        }}
+        p {{
+            margin: 0 0 24px 0;
+            font-size: 14.5px;
+            line-height: 1.55;
+            color: var(--text-muted);
+        }}
+        .notice-actions {{
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }}
+        .btn-link {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 11px 18px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background 0.15s ease;
+        }}
+        .btn-primary-link {{
+            background: var(--primary);
+            color: #FFFFFF;
+        }}
+        .btn-primary-link:hover {{ background: var(--primary-hover); }}
+        .btn-secondary-link {{
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+        }}
+    </style>
+</head>
+<body>
+    <main class="notice-card" role="main">
+        <div class="notice-badge">🛠️ Временное ограничение доступа</div>
+        <h1>{_RUSSIA_UNAVAILABLE_MSG}</h1>
+        <p>Раздел общероссийской карты проходит академическую и картографическую доработку совместно с научным руководителем. Все карты субъектов РФ и режим дуэлей работают в штатном режиме.</p>
+        <div class="notice-actions">
+            <a href="/" class="btn-link btn-primary-link">← Вернуться на главную</a>
+            <a href="/map/rostov" class="btn-link btn-secondary-link">🗺️ Открыть карту Ростовской области</a>
+        </div>
+    </main>
+</body>
+</html>"""
+    return HTMLResponse(
+        content=html,
+        status_code=status_code,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
+def apply_feature_flags_to_html(html: str, russia_enabled: bool) -> str:
+    """Applies server feature flags cleanly into HTML responses and embeds runtime JS config."""
+    if not russia_enabled:
+        html = re.sub(
+            r'<!--\s*RUSSIA_MAP_FEATURE_START\s*-->[\s\S]*?<!--\s*RUSSIA_MAP_FEATURE_END\s*-->',
+            '',
+            html,
+        )
+        html = re.sub(
+            r'/\*\s*RUSSIA_MAP_FEATURE_START\s*\*/[\s\S]*?/\*\s*RUSSIA_MAP_FEATURE_END\s*\*/',
+            '',
+            html,
+        )
+    flags_json = json.dumps({"russia_map_enabled": bool(russia_enabled)})
+    flags_tag = f'<script id="geoatlas-feature-flags">window.GEOATLAS_FEATURES = {flags_json};</script>'
+    html = re.sub(r'<script id="geoatlas-feature-flags">[\s\S]*?</script>', '', html)
+    if "</head>" in html:
+        html = html.replace("</head>", f"{flags_tag}\n</head>", 1)
+    else:
+        html = f"{flags_tag}\n{html}"
+    return html
+
+
+def _should_count_page_visit(request: Optional[Request]) -> bool:
+    """Counts genuine GET openings of the home page, excluding prefetch/SW background requests."""
+    if request is None:
+        return True
+    if request.method != "GET":
+        return False
+    sec_purpose = (request.headers.get("sec-purpose") or "").lower()
+    purpose = (request.headers.get("purpose") or "").lower()
+    if "prefetch" in sec_purpose or purpose == "prefetch":
+        return False
+    if request.headers.get("x-sw-precache"):
+        return False
+    return True
+
+
+def render_index_page(request: Optional[Request] = None, increment_visits: bool = True) -> Response:
+    index_path = os.path.join(BASE_DIR, "index.html")
+    if not os.path.exists(index_path):
+        return render_dynamic_map_response("rostov")
+    if increment_visits and _should_count_page_visit(request):
+        try:
+            db.increment_site_stat("site_visits")
+        except Exception as e:
+            logger.warning("Не удалось обновить счётчик посещений: %s", e)
+    with open(index_path, "r", encoding="utf-8") as f:
+        html = apply_feature_flags_to_html(f.read(), RUSSIA_MAP_ENABLED)
+    return HTMLResponse(
+        content=html,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
 RATE_LIMIT_WINDOW = 60
 RATE_LIMIT_MAX = 3
 _rate_limit_store = collections.defaultdict(lambda: collections.deque(maxlen=RATE_LIMIT_MAX))
@@ -95,6 +308,16 @@ async def csrf_guard(request: Request, call_next):
     return await call_next(request)
 
 @app.middleware("http")
+async def russia_static_guard(request: Request, call_next):
+    if not RUSSIA_MAP_ENABLED:
+        path = urllib.parse.unquote(request.url.path).lower()
+        if path.startswith("/public/maps/") and is_russia_map_target(path):
+            if path.endswith(".json"):
+                return JSONResponse({"detail": _RUSSIA_UNAVAILABLE_MSG}, status_code=503)
+            return render_russia_unavailable_page(status_code=503)
+    return await call_next(request)
+
+@app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -114,9 +337,9 @@ async def security_headers(request: Request, call_next):
     )
 
     path = request.url.path
-    if path == "/sw.js":
+    if path in ("/", "/index.html", "/index", "/sw.js"):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    elif path.endswith(".html") or path == "/" or path in ("/quiz.js", "/public/map.css", "/public/admin.css", "/public/admin.js"):
+    elif path.endswith(".html") or path in ("/quiz.js", "/public/map.css", "/public/admin.css", "/public/admin.js"):
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response
 
@@ -485,6 +708,8 @@ def get_server_time() -> Dict[str, int]:
 
 @app.post("/api/exam/launch")
 def launch_exam_session(req: LaunchSessionRequest, teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[str, Any]:
+    if not RUSSIA_MAP_ENABLED and (is_russia_map_target(req.mapUrl) or is_russia_map_target(req.regionName)):
+        raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
     now_ms = int(time.time() * 1000)
     duration_ms = req.timeLimitMinutes * 60 * 1000
     sess_id = f"SES-SFEDU-{int(time.time())}"
@@ -530,6 +755,8 @@ def get_active_exam_session(teacher: Optional[Dict[str, Any]] = Depends(check_ad
     session = db.load_active_session_db()
     now_ms = int(time.time() * 1000)
     if not session or session.get("status") in ["stopped", "completed"]:
+        return {"session": None, "current_server_time": now_ms, "remaining_seconds": 0}
+    if not RUSSIA_MAP_ENABLED and (is_russia_map_target(session.get("map_url")) or is_russia_map_target(session.get("region_name"))):
         return {"session": None, "current_server_time": now_ms, "remaining_seconds": 0}
     
     # Преподавателю показываем только его сессию (декану / суперадмину — любую)
@@ -595,6 +822,7 @@ def admin_panel(teacher: Dict[str, Any] = Depends(check_admin)):
         rendered = rendered.replace("__SERVER_TEACHER_JSON__", teacher_json)
         rendered = rendered.replace("__SERVER_ALL_TEACHERS_JSON__", all_teachers_json)
         rendered = rendered.replace("__SERVER_BRANDING_JSON__", branding_json)
+        rendered = apply_feature_flags_to_html(rendered, RUSSIA_MAP_ENABLED)
         return HTMLResponse(content=rendered)
 
     total_tests = len(results)
@@ -665,6 +893,28 @@ def get_student_dashboard(email: Optional[str] = None, name: Optional[str] = Non
 
     recent_history = list(reversed(student_records))[:8]
 
+    dashboard_regions: Dict[str, Any] = {
+        "rostov": {
+            "name": "Ростовская область",
+            "tag": "Пилотный полигон ЮФО • 55 районов",
+            "icon": "🌻",
+            **rostov_stats
+        },
+        "krasnodar": {
+            "name": "Краснодарский край",
+            "tag": "Кубань и Черноморье • 44 округа",
+            "icon": "🍇",
+            **krasnodar_stats
+        }
+    }
+    if RUSSIA_MAP_ENABLED:
+        dashboard_regions["russia"] = {
+            "name": "Российская Федерация",
+            "tag": "Общероссийский срез • 89 субъектов",
+            "icon": "🇷🇺",
+            **russia_stats
+        }
+
     return {
         "status": "ok",
         "student": {
@@ -679,26 +929,7 @@ def get_student_dashboard(email: Optional[str] = None, name: Optional[str] = Non
             "violations": violations,
             "integrity": integrity
         },
-        "regions": {
-            "rostov": {
-                "name": "Ростовская область",
-                "tag": "Пилотный полигон ЮФО • 55 районов",
-                "icon": "🌻",
-                **rostov_stats
-            },
-            "krasnodar": {
-                "name": "Краснодарский край",
-                "tag": "Кубань и Черноморье • 44 округа",
-                "icon": "🍇",
-                **krasnodar_stats
-            },
-            "russia": {
-                "name": "Российская Федерация",
-                "tag": "Общероссийский срез • 89 субъектов",
-                "icon": "🇷🇺",
-                **russia_stats
-            }
-        },
+        "regions": dashboard_regions,
         "recent_history": recent_history
     }
 
@@ -981,6 +1212,8 @@ def get_region_data(region_key: str) -> Optional[Dict[str, Any]]:
 
 @app.get("/api/region/{region_id}/data")
 def api_region_data(region_id: str) -> Dict[str, Any]:
+    if not RUSSIA_MAP_ENABLED and is_russia_map_target(region_id):
+        raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
     data = get_region_data(region_id)
     if data:
         return data
@@ -1051,7 +1284,11 @@ def resolve_region_info(region_query: Optional[str] = None) -> Dict[str, Any]:
     return REGIONS_INFO["rostov"]
 
 def render_dynamic_map_response(region_query: Optional[str] = None) -> HTMLResponse:
+    if not RUSSIA_MAP_ENABLED and is_russia_map_target(region_query):
+        return render_russia_unavailable_page(status_code=503)
     info = resolve_region_info(region_query)
+    if not RUSSIA_MAP_ENABLED and (info.get("is_rf") or info.get("id") == "russia"):
+        return render_russia_unavailable_page(status_code=503)
     map_file = find_map_file(info.get("map_file", "")) or find_map_file("rostov_quiz_map.html")
     if not map_file or not os.path.exists(map_file):
         return HTMLResponse(
@@ -1182,6 +1419,7 @@ window.GEOATLAS_BRANDING = {json.dumps(branding, ensure_ascii=False)};
     else:
         html = f"{full_injected}\n{html}"
 
+    html = apply_feature_flags_to_html(html, RUSSIA_MAP_ENABLED)
     return HTMLResponse(content=html, media_type="text/html")
 
 @app.post("/api/upload-map")
@@ -1326,6 +1564,8 @@ def get_maps_list(teacher: Optional[Dict[str, Any]] = Depends(check_admin_option
     for fname in os.listdir(MAPS_DIR):
         if not fname.lower().endswith(".html"):
             continue
+        if not RUSSIA_MAP_ENABLED and is_russia_map_target(fname):
+            continue
         filepath = os.path.join(MAPS_DIR, fname)
         if not os.path.isfile(filepath):
             continue
@@ -1400,6 +1640,10 @@ def delete_map(
 
 @app.get("/public/maps/{file_name}", response_model=None)
 def get_public_map_file(file_name: str):
+    if not RUSSIA_MAP_ENABLED and is_russia_map_target(file_name):
+        if file_name.lower().endswith(".json"):
+            raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
+        return render_russia_unavailable_page(status_code=503)
     target = os.path.join("public", "maps", file_name)
     if os.path.exists(target) and os.path.isfile(target):
         return FileResponse(target)
@@ -1408,12 +1652,24 @@ def get_public_map_file(file_name: str):
     raise HTTPException(status_code=404, detail=f"Карта '{file_name}' не найдена в public/maps/")
 
 @app.get("/", response_model=None)
-def get_index(region: Optional[str] = None):
+def get_index(request: Request, region: Optional[str] = None):
     if region:
         return render_dynamic_map_response(region)
-    if os.path.exists("index.html"):
-        return FileResponse("index.html")
-    return render_dynamic_map_response("rostov")
+    return render_index_page(request, increment_visits=True)
+
+@app.get("/api/stats/visits")
+def api_get_site_visits() -> JSONResponse:
+    """Returns total site home-page opening count without storing user-identifying data."""
+    visits = db.get_site_stat("site_visits")
+    return JSONResponse(
+        content={
+            "status": "ok",
+            "visits": visits,
+            "label": "Посещений сайта",
+            "metric": "home_page_loads",
+        },
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 @app.get("/map", response_model=None)
 def get_map_query(region: Optional[str] = "rostov"):
@@ -1429,12 +1685,20 @@ def get_region_path(region: str):
 
 @app.get("/api/region/context", response_model=None)
 def api_get_region_context(region: Optional[str] = "rostov") -> Dict[str, Any]:
+    if not RUSSIA_MAP_ENABLED and is_russia_map_target(region):
+        raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
     info = resolve_region_info(region)
+    if not RUSSIA_MAP_ENABLED and (info.get("is_rf") or info.get("id") == "russia"):
+        raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
     return {"status": "ok", "context": info}
 
 @app.get("/api/region/{region_id}/context", response_model=None)
 def api_get_region_context_by_id(region_id: str) -> Dict[str, Any]:
+    if not RUSSIA_MAP_ENABLED and is_russia_map_target(region_id):
+        raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
     info = resolve_region_info(region_id)
+    if not RUSSIA_MAP_ENABLED and (info.get("is_rf") or info.get("id") == "russia"):
+        raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
     return {"status": "ok", "context": info}
 
 @app.get("/quiz.js", response_model=None)
@@ -2043,6 +2307,8 @@ async def _delayed_advance_center_round(room: DuelRoom, round_idx: int) -> None:
 @app.post("/api/duel/create")
 def create_duel_room(req: DuelCreateRequest) -> Dict[str, Any]:
     clean_stale_duel_rooms()
+    if not RUSSIA_MAP_ENABLED and is_russia_map_target(req.region):
+        raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
     mode = normalize_duel_mode(req.mode)
     region_id = resolve_region_info(req.region)["id"] if req.region else "rostov"
 
@@ -2498,13 +2764,18 @@ def proxy_carto_tile(style: str, z: int, x: int, y: int):
     )
 
 @app.get("/{slug}", response_model=None)
-def get_slug_route(slug: str):
+def get_slug_route(slug: str, request: Request):
     clean = slug.lower().strip()
+
+    if not RUSSIA_MAP_ENABLED and is_russia_map_target(clean):
+        if clean.endswith(".json"):
+            raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
+        return render_russia_unavailable_page(status_code=503)
 
     if clean in ["admin", "admin.html"]:
         return RedirectResponse("/admin")
     if clean in ["index", "index.html"]:
-        return FileResponse("index.html") if os.path.exists("index.html") else render_dynamic_map_response("rostov")
+        return render_index_page(request, increment_visits=True)
     if clean == "quiz.js":
         return get_quiz_js()
 

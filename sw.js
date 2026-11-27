@@ -18,7 +18,13 @@ self.addEventListener('install', (event) => {
         caches.open(CACHE_NAME).then(async (cache) => {
             for (const url of STATIC_PRECACHE_URLS) {
                 try {
-                    await cache.add(url);
+                    const req = (url === '/' || url === '/index.html')
+                        ? new Request(url, { headers: { 'X-SW-Precache': '1' } })
+                        : url;
+                    const resp = await fetch(req);
+                    if (resp && resp.ok) {
+                        await cache.put(url, resp);
+                    }
                 } catch (e) {
                     // Gracefully skip single asset precache failure (e.g. if offline during install)
                 }
