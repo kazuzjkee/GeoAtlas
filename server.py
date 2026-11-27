@@ -2505,8 +2505,14 @@ async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id:
         return
 
     player = room.players[player_id]
+    old_ws = player.ws
     player.ws = websocket
     player.last_ping = time.time()
+    if old_ws is not None and old_ws is not websocket:
+        try:
+            await old_ws.close(code=1000)
+        except Exception:
+            pass
 
     await room.broadcast({
         "type": "player_connected",

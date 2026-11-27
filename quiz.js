@@ -7814,6 +7814,12 @@ var DuelManager = {
         this.hasFinished = false;
         this._gameplayStarted = false;
         this._activeRound = -1;
+        this.isWsConnected = false;
+        this._connState = 'connecting';
+        this._wsFailures = 0;
+        this._httpFailures = 0;
+        this._httpConfirmed = false;
+        this._maxWsRetries = 4;
 
         closeWelcomeModal();
         this.injectStyles();
@@ -7834,19 +7840,32 @@ var DuelManager = {
 
     fetchRoomState: async function() {
         try {
-            const res = await fetch(`/api/duel/state/${this.roomId}?player_id=${encodeURIComponent(this.playerId)}`);
+            const res = await fetch(`/api/duel/state/${this.roomId}?player_id=${encodeURIComponent(this.playerId)}`, { cache: 'no-store' });
             if (res.status === 404) {
+                this._httpFailures += 1;
                 this.showDuelToast('error', 'Комната дуэли не найдена или истекла');
                 return null;
             }
             if (res.ok) {
                 const data = await res.json();
+                this._httpFailures = 0;
+                this._httpConfirmed = true;
+                if (!this.isWsConnected && this.active && !this.hasFinished) {
+                    this.updateConnectionBadge('polling');
+                }
                 if (data && data.room) {
                     this.updateFromRoomState(data.room);
                     return data.room;
                 }
+            } else {
+                this._httpFailures += 1;
             }
-        } catch (e) {}
+        } catch (e) {
+            this._httpFailures += 1;
+        }
+        if (!this.isWsConnected && this._httpFailures >= 3 && this.active && !this.hasFinished) {
+            this.updateConnectionBadge('lost');
+        }
         return null;
     },
 
@@ -8036,25 +8055,40 @@ var DuelManager = {
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return;
         }
+        if (this._wsTimeout) {
+            clearTimeout(this._wsTimeout);
+            this._wsTimeout = null;
+        }
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const url = `${proto}//${location.host}/ws/duel/${this.roomId}/${this.playerId}`;
         try {
-            this.ws = new WebSocket(url);
-            this.ws.onopen = async () => {
-                this.isWsConnected = true;
-                this.updateConnectionBadge('connected');
-                if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+            const ws = new WebSocket(url);
+            this.ws = ws;
+            ws.onopen = async () => {
+                if (this.ws !== ws || this.hasFinished || !this.active) {
+                    try { ws.close(1000, 'stale'); } catch (e) {}
+                    return;
+                }
+                if (this._wsTimeout) { clearTimeout(this._wsTimeout); this._wsTimeout = null; }
                 if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
+                if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+
+                this.isWsConnected = true;
+                this._wsFailures = 0;
+                this._httpFailures = 0;
+                this._httpConfirmed = true;
+                this.updateConnectionBadge('connected');
+
                 if (this._pingTimer) clearInterval(this._pingTimer);
                 this._pingTimer = setInterval(() => {
-                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                        this.ws.send(JSON.stringify({ type: 'ping' }));
+                    if (this.ws === ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'ping' }));
                     }
                 }, 20000);
 
                 this.sendAction({ type: 'ping' });
                 const state = await this.fetchRoomState();
-                if (!state) return;
+                if (this.ws !== ws || !state || this.hasFinished) return;
 
                 if (state.status === 'finished') {
                     this.hideWaitingOverlay();
@@ -8073,42 +8107,60 @@ var DuelManager = {
                     this.sendAction({ type: 'ready', ready: true });
                 }
             };
-            this.ws.onmessage = (e) => {
+            ws.onmessage = (e) => {
+                if (this.ws !== ws) return;
                 try {
                     const msg = JSON.parse(e.data);
                     this.handleSocketMessage(msg);
                 } catch (err) {}
             };
-            this.ws.onerror = () => {
-                if (!this.hasFinished && this.active) {
-                    this.updateConnectionBadge('reconnecting');
-                    this.fallbackToPolling();
+            ws.onerror = () => {
+                if (this.ws !== ws || this.hasFinished || !this.active) return;
+                this.fallbackToPolling();
+                if (!this._httpConfirmed || this._httpFailures > 0) {
+                    this.updateConnectionBadge(this._httpFailures >= 3 ? 'lost' : 'reconnecting');
                 }
             };
-            this.ws.onclose = () => {
+            ws.onclose = () => {
+                if (this.ws !== ws) return;
+                this.ws = null;
                 this.isWsConnected = false;
+                if (this._wsTimeout) { clearTimeout(this._wsTimeout); this._wsTimeout = null; }
                 if (this._pingTimer) { clearInterval(this._pingTimer); this._pingTimer = null; }
                 if (this.hasFinished || !this.active) {
                     return;
                 }
-                this.updateConnectionBadge('reconnecting');
+                this._wsFailures += 1;
                 this.fallbackToPolling();
-                if (!this._reconnectTimer) {
+
+                if (this._httpConfirmed && this._httpFailures === 0) {
+                    this.updateConnectionBadge('polling');
+                } else if (this._httpFailures >= 3) {
+                    this.updateConnectionBadge('lost');
+                } else {
+                    this.updateConnectionBadge('reconnecting');
+                }
+
+                if (!this._reconnectTimer && this._wsFailures <= (this._maxWsRetries || 4)) {
+                    const backoffMs = Math.min(15000, 2000 * Math.pow(2, Math.max(0, this._wsFailures - 1)));
                     this._reconnectTimer = setTimeout(() => {
                         this._reconnectTimer = null;
-                        if (this.active && !this.hasFinished) {
+                        if (this.active && !this.hasFinished && !this.isWsConnected) {
                             this.connectWebSocket();
                         }
-                    }, 2000);
+                    }, backoffMs);
                 }
             };
         } catch (e) {
             this.fallbackToPolling();
         }
+        const activeWsRef = this.ws;
         this._wsTimeout = setTimeout(() => {
-            if (!this.isWsConnected && this.active && !this.hasFinished) {
-                this.updateConnectionBadge('polling');
+            if (this.ws === activeWsRef && !this.isWsConnected && this.active && !this.hasFinished) {
                 this.fallbackToPolling();
+                if (this._httpConfirmed && this._httpFailures === 0) {
+                    this.updateConnectionBadge('polling');
+                }
             }
         }, 2200);
     },
@@ -8476,19 +8528,24 @@ var DuelManager = {
             </div>
             <div id="duel-live-event-banner" class="duel-event-banner"></div>
         `;
+        this.updateConnectionBadge(this._connState || 'connecting');
     },
 
     updateConnectionBadge(state) {
+        this._connState = state || 'connecting';
         const el = document.getElementById('hud-conn-status');
         if (!el) return;
         if (state === 'connected') {
-            el.textContent = '🟢 WebSocket активен';
+            el.textContent = '🟢 WebSocket подключён';
             el.style.color = '#34D399';
         } else if (state === 'polling') {
-            el.textContent = '🟡 HTTP-синхронизация';
+            el.textContent = '🟡 Работа через HTTP-синхронизацию';
             el.style.color = '#FBBF24';
+        } else if (state === 'lost') {
+            el.textContent = '🔴 Соединение потеряно';
+            el.style.color = '#F87171';
         } else {
-            el.textContent = '🔄 Переподключение...';
+            el.textContent = '🔄 Выполняется переподключение...';
             el.style.color = '#FBBF24';
         }
     },
@@ -8788,21 +8845,117 @@ var DuelManager = {
         style.textContent = `
             #geoatlas-duel-live-hud {
                 position: fixed;
-                top: 14px;
-                left: calc(50% - 170px);
+                top: 66px;
+                left: 50%;
                 transform: translateX(-50%);
-                z-index: 99999;
-                width: min(740px, calc(100vw - 440px));
-                min-width: 480px;
+                z-index: 9999;
+                width: min(680px, calc(100vw - 660px));
+                min-width: 360px;
+                max-width: calc(100vw - 24px);
                 pointer-events: none;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             }
-            @media (max-width: 1120px) {
+            @media (max-width: 1023.98px) {
                 #geoatlas-duel-live-hud {
+                    top: 10px;
                     left: 50%;
-                    width: 94%;
+                    transform: translateX(-50%);
+                    width: min(560px, calc(100vw - 136px));
                     min-width: 0;
-                    max-width: 720px;
+                    max-width: calc(100vw - 20px);
+                }
+            }
+            @media (max-width: 640px) {
+                #geoatlas-duel-live-hud {
+                    top: 64px;
+                    width: calc(100vw - 16px);
+                    max-width: 460px;
+                }
+                .duel-hud-container {
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+                    align-items: center;
+                    gap: 6px !important;
+                    padding: 7px 10px !important;
+                    border-radius: 14px !important;
+                }
+                .duel-box-header {
+                    font-size: 11.5px !important;
+                    gap: 4px !important;
+                }
+                .duel-score {
+                    padding: 1px 5px !important;
+                    font-size: 10px !important;
+                }
+                .duel-sub-info {
+                    font-size: 9.5px !important;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .duel-vs-title {
+                    font-size: 9.5px !important;
+                }
+                .duel-vs-badge {
+                    font-size: 9.5px !important;
+                    padding: 2px 5px !important;
+                }
+                .duel-surrender-btn {
+                    margin-top: 4px !important;
+                    padding: 3px 8px !important;
+                    font-size: 9.5px !important;
+                    opacity: 0.9;
+                }
+                .duel-event-banner {
+                    max-width: calc(100vw - 24px) !important;
+                    font-size: 11px !important;
+                    padding: 5px 12px !important;
+                }
+                #geoatlas-duel-modal,
+                #duel-waiting-overlay,
+                #duel-results-modal,
+                #duel-surrender-confirm-modal {
+                    align-items: flex-end !important;
+                    padding: 0 !important;
+                }
+                #geoatlas-duel-modal > div,
+                #duel-waiting-overlay > div,
+                #duel-results-modal > div,
+                #duel-surrender-confirm-modal > div {
+                    max-width: 100% !important;
+                    width: 100% !important;
+                    max-height: 92dvh !important;
+                    overflow-y: auto !important;
+                    -webkit-overflow-scrolling: touch;
+                    border-radius: 20px 20px 0 0 !important;
+                    padding: 20px 16px !important;
+                    box-sizing: border-box !important;
+                }
+                #duel-waiting-room-code,
+                #duel-room-code-display {
+                    font-size: clamp(24px, 7.5vw, 34px) !important;
+                    letter-spacing: 2px !important;
+                }
+                #geoatlas-duel-modal div[style*="grid-template-columns: 1fr 1fr"],
+                #duel-results-modal div[style*="grid-template-columns: 1fr 1fr"] {
+                    grid-template-columns: 1fr !important;
+                }
+            }
+            @media (max-height: 540px) {
+                #geoatlas-duel-live-hud {
+                    top: 6px !important;
+                }
+                .duel-hud-container {
+                    padding: 5px 10px !important;
+                    gap: 6px !important;
+                }
+                #geoatlas-duel-modal > div,
+                #duel-waiting-overlay > div,
+                #duel-results-modal > div,
+                #duel-surrender-confirm-modal > div {
+                    max-height: 94dvh !important;
+                    overflow-y: auto !important;
+                    padding: 14px 16px !important;
                 }
             }
             .duel-hud-container {

@@ -2135,6 +2135,23 @@
             body.exam-mode .app-card {
                 max-height: 70vh;
             }
+
+            @media (max-height: 540px) {
+                .app-card {
+                    max-height: 56vh !important;
+                }
+                .welcome-card,
+                #student-dashboard-modal .dash-modal-card,
+                #weakness-heatmap-modal > div,
+                #leaderboard-modal-container .welcome-card {
+                    max-height: 94dvh !important;
+                    overflow-y: auto !important;
+                    padding: 14px 16px !important;
+                }
+                .puzzle-tray-list {
+                    max-height: 28vh;
+                }
+            }
         }
 
         /* ДЕСКТОП: >= 1024px — панель строго зафиксирована в развернутом виде, панель слоёв полностью раскрыта */
