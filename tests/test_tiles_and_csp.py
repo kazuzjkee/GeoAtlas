@@ -36,4 +36,6 @@ def test_map_response_hides_carto_key_and_busts_css_cache(client):
     assert "?key=" not in html
     assert '"collapsed": false' in html
     assert "/public/map.css?v=" in html
+    assert "/quiz.js?v=" in html
+    assert "var DuelManager =" not in html
     assert "no-cache" in res.headers.get("Cache-Control", "")

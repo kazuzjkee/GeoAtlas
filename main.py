@@ -1396,9 +1396,7 @@ window.serverMapZoom = {self.zoom};
 '''
 
         quiz_js_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'quiz.js')
-        with open(quiz_js_path, 'r', encoding='utf-8') as f:
-            quiz_js = f.read()
-
+        quiz_ver = int(os.path.getmtime(quiz_js_path)) if os.path.exists(quiz_js_path) else 1
         branding_data = {}
         try:
             import db
@@ -1416,7 +1414,9 @@ window.serverMapZoom = {self.zoom};
             '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n'
         ))
 
-        self.map.get_root().html.add_child(folium.Element(f"<script>{dynamic_js}\n{quiz_js}</script>"))
+        self.map.get_root().html.add_child(folium.Element(
+            f'<script>{dynamic_js}</script>\n<script src="/quiz.js?v={quiz_ver}"></script>'
+        ))
 
         css_file = os.path.join(BASE_DIR, 'public', 'map.css')
         css_ver = int(os.path.getmtime(css_file)) if os.path.exists(css_file) else 1

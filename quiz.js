@@ -2219,8 +2219,13 @@ function startPuzzleMode() {
     if (typeof _heatmapActive !== 'undefined' && _heatmapActive) exitHeatmapMode();
     currentSessionMistakes = [];
     currentSessionMistakesDetails = [];
-    if (typeof EMBEDDED_PUZZLE_DATA === 'undefined' || !EMBEDDED_PUZZLE_DATA || EMBEDDED_PUZZLE_DATA.length < 2) {
-        alert('Для запуска режима пазла требуются пространственные данные районов этого региона.');
+    const rawPuzzleData = getPuzzleData();
+    if (!rawPuzzleData || rawPuzzleData.length < 2) {
+        if (typeof DuelManager !== 'undefined' && DuelManager.active) {
+            DuelManager.showDuelToast('error', 'Для запуска пазла в этом регионе недостаточно данных');
+        } else {
+            alert('Для запуска режима пазла требуются пространственные данные районов этого региона.');
+        }
         return;
     }
 
@@ -2229,6 +2234,10 @@ function startPuzzleMode() {
         alert('Карта еще не инициализирована. Подождите пару секунд.');
         return;
     }
+
+    const sidePanel = document.getElementById('quiz-controls');
+    if (sidePanel) sidePanel.classList.remove('collapsed');
+    document.body.classList.remove('ui-collapsed');
 
     currentQuiz = 'puzzle';
     isPuzzleMode = true;
@@ -2253,7 +2262,7 @@ function startPuzzleMode() {
 
     hideAllMapLayersForPuzzle();
 
-    puzzleDistricts = JSON.parse(JSON.stringify(EMBEDDED_PUZZLE_DATA));
+    puzzleDistricts = JSON.parse(JSON.stringify(rawPuzzleData));
     puzzlePlacedDistricts = new Set();
     puzzleSlotLayers = {};
     puzzlePlacedMarkers = [];
@@ -2263,13 +2272,43 @@ function startPuzzleMode() {
 
     renderPuzzleRegionOutline();
 
-    const randomIndex = Math.floor(Math.random() * puzzleDistricts.length);
-    puzzleAnchorDistrict = puzzleDistricts[randomIndex];
+    const isDuelPuzzle = typeof DuelManager !== 'undefined' && DuelManager.active && DuelManager.roomState;
+    const duelRoom = isDuelPuzzle ? DuelManager.roomState : null;
+    if (duelRoom && duelRoom.puzzle_anchor_id) {
+        puzzleAnchorDistrict = puzzleDistricts.find(d => String(d.id) === String(duelRoom.puzzle_anchor_id)) || puzzleDistricts[0];
+    } else {
+        const randomIndex = Math.floor(Math.random() * puzzleDistricts.length);
+        puzzleAnchorDistrict = puzzleDistricts[randomIndex];
+    }
 
-    placeDistrictOnMap(puzzleAnchorDistrict, true);
+    placeDistrictOnMap(puzzleAnchorDistrict, true, true);
 
-    puzzleUnplacedQueue = puzzleDistricts.filter(d => d.id !== puzzleAnchorDistrict.id);
-    shuffleArray(puzzleUnplacedQueue);
+    const remaining = puzzleDistricts.filter(d => d.id !== puzzleAnchorDistrict.id);
+    if (duelRoom && Array.isArray(duelRoom.puzzle_piece_ids) && duelRoom.puzzle_piece_ids.length > 0) {
+        const byId = new Map(remaining.map(d => [String(d.id), d]));
+        puzzleUnplacedQueue = duelRoom.puzzle_piece_ids.map(pid => byId.get(String(pid))).filter(Boolean);
+        const queuedSet = new Set(puzzleUnplacedQueue.map(d => String(d.id)));
+        remaining.forEach(d => {
+            if (!queuedSet.has(String(d.id))) puzzleUnplacedQueue.push(d);
+        });
+    } else {
+        puzzleUnplacedQueue = remaining;
+        shuffleArray(puzzleUnplacedQueue);
+    }
+
+    if (duelRoom) {
+        const myPlayer = (duelRoom.players || []).find(p => p.player_id === DuelManager.playerId);
+        if (myPlayer && Array.isArray(myPlayer.placed_ids) && myPlayer.placed_ids.length > 0) {
+            const restoredSet = new Set(myPlayer.placed_ids.map(String));
+            puzzleDistricts.forEach(d => {
+                if (restoredSet.has(String(d.id)) && !puzzlePlacedDistricts.has(d.id)) {
+                    placeDistrictOnMap(d, false, true);
+                }
+            });
+            puzzleUnplacedQueue = puzzleUnplacedQueue.filter(d => !puzzlePlacedDistricts.has(d.id));
+            puzzleMistakes = myPlayer.mistakes || 0;
+        }
+    }
 
     const initialNeighbor = puzzleUnplacedQueue.find(d => isDistrictNeighborOfPlaced(d)) || puzzleUnplacedQueue[0];
     if (initialNeighbor) {
@@ -2308,12 +2347,15 @@ function hideAllMapLayersForPuzzle() {
             } catch(e) {}
         } else if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
             if (layer.setOpacity) {
+                const el = typeof layer.getElement === 'function' ? layer.getElement() : null;
                 puzzleSavedLayerStyles.push({
                     layer: layer,
                     isMarker: true,
-                    opacity: 1
+                    opacity: 1,
+                    prevPointerEvents: el ? el.style.pointerEvents : ''
                 });
                 try { layer.setOpacity(0); } catch(e) {}
+                if (el) el.style.pointerEvents = 'none';
             }
         }
     });
@@ -2324,6 +2366,8 @@ function restoreMapLayersAfterPuzzle() {
         try {
             if (item.isMarker && item.layer.setOpacity) {
                 item.layer.setOpacity(item.opacity);
+                const el = typeof item.layer.getElement === 'function' ? item.layer.getElement() : null;
+                if (el) el.style.pointerEvents = item.prevPointerEvents || '';
             } else if (item.layer.setStyle) {
                 item.layer.setStyle({
                     opacity: item.opacity,
@@ -2344,9 +2388,10 @@ function renderPuzzleRegionOutline() {
         puzzleOutlineLayer = null;
     }
 
-    if (typeof REGION_OUTLINE_GEOJSON !== 'undefined' && REGION_OUTLINE_GEOJSON) {
+    const outlineData = getRegionOutlineData();
+    if (outlineData) {
         try {
-            puzzleOutlineLayer = L.geoJSON(REGION_OUTLINE_GEOJSON, {
+            puzzleOutlineLayer = L.geoJSON(outlineData, {
                 style: {
                     color: '#334155',
                     weight: 3.0,
@@ -2376,15 +2421,16 @@ function renderPuzzleSlots() {
     puzzleSlotLayers = {};
 }
 
-function placeDistrictOnMap(district, isAnchor = false) {
+function placeDistrictOnMap(district, isAnchor = false, silentSync = false) {
     const map = getMapObject();
     if (!map || !district || !district.geojson) return;
 
     puzzlePlacedDistricts.add(district.id);
     const placedCount = puzzlePlacedDistricts.size;
+    const userPlacedCount = Math.max(0, placedCount - (puzzleAnchorDistrict ? 1 : 0));
 
-    if (typeof DuelManager !== 'undefined' && DuelManager.active && !isAnchor) {
-        DuelManager.submitPuzzlePiece(placedCount, puzzleMistakes, district.name);
+    if (typeof DuelManager !== 'undefined' && DuelManager.active && !isAnchor && !silentSync) {
+        DuelManager.submitPuzzlePiece(userPlacedCount, puzzleMistakes, district.name, district.id);
     }
     const pieceColor = isAnchor ? '#2563EB' : getPuzzlePieceColor(placedCount);
 
@@ -2562,6 +2608,8 @@ function isPointNearDistrict(lat, lng, district, toleranceKm = 14) {
 function setupPuzzleDropZone() {
     const map = getMapObject();
     if (!map) return;
+    const markerPane = typeof map.getPane === 'function' ? map.getPane('markerPane') : null;
+    if (markerPane) markerPane.style.pointerEvents = 'none';
     const container = map.getContainer();
     if (!container || container._puzzleDropBound) return;
     container._puzzleDropBound = true;
@@ -2577,6 +2625,8 @@ function setupPuzzleDropZone() {
 function removePuzzleDropZone() {
     const map = getMapObject();
     if (!map) return;
+    const markerPane = typeof map.getPane === 'function' ? map.getPane('markerPane') : null;
+    if (markerPane) markerPane.style.pointerEvents = '';
     const container = map.getContainer();
     if (container && container._puzzleDropBound) {
         container._puzzleDropBound = false;
@@ -3141,7 +3191,11 @@ function placePuzzleDistrict(district) {
     updatePuzzleProgress();
 
     if (puzzleUnplacedQueue.length === 0) {
-        setTimeout(finishPuzzleVictory, 600);
+        if (typeof DuelManager !== 'undefined' && (DuelManager.active || DuelManager.hasFinished)) {
+            showPuzzleFloatingMessage('🎉 Все районы собраны! Фиксируем итоги дуэли...', '#10B981');
+        } else {
+            setTimeout(finishPuzzleVictory, 600);
+        }
         return;
     }
 
@@ -3188,6 +3242,9 @@ function triggerPuzzleMismatch(targetDistrict, message = null) {
     const defaultMsg = `❌ Неверно! Район «${escapeHtml(targetDistrict.name)}» не пристыкован.`;
     showPuzzleFloatingMessage(message || defaultMsg, '#DC2626');
     updatePuzzleProgress();
+    if (typeof DuelManager !== 'undefined' && DuelManager.active) {
+        DuelManager.submitPuzzleMistake(puzzleMistakes, targetDistrict ? targetDistrict.name : '');
+    }
 }
 
 function handlePuzzleSlotClick(clickedId, slotLayer) {
@@ -3506,7 +3563,8 @@ function restartPuzzleMode() {
 
 function savePuzzleResult(total, accuracy, timeStr, token, mistakes) {
     const student = getCurrentStudentInfo();
-    const results = JSON.parse(localStorage.getItem('rostovQuizResults') || '[]');
+    const storageKey = getResultsStorageKey();
+    const results = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('rostovQuizResults') || '[]');
     results.push({
         date: new Date().toLocaleString(),
         student: student ? student.name : 'Анонимно',
@@ -3547,7 +3605,11 @@ function savePuzzleResult(total, accuracy, timeStr, token, mistakes) {
     }
 }
 
-function exitPuzzleMode() {
+function exitPuzzleMode(forceUiOnly = false) {
+    if (!forceUiOnly && typeof DuelManager !== 'undefined' && DuelManager.active) {
+        DuelManager.surrenderDuel();
+        return;
+    }
     stopPuzzleTimer();
     isPuzzleMode = false;
     currentQuiz = null;
@@ -3805,6 +3867,9 @@ function generateRiverQuestions(data) {
 function showQuestion() {
     if (currentQuestion >= quizData.length) {
         stopTimer();
+        if (typeof DuelManager !== 'undefined' && (DuelManager.active || DuelManager.hasFinished)) {
+            return;
+        }
         showResults();
         return;
     }
@@ -4107,6 +4172,18 @@ function setupMapClickListener(question) {
     const map = getMapObject();
     if (!map) return;
 
+    if (!map.getPane('centerClickPane')) {
+        const pane = map.createPane('centerClickPane');
+        pane.style.zIndex = '650';
+    }
+    const markerPane = map.getPane('markerPane');
+    if (markerPane) {
+        markerPane.style.pointerEvents = 'none';
+    }
+    if (!window._centerClickRenderer) {
+        window._centerClickRenderer = L.svg({ pane: 'centerClickPane' });
+    }
+
     if (window._clickBlocker) {
         try { map.removeLayer(window._clickBlocker); } catch(e) {}
         window._clickBlocker = null;
@@ -4114,7 +4191,15 @@ function setupMapClickListener(question) {
 
     window._clickBlocker = L.rectangle(
         [[-90, -180], [90, 180]],
-        { color: 'transparent', fillColor: 'transparent', fillOpacity: 0, weight: 0, interactive: true }
+        {
+            pane: 'centerClickPane',
+            renderer: window._centerClickRenderer,
+            color: 'transparent',
+            fillColor: 'transparent',
+            fillOpacity: 0,
+            weight: 0,
+            interactive: true
+        }
     ).addTo(map);
 
     window._clickHandler = function(e) {
@@ -4189,18 +4274,27 @@ function handleMapClick(lat, lon, question) {
         });
     }
 
+    if (window._centerNextQuestionTimer) {
+        clearTimeout(window._centerNextQuestionTimer);
+        window._centerNextQuestionTimer = null;
+    }
+
     score += pointsAwarded;
 
-    if (typeof DuelManager !== 'undefined' && DuelManager.active) {
-        DuelManager.submitCenterAnswer(currentQuestion, pointsAwarded, distance, question.correctAnswer || question.name);
+    const inDuelCenter = typeof DuelManager !== 'undefined' && DuelManager.active;
+    if (inDuelCenter) {
+        DuelManager.submitCenterAnswer(currentQuestion, pointsAwarded, distance, question.correctAnswer || question.name, lat, lon);
     }
-    if (typeof saveActiveQuizDraft === 'function') {
+    if (typeof saveActiveQuizDraft === 'function' && !inDuelCenter) {
         saveActiveQuizDraft();
     }
 
     clearMarkers();
 
     const map = getMapObject();
+    if (map && map.getPane('markerPane')) {
+        map.getPane('markerPane').style.pointerEvents = '';
+    }
     if (window._clickBlocker) {
         try {
             if (window._clickHandler) {
@@ -4246,10 +4340,15 @@ function handleMapClick(lat, lon, question) {
     showFeedback(message, badgeType);
     updateScore();
 
-    setTimeout(() => {
-        currentQuestion++;
-        showQuestion();
-    }, 2600);
+    if (inDuelCenter) {
+        DuelManager.showCenterRoundAnsweredState(currentQuestion, pointsAwarded, distance);
+    } else {
+        window._centerNextQuestionTimer = setTimeout(() => {
+            window._centerNextQuestionTimer = null;
+            currentQuestion++;
+            showQuestion();
+        }, 2600);
+    }
 }
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -4790,6 +4889,10 @@ function copyExamToken(token) {
 }
 
 function exitQuiz() {
+    if (typeof DuelManager !== 'undefined' && DuelManager.active) {
+        DuelManager.surrenderDuel();
+        return;
+    }
     if (isPuzzleMode) {
         if (confirm('Выйти из режима сборки пазла? Прогресс текущей сессии будет сброшен.')) {
             exitPuzzleMode();
@@ -4818,6 +4921,9 @@ function exitQuizDirectly() {
     isExamMode = false;
     setBasemapVisible(true);
     const map = getMapObject();
+    if (map && map.getPane('markerPane')) {
+        map.getPane('markerPane').style.pointerEvents = '';
+    }
     if (map && window._clickBlocker) {
         try {
             if (window._clickHandler) {
@@ -5600,10 +5706,15 @@ function injectExamProctorStyles() {
     document.head.appendChild(style);
 }
 
-function hideMapLoader() {
+function hideMapLoader(immediate = false) {
     const loader = document.getElementById('map-loader');
     if (!loader) return;
     loader.classList.add('hidden');
+    loader.style.pointerEvents = 'none';
+    if (immediate) {
+        loader.style.display = 'none';
+        return;
+    }
     setTimeout(() => {
         if (loader && loader.classList.contains('hidden')) {
             loader.style.display = 'none';
@@ -5813,12 +5924,13 @@ window.addEventListener('load', function() {
     setTimeout(checkMapRenderedAndHideLoader, 250);
     setTimeout(hideMapLoader, 2000);
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasDuel = !!urlParams.get('duel');
     const hideWelcomeKey = `geoatlas_hide_welcome_${resolveRegionKey(window.location.pathname)}`;
-    if (!localStorage.getItem(hideWelcomeKey) && !localStorage.getItem('rostovMapHideWelcome')) {
+    if (!hasDuel && !localStorage.getItem(hideWelcomeKey) && !localStorage.getItem('rostovMapHideWelcome')) {
         setTimeout(openWelcomeModal, 400);
     }
 
-    const urlParams = new URLSearchParams(window.location.search);
     const hasExam = urlParams.get('exam') === '1' || urlParams.get('session_id') || urlParams.get('mode') === 'exam_mixed';
     const regionParam = urlParams.get('region');
 
@@ -7193,6 +7305,43 @@ if (typeof window !== 'undefined') {
 }
 
 // Duel multiplayer (1v1)
+const DUEL_MODE_LABELS = {
+    center: '🎯 Райцентры (7 раундов)',
+    puzzle: '🧩 Сборка пазла'
+};
+
+function normalizeClientDuelMode(rawMode) {
+    const m = String(rawMode || 'center').trim().toLowerCase();
+    return (m === 'puzzle' || m.includes('пазл')) ? 'puzzle' : 'center';
+}
+
+function copyDuelTextSafe(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).catch(() => copyDuelTextFallback(text));
+    }
+    return Promise.resolve(copyDuelTextFallback(text));
+}
+
+function copyDuelTextFallback(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    ta.remove();
+}
+
+function clearDuelQueryParams() {
+    if (typeof window === 'undefined' || !window.history || !window.history.replaceState) return;
+    try {
+        const url = new URL(window.location.href);
+        ['duel', 'player', 'role', 'mode'].forEach(k => url.searchParams.delete(k));
+        window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+    } catch (e) {}
+}
+
 var DuelManager = {
     active: false,
     ws: null,
@@ -7210,6 +7359,14 @@ var DuelManager = {
     total: 7,
     isWsConnected: false,
     hasFinished: false,
+    _gameplayStarted: false,
+    _activeRound: -1,
+    _pingTimer: null,
+    _reconnectTimer: null,
+    _roundTimerInterval: null,
+    _serverTimeOffset: 0,
+    _wsTimeout: null,
+    _lobbyPollInterval: null,
 
     initFromUrl() {
         if (typeof window === 'undefined') return;
@@ -7217,9 +7374,14 @@ var DuelManager = {
         const duelCode = params.get('duel');
         const pId = params.get('player');
         const rRole = params.get('role');
+        const urlMode = params.get('mode');
+        if (urlMode) {
+            this.mode = normalizeClientDuelMode(urlMode);
+        }
         if (duelCode) {
+            closeWelcomeModal();
             if (pId && rRole) {
-                this.startDuelSession(duelCode, pId, rRole);
+                this.startDuelSession(duelCode, pId, rRole, this.mode);
             } else {
                 this.openModal(duelCode);
             }
@@ -7240,12 +7402,42 @@ var DuelManager = {
     },
 
     closeModal() {
+        if (this._lobbyPollInterval) {
+            clearInterval(this._lobbyPollInterval);
+            this._lobbyPollInterval = null;
+        }
         const modal = document.getElementById('geoatlas-duel-modal');
         if (modal) modal.style.display = 'none';
     },
 
+    showLobbyError(msg) {
+        const box = document.getElementById('duel-lobby-error');
+        if (!box) return;
+        if (!msg) {
+            box.style.display = 'none';
+            box.textContent = '';
+            return;
+        }
+        box.textContent = msg;
+        box.style.display = 'block';
+    },
+
+    updateLobbyModeCards(modal) {
+        modal.querySelectorAll('label.duel-mode-card').forEach((card) => {
+            const radio = card.querySelector('input[name="duel-mode"]');
+            const checked = !!(radio && radio.checked);
+            card.style.borderColor = checked ? '#2563EB' : 'rgba(255, 255, 255, 0.12)';
+            card.style.background = checked ? 'rgba(37, 99, 235, 0.16)' : 'rgba(255, 255, 255, 0.03)';
+            card.style.boxShadow = checked ? '0 0 0 1px rgba(37, 99, 235, 0.4)' : 'none';
+        });
+    },
+
     renderModalLobby(modal, prefillCode = '') {
-        const student = getCurrentStudentInfo() || { name: 'Студент', group: 'Группа' };
+        if (this._lobbyPollInterval) {
+            clearInterval(this._lobbyPollInterval);
+            this._lobbyPollInterval = null;
+        }
+        const currentReg = (typeof window.currentRegionKey !== 'undefined' && window.currentRegionKey) ? window.currentRegionKey : 'rostov';
         modal.innerHTML = `
             <div style="background: #0B1120; border: 1.5px solid rgba(255, 255, 255, 0.14); border-radius: 24px; max-width: 580px; width: 100%; padding: 28px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85); color: #F8FAFC;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
@@ -7259,28 +7451,30 @@ var DuelManager = {
                     <button onclick="DuelManager.closeModal()" style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); color: #94A3B8; font-size: 22px; width: 34px; height: 34px; border-radius: 8px; cursor: pointer;">&times;</button>
                 </div>
 
-                <div style="display: flex; gap: 8px; margin-bottom: 22px; background: rgba(255, 255, 255, 0.04); padding: 4px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                <div style="display: flex; gap: 8px; margin-bottom: 18px; background: rgba(255, 255, 255, 0.04); padding: 4px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08);">
                     <button id="duel-tab-create" style="flex: 1; padding: 10px; border-radius: 9px; font-size: 13.5px; font-weight: 700; cursor: pointer; border: none; background: #2563EB; color: #FFFFFF; transition: all 0.2s;">👑 Создать дуэль</button>
                     <button id="duel-tab-join" style="flex: 1; padding: 10px; border-radius: 9px; font-size: 13.5px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: #94A3B8; transition: all 0.2s;">🔗 Войти по коду</button>
                 </div>
+
+                <div id="duel-lobby-error" style="display: none; background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.45); color: #FCA5A5; border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px;"></div>
 
                 <!-- БЛОК СОЗДАНИЯ -->
                 <div id="duel-content-create">
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; font-size: 12.5px; font-weight: 700; color: #CBD5E1; margin-bottom: 8px;">Дисциплина дуэли:</label>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <label style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.03); border: 1.5px solid #2563EB; border-radius: 12px; padding: 12px; cursor: pointer;">
+                            <label class="duel-mode-card" style="display: flex; align-items: center; gap: 10px; background: rgba(37, 99, 235, 0.16); border: 1.5px solid #2563EB; border-radius: 12px; padding: 12px; cursor: pointer; transition: all 0.15s;">
                                 <input type="radio" name="duel-mode" value="center" checked style="accent-color: #2563EB;">
                                 <div>
                                     <div style="font-size: 13px; font-weight: 700; color: #FFFFFF;">🎯 Райцентры</div>
                                     <div style="font-size: 11px; color: #94A3B8;">Скорость и точность клика (7 раундов)</div>
                                 </div>
                             </label>
-                            <label style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.03); border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 12px; cursor: pointer;">
+                            <label class="duel-mode-card" style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.03); border: 1.5px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 12px; cursor: pointer; transition: all 0.15s;">
                                 <input type="radio" name="duel-mode" value="puzzle" style="accent-color: #2563EB;">
                                 <div>
                                     <div style="font-size: 13px; font-weight: 700; color: #FFFFFF;">🧩 Сборка пазла</div>
-                                    <div style="font-size: 11px; color: #94A3B8;">Кто быстрее соберет контур региона</div>
+                                    <div style="font-size: 11px; color: #94A3B8;">Кто быстрее соберет регион</div>
                                 </div>
                             </label>
                         </div>
@@ -7289,9 +7483,10 @@ var DuelManager = {
                     <div style="margin-bottom: 20px;">
                         <label style="display: block; font-size: 12.5px; font-weight: 700; color: #CBD5E1; margin-bottom: 8px;">Регион карты:</label>
                         <select id="duel-region-select" style="width: 100%; background: #0F172A; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 11px 14px; color: #FFFFFF; font-size: 13.5px; outline: none;">
-                            <option value="rostov" selected>🌾 Ростовская область</option>
-                            <option value="krasnodar">🌻 Краснодарский край (Кубань)</option>
-                            <option value="russia">🇷🇺 Российская Федерация (Субъекты)</option>
+                            <option value="rostov" ${currentReg === 'rostov' ? 'selected' : ''}>🌾 Ростовская область</option>
+                            <option value="krasnodar" ${currentReg === 'krasnodar' ? 'selected' : ''}>🌻 Краснодарский край (Кубань)</option>
+                            <option value="adygey" ${currentReg === 'adygey' ? 'selected' : ''}>🏔️ Республика Адыгея</option>
+                            <option value="russia" ${currentReg === 'russia' ? 'selected' : ''}>🇷🇺 Российская Федерация (Субъекты)</option>
                         </select>
                     </div>
 
@@ -7315,18 +7510,25 @@ var DuelManager = {
             </div>
         `;
 
+        modal.querySelectorAll('input[name="duel-mode"]').forEach((r) => {
+            r.addEventListener('change', () => this.updateLobbyModeCards(modal));
+        });
+        this.updateLobbyModeCards(modal);
+
         const tabCreate = document.getElementById('duel-tab-create');
         const tabJoin = document.getElementById('duel-tab-join');
         const contentCreate = document.getElementById('duel-content-create');
         const contentJoin = document.getElementById('duel-content-join');
 
         tabCreate.onclick = () => {
+            this.showLobbyError('');
             tabCreate.style.background = '#2563EB'; tabCreate.style.color = '#FFFFFF';
             tabJoin.style.background = 'transparent'; tabJoin.style.color = '#94A3B8';
             contentCreate.style.display = 'block'; contentJoin.style.display = 'none';
         };
 
         tabJoin.onclick = () => {
+            this.showLobbyError('');
             tabJoin.style.background = '#2563EB'; tabJoin.style.color = '#FFFFFF';
             tabCreate.style.background = 'transparent'; tabCreate.style.color = '#94A3B8';
             contentCreate.style.display = 'none'; contentJoin.style.display = 'block';
@@ -7337,36 +7539,39 @@ var DuelManager = {
         }
 
         document.getElementById('btn-create-duel-room').onclick = async () => {
+            this.showLobbyError('');
             const btn = document.getElementById('btn-create-duel-room');
             btn.disabled = true;
-            btn.textContent = '⏳ Создаем комнату...';
+            btn.textContent = '⏳ Создаём комнату...';
             try {
-                const mode = document.querySelector('input[name="duel-mode"]:checked').value;
+                const checked = modal.querySelector('input[name="duel-mode"]:checked');
+                const mode = checked ? checked.value : 'center';
                 const region = document.getElementById('duel-region-select').value;
                 const res = await this.createRoom(mode, region);
                 this.renderRoomWaitingScreen(modal, res, 'host');
-            } catch(e) {
-                alert(e.message || 'Ошибка создания комнаты');
+            } catch (e) {
+                this.showLobbyError(e.message || 'Не удалось создать комнату дуэли');
                 btn.disabled = false;
                 btn.textContent = '🚀 Создать комнату дуэли';
             }
         };
 
         document.getElementById('btn-join-duel-room').onclick = async () => {
+            this.showLobbyError('');
             const codeInput = document.getElementById('duel-join-code-input');
             const code = codeInput.value.trim().toUpperCase();
             if (!code) {
-                alert('Пожалуйста, введите код комнаты (например DUEL-1234)');
+                this.showLobbyError('Введите код комнаты (например, DUEL-4821)');
                 return;
             }
             const btn = document.getElementById('btn-join-duel-room');
             btn.disabled = true;
-            btn.textContent = '⏳ Подключаемся...';
+            btn.textContent = '⏳ Подключаемся к комнате...';
             try {
                 const res = await this.joinRoom(code);
-                this.renderRoomWaitingScreen(modal, res, 'join');
-            } catch(e) {
-                alert(e.message || 'Ошибка входа в комнату');
+                this.launchDuelOnMap(res);
+            } catch (e) {
+                this.showLobbyError(e.message || 'Ошибка входа в комнату');
                 btn.disabled = false;
                 btn.textContent = '⚔️ Присоединиться к битве';
             }
@@ -7379,171 +7584,251 @@ var DuelManager = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                mode: mode || 'center',
+                mode: normalizeClientDuelMode(mode),
                 region: region || 'rostov',
-                host_name: student.name || 'Студент',
+                host_name: student.name || 'Создатель',
                 host_group: student.group || '-',
-                host_email: student.email || 'student@sfedu.ru'
+                host_email: student.email || ''
             })
         });
-        if (!res.ok) throw new Error('Ошибка создания комнаты');
-        return await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || 'Ошибка создания комнаты');
+        return data;
     },
 
     async joinRoom(roomCode) {
         const student = getCurrentStudentInfo() || {};
+        const cleanName = (student.name && student.name !== 'Студент') ? student.name : 'Соперник';
         const res = await fetch('/api/duel/join', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 room_id: roomCode.trim().toUpperCase(),
-                player_name: student.name || 'Студент',
+                player_name: cleanName,
                 player_group: student.group || '-',
-                player_email: student.email || 'student@sfedu.ru'
+                player_email: student.email || ''
             })
         });
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            throw new Error(data.detail || 'Комната не найдена или заполнена');
+            throw new Error(data.detail || 'Комната не найдена, заполнена или уже завершена');
         }
-        return await res.json();
+        return data;
     },
 
     renderRoomWaitingScreen(modal, data, role) {
+        if (this._lobbyPollInterval) clearInterval(this._lobbyPollInterval);
         const room = data.room || {};
-        const inviteUrl = `${window.location.origin}/map/${data.region}?duel=${data.room_id}`;
+        const players = room.players || [];
+        const inviteUrl = `${window.location.origin}/map/${data.region}?duel=${encodeURIComponent(data.room_id)}`;
+        const modeTitle = DUEL_MODE_LABELS[data.mode] || DUEL_MODE_LABELS.center;
+        const regionTitle = typeof getRegionName === 'function' ? getRegionName(data.region) : data.region;
+
         modal.innerHTML = `
-            <div style="background: #0B1120; border: 1.5px solid rgba(255, 255, 255, 0.14); border-radius: 24px; max-width: 580px; width: 100%; padding: 28px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85); color: #F8FAFC;">
-                <div style="text-align: center; margin-bottom: 22px;">
-                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #F59E0B; font-weight: 800;">КОМНАТА ДУЭЛИ СОЗДАНА</div>
-                    <div style="font-size: 36px; font-weight: 900; color: #FFFFFF; letter-spacing: 3px; margin: 6px 0;">${escapeHtml(data.room_id)}</div>
-                    <div style="font-size: 13px; color: #94A3B8;">Дисциплина: <b>${data.mode === 'center' ? '🎯 Райцентры на скорость' : '🧩 Пазл региона'}</b> • 🌍 ${escapeHtml(data.region)}</div>
+            <div style="background: #0B1120; border: 1.5px solid rgba(59, 130, 246, 0.45); border-radius: 24px; max-width: 580px; width: 100%; padding: 28px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85); color: #F8FAFC;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div>
+                        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.4px; color: #34D399; font-weight: 800;">✅ ГОТОВО К ПОДКЛЮЧЕНИЮ</div>
+                        <h3 style="margin: 4px 0 0 0; font-size: 22px; font-weight: 800; color: #FFFFFF;">Комната создана</h3>
+                    </div>
+                    <button id="duel-wait-close-x" style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); color: #94A3B8; font-size: 20px; width: 34px; height: 34px; border-radius: 8px; cursor: pointer;" title="Отменить ожидание">&times;</button>
                 </div>
 
-                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
-                    <div style="font-size: 12px; color: #CBD5E1; font-weight: 600; margin-bottom: 8px;">Ссылка-приглашение для второго студента:</div>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" readonly value="${escapeHtml(inviteUrl)}" style="flex: 1; background: #0F172A; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 8px 12px; color: #93C5FD; font-size: 12px; outline: none;">
-                        <button id="copy-duel-link-btn" style="background: #2563EB; border: none; border-radius: 8px; color: #FFFFFF; padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">Копировать</button>
+                <div style="background: rgba(15, 23, 42, 0.9); border: 1.5px solid rgba(245, 158, 11, 0.45); border-radius: 16px; padding: 18px; text-align: center; margin-bottom: 16px;">
+                    <div style="font-size: 11.5px; color: #CBD5E1; font-weight: 600; margin-bottom: 6px;">Код комнаты для второго игрока:</div>
+                    <div id="duel-lobby-room-code" style="font-size: 38px; font-weight: 900; color: #FBBF24; letter-spacing: 4px; font-family: 'JetBrains Mono', monospace; user-select: all;">${escapeHtml(data.room_id)}</div>
+                    <div style="display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap;">
+                        <button id="copy-duel-code-btn" type="button" style="background: #2563EB; border: none; border-radius: 10px; color: #FFFFFF; padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer;">📋 Скопировать код</button>
+                        <button id="copy-duel-link-btn" type="button" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 10px; color: #E2E8F0; padding: 9px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer;">🔗 Скопировать ссылку</button>
+                    </div>
+                    <div id="duel-copy-feedback" style="min-height: 18px; font-size: 12px; font-weight: 700; color: #34D399; margin-top: 8px;"></div>
+                </div>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">
+                    <div style="flex: 1; min-width: 180px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 10px 12px;">
+                        <div style="font-size: 11px; color: #94A3B8;">Режим дуэли</div>
+                        <div style="font-size: 13.5px; font-weight: 700; color: #FFFFFF; margin-top: 2px;">${escapeHtml(modeTitle)}</div>
+                    </div>
+                    <div style="flex: 1; min-width: 180px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 10px 12px;">
+                        <div style="font-size: 11px; color: #94A3B8;">Регион</div>
+                        <div style="font-size: 13.5px; font-weight: 700; color: #FFFFFF; margin-top: 2px;">${escapeHtml(regionTitle)}</div>
                     </div>
                 </div>
 
                 <!-- СПИСОК УЧАСТНИКОВ -->
-                <div style="margin-bottom: 24px;">
+                <div style="margin-bottom: 20px;">
                     <div style="font-size: 12.5px; font-weight: 700; color: #CBD5E1; margin-bottom: 10px;">Участники дуэли:</div>
                     <div id="duel-lobby-players-list" style="display: flex; flex-direction: column; gap: 8px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 10px 14px;">
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <span>👑</span>
-                                <span style="font-size: 13.5px; font-weight: 700; color: #FFFFFF;">${escapeHtml(room.players?.[0]?.name || 'Игрок 1')}</span>
+                                <span style="font-size: 13.5px; font-weight: 700; color: #FFFFFF;">${escapeHtml(players[0]?.name || 'Игрок 1')}</span>
                             </div>
-                            <span style="font-size: 11px; color: #34D399; font-weight: 700;">ГОТОВ ✅</span>
+                            <span style="font-size: 11px; color: #34D399; font-weight: 700;">В КОМНАТЕ</span>
                         </div>
-                        <div id="duel-opp-slot" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(255, 255, 255, 0.15); border-radius: 10px; padding: 10px 14px;">
+                        <div id="duel-opp-slot" style="display: flex; align-items: center; justify-content: space-between; background: rgba(245, 158, 11, 0.08); border: 1px dashed rgba(245, 158, 11, 0.4); border-radius: 10px; padding: 10px 14px;">
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <span>⏳</span>
-                                <span style="font-size: 13px; color: #94A3B8;">Ожидание второго игрока...</span>
+                                <span style="font-size: 13px; color: #E2E8F0;">Ожидание второго игрока...</span>
                             </div>
-                            <span style="font-size: 11px; color: #F59E0B; font-weight: 600;">ЖДЕМ ПОДКЛЮЧЕНИЯ</span>
+                            <span style="font-size: 11px; color: #F59E0B; font-weight: 700;">ЖДЁМ ПОДКЛЮЧЕНИЯ</span>
                         </div>
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 10px;">
-                    <button onclick="DuelManager.closeModal()" style="flex: 1; padding: 12px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; color: #CBD5E1; font-size: 13.5px; font-weight: 600; cursor: pointer;">Выйти</button>
-                    <button id="btn-start-duel-now" style="flex: 2; padding: 12px; background: linear-gradient(135deg, #EF4444, #F59E0B); border: none; border-radius: 12px; color: #FFFFFF; font-size: 14.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);">
-                        ⚔️ Начать дуэль!
+                    <button id="cancel-duel-lobby-btn" style="flex: 1; padding: 12px; background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.45); border-radius: 12px; color: #FCA5A5; font-size: 13.5px; font-weight: 700; cursor: pointer;">Отменить</button>
+                    <button id="btn-start-duel-now" style="flex: 1.6; padding: 12px; background: linear-gradient(135deg, #2563EB, #1D4ED8); border: none; border-radius: 12px; color: #FFFFFF; font-size: 14px; font-weight: 800; cursor: pointer;">
+                        🗺️ Перейти на карту ожидания
                     </button>
                 </div>
             </div>
         `;
 
+        const feedbackEl = document.getElementById('duel-copy-feedback');
+        document.getElementById('copy-duel-code-btn').onclick = () => {
+            copyDuelTextSafe(data.room_id).then(() => {
+                if (feedbackEl) {
+                    feedbackEl.textContent = `✅ Код ${data.room_id} скопирован!`;
+                    setTimeout(() => { if (feedbackEl) feedbackEl.textContent = ''; }, 2500);
+                }
+            });
+        };
         document.getElementById('copy-duel-link-btn').onclick = () => {
-            navigator.clipboard.writeText(inviteUrl);
-            document.getElementById('copy-duel-link-btn').textContent = 'Скопировано! ✓';
-            setTimeout(() => {
-                const el = document.getElementById('copy-duel-link-btn');
-                if (el) el.textContent = 'Копировать';
-            }, 2000);
+            copyDuelTextSafe(inviteUrl).then(() => {
+                if (feedbackEl) {
+                    feedbackEl.textContent = '✅ Ссылка-приглашение скопирована!';
+                    setTimeout(() => { if (feedbackEl) feedbackEl.textContent = ''; }, 2500);
+                }
+            });
         };
 
-        const startBtn = document.getElementById('btn-start-duel-now');
-        startBtn.onclick = () => {
+        const cancelLobby = async () => {
+            if (this._lobbyPollInterval) {
+                clearInterval(this._lobbyPollInterval);
+                this._lobbyPollInterval = null;
+            }
+            try {
+                await fetch(`/api/duel/action/${data.room_id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ player_id: data.player_id, action: 'cancel', payload: {} })
+                });
+            } catch (e) {}
+            this.closeModal();
+        };
+
+        document.getElementById('cancel-duel-lobby-btn').onclick = cancelLobby;
+        document.getElementById('duel-wait-close-x').onclick = cancelLobby;
+        document.getElementById('btn-start-duel-now').onclick = () => {
             this.launchDuelOnMap(data);
         };
 
-        // Начинаем опрашивать состояние комнаты
         const lobbyPollInterval = setInterval(async () => {
             try {
-                const res = await fetch(`/api/duel/state/${data.room_id}`);
+                const res = await fetch(`/api/duel/state/${data.room_id}?player_id=${encodeURIComponent(data.player_id)}`);
                 if (!res.ok) return;
                 const state = await res.json();
                 const currentRoom = state.room || {};
-                const players = currentRoom.players || [];
-                if (players.length >= 2) {
-                    const opp = players[1];
+                const curPlayers = currentRoom.players || [];
+                if (curPlayers.length >= 2) {
+                    const opp = curPlayers.find(p => p.player_id !== data.player_id) || curPlayers[1];
                     const oppSlot = document.getElementById('duel-opp-slot');
                     if (oppSlot) {
-                        oppSlot.style.background = 'rgba(16, 185, 129, 0.08)';
-                        oppSlot.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                        oppSlot.style.background = 'rgba(16, 185, 129, 0.12)';
+                        oppSlot.style.border = '1px solid rgba(16, 185, 129, 0.45)';
                         oppSlot.innerHTML = `
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <span>⚔️</span>
-                                <span style="font-size: 13.5px; font-weight: 700; color: #FFFFFF;">${escapeHtml(opp.name)} (${escapeHtml(opp.group || '')})</span>
+                                <span style="font-size: 13.5px; font-weight: 700; color: #FFFFFF;">${escapeHtml(opp.name)} (${escapeHtml(opp.group || '-')})</span>
                             </div>
-                            <span style="font-size: 11px; color: #34D399; font-weight: 700;">ПОДКЛЮЧЕН! 🚀</span>
+                            <span style="font-size: 11px; color: #34D399; font-weight: 700;">ПОДКЛЮЧЁН! 🚀</span>
                         `;
                     }
-                    startBtn.textContent = '⚔️ В бой! Начать дуэль';
-                    startBtn.style.animation = 'pulse 1s infinite alternate';
-                }
-                if (currentRoom.status === 'playing') {
                     clearInterval(lobbyPollInterval);
-                    this.launchDuelOnMap(data);
+                    this._lobbyPollInterval = null;
+                    setTimeout(() => this.launchDuelOnMap(data), 350);
+                } else if (currentRoom.status === 'cancelled') {
+                    clearInterval(lobbyPollInterval);
+                    this._lobbyPollInterval = null;
+                    this.closeModal();
                 }
-            } catch(e) {}
-        }, 1200);
+            } catch (e) {}
+        }, 1000);
 
-        // Сохраняем ссылку на интервал
         this._lobbyPollInterval = lobbyPollInterval;
     },
 
     launchDuelOnMap(data) {
-        if (this._lobbyPollInterval) clearInterval(this._lobbyPollInterval);
+        if (this._lobbyPollInterval) {
+            clearInterval(this._lobbyPollInterval);
+            this._lobbyPollInterval = null;
+        }
         this.closeModal();
 
-        const currentMapUrl = window.location.pathname;
         const targetRegion = data.region || 'rostov';
+        const currentReg = (typeof window.currentRegionKey !== 'undefined' && window.currentRegionKey)
+            ? resolveRegionKey(window.currentRegionKey)
+            : resolveRegionKey(window.location.pathname);
 
-        // Если мы уже находимся на карте этого региона
-        if (currentMapUrl.includes(targetRegion) || (typeof window.currentRegionKey !== 'undefined' && window.currentRegionKey === targetRegion)) {
-            this.startDuelSession(data.room_id, data.player_id, data.role);
+        if (currentReg === resolveRegionKey(targetRegion)) {
+            if (window.history && window.history.replaceState) {
+                const url = new URL(window.location.href);
+                url.searchParams.set('duel', data.room_id);
+                url.searchParams.set('player', data.player_id);
+                url.searchParams.set('role', data.role);
+                url.searchParams.set('mode', data.mode || 'center');
+                window.history.replaceState({}, document.title, url.pathname + url.search);
+            }
+            this.startDuelSession(data.room_id, data.player_id, data.role, data.mode);
         } else {
-            // Переходим на страницу карты
-            window.location.href = data.map_url || `/map/${targetRegion}?duel=${data.room_id}&player=${data.player_id}&role=${data.role}`;
+            window.location.href = data.map_url || `/map/${targetRegion}?duel=${encodeURIComponent(data.room_id)}&player=${encodeURIComponent(data.player_id)}&role=${encodeURIComponent(data.role)}&mode=${encodeURIComponent(data.mode || 'center')}`;
         }
     },
 
-    startDuelSession(roomId, playerId, role) {
+    startDuelSession(roomId, playerId, role, initialMode = null) {
+        this.clearAllTimers();
         this.active = true;
         this.roomId = roomId.toUpperCase();
         this.playerId = playerId;
         this.role = role;
+        if (initialMode) {
+            this.mode = normalizeClientDuelMode(initialMode);
+        }
+        this.region = (typeof window.currentRegionKey !== 'undefined' && window.currentRegionKey) ? window.currentRegionKey : 'rostov';
         this.myScore = 0;
         this.oppScore = 0;
         this.myProgress = 0;
         this.oppProgress = 0;
+        this.total = this.mode === 'puzzle' ? Math.max(1, (getPuzzleData().length || 26) - 1) : 7;
         this.hasFinished = false;
         this._gameplayStarted = false;
+        this._activeRound = -1;
 
+        closeWelcomeModal();
         this.injectStyles();
         this.renderLiveHUD();
+        this.showWaitingOverlay();
         this.connectWebSocket();
+    },
+
+    clearAllTimers() {
+        if (this._wsTimeout) { clearTimeout(this._wsTimeout); this._wsTimeout = null; }
+        if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
+        if (this._pingTimer) { clearInterval(this._pingTimer); this._pingTimer = null; }
+        if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+        if (this._roundTimerInterval) { clearInterval(this._roundTimerInterval); this._roundTimerInterval = null; }
+        if (this._lobbyPollInterval) { clearInterval(this._lobbyPollInterval); this._lobbyPollInterval = null; }
+        if (window._centerNextQuestionTimer) { clearTimeout(window._centerNextQuestionTimer); window._centerNextQuestionTimer = null; }
     },
 
     fetchRoomState: async function() {
         try {
-            const res = await fetch(`/api/duel/state/${this.roomId}?player_id=${this.playerId}`);
+            const res = await fetch(`/api/duel/state/${this.roomId}?player_id=${encodeURIComponent(this.playerId)}`);
+            if (res.status === 404) {
+                this.showDuelToast('error', 'Комната дуэли не найдена или истекла');
+                return null;
+            }
             if (res.ok) {
                 const data = await res.json();
                 if (data && data.room) {
@@ -7556,23 +7841,90 @@ var DuelManager = {
     },
 
     showWaitingOverlay: function() {
+        if (this.hasFinished) return;
+        hideMapLoader(true);
         let el = document.getElementById('duel-waiting-overlay');
         if (!el) {
             el = document.createElement('div');
             el.id = 'duel-waiting-overlay';
-            el.style.cssText = 'position:fixed;inset:0;background:rgba(3,7,18,0.85);backdrop-filter:blur(8px);z-index:9999998;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+            el.style.cssText = 'position:fixed;inset:0;background:rgba(3,7,18,0.86);backdrop-filter:blur(8px);z-index:9999998;display:flex;align-items:center;justify-content:center;padding:16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
             document.body.appendChild(el);
         }
         el.style.display = 'flex';
+        const room = this.roomState || {};
+        const players = room.players || [];
+        const hasOpp = players.length >= 2;
+        const opp = players.find(p => p.player_id !== this.playerId);
+        const modeTitle = DUEL_MODE_LABELS[this.mode] || DUEL_MODE_LABELS.center;
+        const regionTitle = typeof getRegionName === 'function' ? getRegionName(this.region) : this.region;
+        const inviteUrl = `${window.location.origin}/map/${this.region}?duel=${encodeURIComponent(this.roomId)}`;
+        const wsBadge = this.isWsConnected
+            ? '<span style="color:#34D399;">🟢 Соединение активно</span>'
+            : '<span style="color:#FBBF24;">🟡 Синхронизация с сервером...</span>';
+
         el.innerHTML = `
-            <div style="background:#0B1120;border:2px solid #F59E0B;border-radius:20px;padding:32px;text-align:center;max-width:440px;color:#F8FAFC;box-shadow:0 25px 60px rgba(0,0,0,0.85);">
-                <div style="font-size:44px;margin-bottom:10px;">⏳</div>
-                <h2 style="color:#FFFFFF;margin:0 0 6px 0;font-size:20px;">Ожидание соперника</h2>
-                <p style="color:#94A3B8;font-size:13px;margin:0 0 6px 0;">Комната: <strong style="color:#FBBF24;font-family:monospace;">${escapeHtml(this.roomId)}</strong></p>
-                <p style="color:#64748B;font-size:12px;margin:0 0 20px 0;">Соперник ещё не присоединился. Как только он подключится — игра начнётся автоматически.</p>
-                <button onclick="DuelManager.surrenderDuel()" style="background:#EF4444;color:#FFFFFF;border:none;border-radius:10px;padding:10px 24px;font-size:13.5px;font-weight:700;cursor:pointer;">🏳️ Отказаться от дуэли</button>
+            <div style="background:#0B1120;border:2px solid rgba(59,130,246,0.65);border-radius:22px;padding:28px;text-align:center;max-width:480px;width:100%;color:#F8FAFC;box-shadow:0 25px 60px rgba(0,0,0,0.85);">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:#34D399;font-weight:800;">
+                    ${hasOpp ? '✅ Оба игрока в комнате' : 'Комната создана'}
+                </div>
+                <h2 style="color:#FFFFFF;margin:6px 0 12px 0;font-size:21px;">
+                    ${hasOpp ? 'Подготовка к старту...' : 'Ожидание второго игрока'}
+                </h2>
+
+                <div style="background:rgba(15,23,42,0.92);border:1.5px solid rgba(245,158,11,0.5);border-radius:14px;padding:14px;margin-bottom:14px;">
+                    <div style="font-size:11.5px;color:#94A3B8;margin-bottom:4px;">Код комнаты для соперника:</div>
+                    <div id="duel-waiting-room-code" style="font-size:34px;font-weight:900;color:#FBBF24;letter-spacing:3px;font-family:'JetBrains Mono',monospace;user-select:all;">${escapeHtml(this.roomId || '')}</div>
+                    <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
+                        <button id="duel-overlay-copy-code" type="button" style="background:#2563EB;color:#FFFFFF;border:none;border-radius:9px;padding:8px 16px;font-size:12.5px;font-weight:700;cursor:pointer;">📋 Скопировать код</button>
+                        <button id="duel-overlay-copy-link" type="button" style="background:rgba(255,255,255,0.08);color:#E2E8F0;border:1px solid rgba(255,255,255,0.16);border-radius:9px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;">🔗 Ссылка</button>
+                    </div>
+                    <div id="duel-overlay-copy-feedback" style="min-height:16px;font-size:11.5px;font-weight:700;color:#34D399;margin-top:6px;"></div>
+                </div>
+
+                <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;">
+                    <span style="background:rgba(37,99,235,0.16);border:1px solid rgba(37,99,235,0.4);color:#93C5FD;padding:5px 10px;border-radius:8px;font-weight:700;">${escapeHtml(modeTitle)}</span>
+                    <span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);color:#E2E8F0;padding:5px 10px;border-radius:8px;font-weight:600;">🌍 ${escapeHtml(regionTitle)}</span>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 12px;margin-bottom:16px;font-size:12.5px;">
+                    ${hasOpp
+                        ? `<div style="color:#34D399;font-weight:700;">⚔️ Соперник подключён: ${escapeHtml(opp?.name || 'Игрок 2')}</div>`
+                        : '<div style="color:#CBD5E1;">⏳ Передайте код второму игроку — игра начнётся сразу после подключения.</div>'}
+                    <div style="font-size:11.5px;margin-top:4px;">${wsBadge}</div>
+                </div>
+
+                <div id="duel-waiting-error" style="display:none;background:rgba(239,68,68,0.15);border:1px solid #EF4444;color:#FCA5A5;border-radius:10px;padding:8px 12px;font-size:12px;margin-bottom:12px;"></div>
+
+                <button id="duel-waiting-cancel-btn" type="button" style="background:rgba(239,68,68,0.16);color:#FCA5A5;border:1px solid rgba(239,68,68,0.5);border-radius:10px;padding:10px 22px;font-size:13.5px;font-weight:700;cursor:pointer;">
+                    ${hasOpp ? '🏳️ Сдаться и завершить' : '❌ Отменить комнату'}
+                </button>
             </div>
         `;
+
+        const feedbackEl = document.getElementById('duel-overlay-copy-feedback');
+        document.getElementById('duel-overlay-copy-code').onclick = () => {
+            copyDuelTextSafe(this.roomId).then(() => {
+                if (feedbackEl) {
+                    feedbackEl.textContent = `✅ Код ${this.roomId} скопирован!`;
+                    setTimeout(() => { if (feedbackEl) feedbackEl.textContent = ''; }, 2500);
+                }
+            });
+        };
+        document.getElementById('duel-overlay-copy-link').onclick = () => {
+            copyDuelTextSafe(inviteUrl).then(() => {
+                if (feedbackEl) {
+                    feedbackEl.textContent = '✅ Ссылка-приглашение скопирована!';
+                    setTimeout(() => { if (feedbackEl) feedbackEl.textContent = ''; }, 2500);
+                }
+            });
+        };
+        document.getElementById('duel-waiting-cancel-btn').onclick = () => {
+            if (!hasOpp && this.role === 'host') {
+                this.cancelWaitingRoom();
+            } else {
+                this.surrenderDuel();
+            }
+        };
     },
 
     hideWaitingOverlay: function() {
@@ -7580,51 +7932,132 @@ var DuelManager = {
         if (el) el.style.display = 'none';
     },
 
-    surrenderDuel: function() {
-        if (!this.active && !this.roomId) {
-            this.hideWaitingOverlay();
-            return;
-        }
-        const doSurrender = () => {
-            const wasWaiting = !this._gameplayStarted;
-            this.hideWaitingOverlay();
+    async cancelWaitingRoom() {
+        const rid = this.roomId;
+        const pid = this.playerId;
+        this.clearAllTimers();
+        this.hasFinished = true;
+        this.active = false;
+        this.hideWaitingOverlay();
+        this.removeCountdownOverlay();
+        const hud = document.getElementById('geoatlas-duel-live-hud');
+        if (hud) hud.remove();
+        clearDuelQueryParams();
+
+        try {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({ type: 'surrender' }));
-            } else {
-                fetch(`/api/duel/action/${this.roomId}`, {
+                this.ws.send(JSON.stringify({ type: 'cancel' }));
+                this.ws.close(1000, 'cancelled');
+            } else if (rid && pid) {
+                await fetch(`/api/duel/action/${rid}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ player_id: this.playerId, action: 'surrender', payload: {} })
-                }).then(r => r.json()).then(data => {
-                    if (data && data.room) this.updateFromRoomState(data.room);
-                }).catch(() => {});
+                    body: JSON.stringify({ player_id: pid, action: 'cancel', payload: {} })
+                });
             }
-            if (wasWaiting) {
-                setTimeout(() => {
-                    window.location.href = '/index.html';
-                }, 400);
-            }
+        } catch (e) {}
+        this.showDuelToast('info', 'Комната ожидания отменена');
+    },
+
+    surrenderDuel: function() {
+        if (this.hasFinished) return;
+        const players = (this.roomState && this.roomState.players) || [];
+        if (players.length < 2 && this.role === 'host' && (!this.roomState || this.roomState.status === 'waiting')) {
+            this.cancelWaitingRoom();
+            return;
+        }
+        this.openSurrenderConfirmModal();
+    },
+
+    openSurrenderConfirmModal() {
+        if (document.getElementById('duel-surrender-confirm-modal')) return;
+        const confirmModal = document.createElement('div');
+        confirmModal.id = 'duel-surrender-confirm-modal';
+        confirmModal.style.cssText = 'position:fixed;inset:0;background:rgba(3,7,18,0.8);backdrop-filter:blur(6px);z-index:99999998;display:flex;align-items:center;justify-content:center;padding:20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+        confirmModal.innerHTML = `
+            <div style="background:#0B1120;border:1.5px solid rgba(239,68,68,0.6);border-radius:20px;max-width:420px;width:100%;padding:24px;text-align:center;color:#F8FAFC;box-shadow:0 20px 50px rgba(0,0,0,0.8);">
+                <div style="font-size:38px;margin-bottom:8px;">🏳️</div>
+                <h3 style="margin:0 0 8px 0;font-size:19px;font-weight:800;color:#FFFFFF;">Сдаться в дуэли?</h3>
+                <p style="margin:0 0 20px 0;font-size:13px;color:#94A3B8;line-height:1.5;">Вы получите техническое поражение, а после завершения откроется окно итоговых результатов.</p>
+                <div style="display:flex;gap:10px;">
+                    <button id="duel-cancel-surrender-btn" type="button" style="flex:1;padding:11px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.16);border-radius:10px;color:#E2E8F0;font-size:13px;font-weight:600;cursor:pointer;">Продолжить</button>
+                    <button id="duel-confirm-surrender-btn" type="button" style="flex:1;padding:11px;background:#EF4444;border:none;border-radius:10px;color:#FFFFFF;font-size:13px;font-weight:700;cursor:pointer;">🏳️ Да, сдаться</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(confirmModal);
+
+        document.getElementById('duel-cancel-surrender-btn').onclick = () => confirmModal.remove();
+        document.getElementById('duel-confirm-surrender-btn').onclick = () => {
+            confirmModal.remove();
+            this.executeSurrender();
         };
-        if (confirm('Сдаться и получить техническое поражение?')) {
-            doSurrender();
+    },
+
+    executeSurrender() {
+        if (this.hasFinished) return;
+        this.hideWaitingOverlay();
+        this.removeCountdownOverlay();
+        if (window._centerNextQuestionTimer) {
+            clearTimeout(window._centerNextQuestionTimer);
+            window._centerNextQuestionTimer = null;
+        }
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'surrender' }));
+            // Fallback REST check if WS reply delayed
+            setTimeout(() => {
+                if (!this.hasFinished) this.fetchRoomState();
+            }, 800);
+        } else {
+            fetch(`/api/duel/action/${this.roomId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_id: this.playerId, action: 'surrender', payload: {} })
+            }).then(r => r.json()).then(data => {
+                if (data && data.room) this.updateFromRoomState(data.room);
+            }).catch(() => {
+                this.showDuelToast('error', 'Не удалось отправить сдачу на сервер');
+            });
         }
     },
 
     connectWebSocket() {
+        if (this.hasFinished || !this.active) return;
+        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const url = `${proto}//${location.host}/ws/duel/${this.roomId}/${this.playerId}`;
         try {
             this.ws = new WebSocket(url);
             this.ws.onopen = async () => {
                 this.isWsConnected = true;
-                if (this.pollTimer) clearInterval(this.pollTimer);
+                this.updateConnectionBadge('connected');
+                if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+                if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
+                if (this._pingTimer) clearInterval(this._pingTimer);
+                this._pingTimer = setInterval(() => {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({ type: 'ping' }));
+                    }
+                }, 20000);
+
+                this.sendAction({ type: 'ping' });
                 const state = await this.fetchRoomState();
-                if (state && state.status === 'playing') {
-                    this.hideWaitingOverlay();
-                    if (!this._gameplayStarted) this.startGamePlay(state);
-                } else if (state && state.status === 'finished') {
+                if (!state) return;
+
+                if (state.status === 'finished') {
                     this.hideWaitingOverlay();
                     this.onGameOver(state);
+                } else if (state.status === 'cancelled') {
+                    this.cancelWaitingRoom();
+                } else if (state.status === 'playing') {
+                    this.hideWaitingOverlay();
+                    if (!this._gameplayStarted) {
+                        this.startGamePlay(state);
+                    } else {
+                        this.updateFromRoomState(state);
+                    }
                 } else {
                     this.showWaitingOverlay();
                     this.sendAction({ type: 'ready', ready: true });
@@ -7634,36 +8067,54 @@ var DuelManager = {
                 try {
                     const msg = JSON.parse(e.data);
                     this.handleSocketMessage(msg);
-                } catch(err) {}
+                } catch (err) {}
             };
-            this.ws.onerror = () => { this.fallbackToPolling(); };
+            this.ws.onerror = () => {
+                if (!this.hasFinished && this.active) {
+                    this.updateConnectionBadge('reconnecting');
+                    this.fallbackToPolling();
+                }
+            };
             this.ws.onclose = () => {
                 this.isWsConnected = false;
-                if (this.active && !this.hasFinished) this.fallbackToPolling();
+                if (this._pingTimer) { clearInterval(this._pingTimer); this._pingTimer = null; }
+                if (this.hasFinished || !this.active) {
+                    return;
+                }
+                this.updateConnectionBadge('reconnecting');
+                this.fallbackToPolling();
+                if (!this._reconnectTimer) {
+                    this._reconnectTimer = setTimeout(() => {
+                        this._reconnectTimer = null;
+                        if (this.active && !this.hasFinished) {
+                            this.connectWebSocket();
+                        }
+                    }, 2000);
+                }
             };
-        } catch(e) {
+        } catch (e) {
             this.fallbackToPolling();
         }
         this._wsTimeout = setTimeout(() => {
             if (!this.isWsConnected && this.active && !this.hasFinished) {
+                this.updateConnectionBadge('polling');
                 this.fallbackToPolling();
             }
         }, 2200);
     },
 
     fallbackToPolling() {
-        if (this.pollTimer) return;
+        if (this.pollTimer || this.hasFinished) return;
+        this.sendAction({ type: 'ready', ready: true });
         this.pollTimer = setInterval(async () => {
             if (!this.active || this.hasFinished) return;
-            try {
-                const res = await fetch(`/api/duel/state/${this.roomId}?player_id=${this.playerId}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.room) {
-                        this.updateFromRoomState(data.room);
-                    }
+            await this.fetchRoomState();
+            if (this.roomState && (this.roomState.status === 'waiting' || this.roomState.status === 'ready') && !this._gameplayStarted) {
+                const me = (this.roomState.players || []).find(p => p.player_id === this.playerId);
+                if (me && !me.ready) {
+                    this.sendAction({ type: 'ready', ready: true });
                 }
-            } catch(e) {}
+            }
         }, 1000);
     },
 
@@ -7687,13 +8138,54 @@ var DuelManager = {
 
     handleSocketMessage(msg) {
         if (!msg) return;
-        if (msg.room) this.updateFromRoomState(msg.room);
-        if (msg.type === 'countdown') {
+        if (msg.type === 'pong' && typeof msg.server_now === 'number') {
+            this._serverTimeOffset = msg.server_now - (Date.now() / 1000);
+            return;
+        }
+        if (msg.type === 'error') {
+            const errEl = document.getElementById('duel-waiting-error');
+            if (errEl) {
+                errEl.textContent = msg.message || 'Ошибка WebSocket-соединения';
+                errEl.style.display = 'block';
+            }
+            this.showDuelToast('error', msg.message || 'Ошибка дуэли');
+            return;
+        }
+        if (msg.type === 'room_cancelled') {
+            this.cancelWaitingRoom();
+            return;
+        }
+        if (msg.room) {
+            this.updateFromRoomState(msg.room);
+        }
+        if (msg.type === 'player_connected') {
+            if (this.roomState && !this._gameplayStarted && this.roomState.status !== 'finished') {
+                this.showWaitingOverlay();
+                if (msg.player_id !== this.playerId) {
+                    this.showDuelToast('success', `🟢 ${msg.player_name || 'Соперник'} подключился`);
+                }
+            } else if (msg.player_id !== this.playerId) {
+                this.setOpponentStatusBadge('online');
+                this.showDuelToast('success', `🟢 ${msg.player_name || 'Соперник'} снова в сети`);
+            }
+        } else if (msg.type === 'player_disconnected') {
+            if (msg.player_id !== this.playerId && !this.hasFinished) {
+                this.setOpponentStatusBadge('offline');
+                this.showDuelToast('warning', `⚠️ ${msg.player_name || 'Соперник'} потерял соединение`);
+            }
+        } else if (msg.type === 'countdown') {
             this.hideWaitingOverlay();
             this.showCountdownOverlay(msg.seconds);
         } else if (msg.type === 'game_start') {
             this.hideWaitingOverlay();
             this.startGamePlay(msg.room);
+        } else if (msg.type === 'round_next') {
+            if (this.mode === 'center' && msg.room && !this.hasFinished) {
+                if (typeof msg.timed_out_round === 'number') {
+                    this.showDuelToast('warning', `⏱ Время раунда ${msg.timed_out_round + 1} вышло — переходим дальше`);
+                }
+                this.enterCenterRound(msg.room);
+            }
         } else if (msg.type === 'opponent_action') {
             this.onOpponentAction(msg);
         } else if (msg.type === 'game_over') {
@@ -7703,29 +8195,56 @@ var DuelManager = {
     },
 
     updateFromRoomState(room) {
+        if (!room) return;
+        if (typeof room.server_now === 'number') {
+            this._serverTimeOffset = room.server_now - (Date.now() / 1000);
+        }
+        const prevRound = this.roomState ? this.roomState.current_round : -1;
         this.roomState = room;
-        this.mode = room.mode;
-        this.region = room.region;
+        this.mode = normalizeClientDuelMode(room.mode);
+        this.region = room.region || this.region;
 
         const players = room.players || [];
         const myP = players.find(p => p.player_id === this.playerId);
         const oppP = players.find(p => p.player_id !== this.playerId);
 
+        this.total = room.total_items || (myP && myP.total) || this.total || 7;
         if (myP) {
             this.myScore = myP.score;
             this.myProgress = myP.progress;
-            this.total = myP.total || 7;
         }
         if (oppP) {
             this.oppScore = oppP.score;
             this.oppProgress = oppP.progress;
+            this.setOpponentStatusBadge(oppP.online ? 'online' : 'offline');
         }
 
-        this.updateHUDValues(myP, oppP);
+        this.updateHUDValues(myP, oppP, room);
 
-        if (room.status === 'playing' && !this._gameplayStarted) {
+        if (room.status === 'cancelled' && !this.hasFinished) {
+            this.cancelWaitingRoom();
+            return;
+        }
+
+        if ((room.status === 'waiting' || room.status === 'ready') && !this._gameplayStarted && !this.hasFinished) {
+            const waitEl = document.getElementById('duel-waiting-overlay');
+            if (waitEl && waitEl.style.display !== 'none') {
+                this.showWaitingOverlay();
+            }
+        }
+
+        if (room.status === 'playing' && !this._gameplayStarted && !this.hasFinished) {
             this.hideWaitingOverlay();
             this.startGamePlay(room);
+        } else if (
+            room.status === 'playing' &&
+            this._gameplayStarted &&
+            this.mode === 'center' &&
+            typeof room.current_round === 'number' &&
+            room.current_round !== this._activeRound &&
+            room.current_round !== prevRound
+        ) {
+            this.enterCenterRound(room);
         }
 
         if (room.status === 'finished' && !this.hasFinished) {
@@ -7735,12 +8254,44 @@ var DuelManager = {
     },
 
     startGamePlay(room) {
+        if (!room || this.hasFinished) return;
+        this.mode = normalizeClientDuelMode(room.mode);
+        this.region = room.region || this.region;
+        this.total = room.total_items || this.total || (this.mode === 'puzzle' ? 25 : 7);
+
+        if (!getMapObject()) {
+            setTimeout(() => {
+                if (!this._gameplayStarted && !this.hasFinished) this.startGamePlay(room);
+            }, 150);
+            return;
+        }
+
         this._gameplayStarted = true;
+        hideMapLoader(true);
         this.removeCountdownOverlay();
+        this.hideWaitingOverlay();
+        closeWelcomeModal();
+
+        // Разворачиваем панель режима, чтобы игровой интерфейс всегда был виден
+        const panel = document.getElementById('quiz-controls');
+        if (panel) panel.classList.remove('collapsed');
+        document.body.classList.remove('ui-collapsed');
+
+        const players = room.players || [];
+        const myP = players.find(p => p.player_id === this.playerId);
+        const oppP = players.find(p => p.player_id !== this.playerId);
+
+        this.renderLiveHUD();
+        this.updateHUDValues(myP, oppP, room);
 
         if (this.mode === 'center') {
+            if (typeof isPuzzleMode !== 'undefined' && isPuzzleMode) {
+                exitPuzzleMode(true);
+            }
+            const pm = document.getElementById('puzzle-mode');
+            if (pm) pm.style.display = 'none';
+
             if (room.questions && room.questions.length > 0) {
-                // Инициализируем идентичные вопросы для обоих студентов
                 quizData = room.questions.map(q => ({
                     type: 'center',
                     correctAnswer: q.name,
@@ -7750,17 +8301,96 @@ var DuelManager = {
                     centerName: q.name
                 }));
                 totalQuestions = quizData.length;
-                currentQuestion = 0;
-                score = 0;
-                mistakes = 0;
-                prepareQuizUI('center', '🎯 Дуэль: Найти райцентр', true, false);
-                showQuestion();
+                maxPossibleScore = totalQuestions * 3;
+                score = myP ? (myP.score || 0) : 0;
+                mistakes = myP ? (myP.mistakes || 0) : 0;
+                const regionTitle = typeof getRegionName === 'function' ? getRegionName(this.region) : this.region;
+                prepareQuizUI('center', `🎯 Дуэль: Райцентры (${regionTitle})`, false, false);
+                updateScore();
+                this.enterCenterRound(room);
             } else {
                 startCenterQuiz();
             }
         } else if (this.mode === 'puzzle') {
+            if (this._roundTimerInterval) {
+                clearInterval(this._roundTimerInterval);
+                this._roundTimerInterval = null;
+            }
             startPuzzleMode();
+            this.startSyncedRoundTimer(room);
         }
+    },
+
+    enterCenterRound(room) {
+        if (!room || this.mode !== 'center' || this.hasFinished) return;
+        const roundIdx = Math.max(0, Math.min((quizData.length || 1) - 1, Number(room.current_round || 0)));
+        if (this._activeRound === roundIdx) return;
+
+        if (window._centerNextQuestionTimer) {
+            clearTimeout(window._centerNextQuestionTimer);
+            window._centerNextQuestionTimer = null;
+        }
+        this._activeRound = roundIdx;
+        currentQuestion = roundIdx;
+
+        const players = room.players || [];
+        const myP = players.find(p => p.player_id === this.playerId);
+        const oppP = players.find(p => p.player_id !== this.playerId);
+        this.updateHUDValues(myP, oppP, room);
+
+        const answeredMap = (room.round_answers && room.round_answers[String(roundIdx)]) || {};
+        const myAns = answeredMap[this.playerId];
+        if (myAns) {
+            showQuestion();
+            if (window._clickBlocker) {
+                try {
+                    if (window._clickHandler) window._clickBlocker.off('click', window._clickHandler);
+                    const m = getMapObject();
+                    if (m) m.removeLayer(window._clickBlocker);
+                } catch (e) {}
+                window._clickBlocker = null;
+                window._clickHandler = null;
+            }
+            this.showCenterRoundAnsweredState(roundIdx, myAns.points || 0, myAns.distance || 0);
+        } else {
+            showQuestion();
+        }
+        this.startSyncedRoundTimer(room);
+    },
+
+    showCenterRoundAnsweredState(roundIdx, pointsAwarded, distance) {
+        const container = document.getElementById('options-container');
+        if (!container) return;
+        const prev = document.getElementById('duel-round-wait-box');
+        if (prev) prev.remove();
+        const box = document.createElement('div');
+        box.id = 'duel-round-wait-box';
+        box.style.cssText = 'margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(37,99,235,0.12);border:1px solid rgba(37,99,235,0.35);color:#1E3A8A;font-size:12.5px;font-weight:700;text-align:center;';
+        box.textContent = `✓ Ответ по раунду ${roundIdx + 1}/${this.total} отправлен (+${pointsAwarded} б., ${Math.round(distance)} км). Ожидаем соперника...`;
+        container.appendChild(box);
+    },
+
+    startSyncedRoundTimer(room) {
+        if (this._roundTimerInterval) clearInterval(this._roundTimerInterval);
+        const duration = Number(room.round_duration || 20);
+        const startedAt = Number(room.round_started_at || (Date.now() / 1000));
+        const renderTick = () => {
+            const timerBadge = document.getElementById('hud-round-timer');
+            if (!timerBadge || this.hasFinished) return;
+            if (this.mode === 'puzzle') {
+                const elapsed = Math.max(0, Math.floor((Date.now() / 1000) + this._serverTimeOffset - Number((this.roomState && this.roomState.start_time) || (Date.now() / 1000))));
+                const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                const ss = String(elapsed % 60).padStart(2, '0');
+                timerBadge.textContent = `⏱ ${mm}:${ss}`;
+                return;
+            }
+            const nowServer = (Date.now() / 1000) + this._serverTimeOffset;
+            const rem = Math.max(0, Math.ceil(duration - (nowServer - startedAt)));
+            timerBadge.textContent = `⏱ ${rem}с`;
+            timerBadge.style.color = rem <= 5 ? '#FCA5A5' : '#93C5FD';
+        };
+        renderTick();
+        this._roundTimerInterval = setInterval(renderTick, 500);
     },
 
     showCountdownOverlay(seconds) {
@@ -7772,7 +8402,8 @@ var DuelManager = {
             document.body.appendChild(el);
         }
         el.innerHTML = `
-            <div style="font-size: 16px; font-weight: 800; color: #F59E0B; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px;">⚔️ Битва начинается через:</div>
+            <div style="font-size: 13px; font-weight: 700; color: #93C5FD; margin-bottom: 6px;">${escapeHtml(DUEL_MODE_LABELS[this.mode] || '')}</div>
+            <div style="font-size: 16px; font-weight: 800; color: #F59E0B; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px;">⚔️ Оба игрока готовы — битва через:</div>
             <div style="font-size: 110px; font-weight: 900; color: #FFFFFF; text-shadow: 0 0 35px rgba(245, 158, 11, 0.8);">${seconds}</div>
         `;
     },
@@ -7790,25 +8421,33 @@ var DuelManager = {
             document.body.appendChild(hud);
         }
         const student = getCurrentStudentInfo() || { name: 'Вы' };
+        const isPuzzle = this.mode === 'puzzle';
+        const initialBadge = isPuzzle ? '🧩 ГОНКА ПАЗЛА' : `🎯 РАУНД 1 / ${this.total || 7}`;
+        const initialSub = `Прогресс: 0 / ${this.total || 7}`;
+
         hud.innerHTML = `
             <div class="duel-hud-container">
                 <!-- ВЫ -->
                 <div class="duel-player-box my-box">
                     <div class="duel-box-header">
                         <span class="duel-crown">👑</span>
-                        <span class="duel-name">${escapeHtml(student.name || 'Вы')}</span>
+                        <span class="duel-name" id="hud-my-name">${escapeHtml(student.name || 'Вы')}</span>
                         <span class="duel-score" id="hud-my-score">0 б.</span>
                     </div>
                     <div class="duel-bar-track">
                         <div class="duel-bar-fill my-fill" id="hud-my-bar" style="width: 0%"></div>
                     </div>
-                    <div class="duel-sub-info" id="hud-my-sub">Прогресс: 0 / 7</div>
+                    <div class="duel-sub-info" id="hud-my-sub">${initialSub}</div>
                 </div>
 
                 <!-- ЦЕНТР VS -->
                 <div class="duel-vs-box">
-                    <div class="duel-vs-title">⚔️ ДУЭЛЬ 1V1</div>
-                    <div class="duel-vs-badge" id="hud-round-badge">РАУНД 1 / 7</div>
+                    <div class="duel-vs-title" id="hud-mode-label">${isPuzzle ? '🧩 ПАЗЛ 1V1' : '🎯 РАЙЦЕНТРЫ 1V1'}</div>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <div class="duel-vs-badge" id="hud-round-badge">${initialBadge}</div>
+                        <div class="duel-vs-badge" id="hud-round-timer" style="border-color:#3B82F6;background:rgba(59,130,246,0.15);color:#93C5FD;">⏱ --</div>
+                    </div>
+                    <div id="hud-conn-status" style="font-size:10px;color:#34D399;font-weight:700;">🟢 В сети</div>
                     <button onclick="DuelManager.surrenderDuel()" class="duel-surrender-btn" title="Сдаться (техническое поражение)">🏳️ Сдаться</button>
                 </div>
 
@@ -7817,19 +8456,43 @@ var DuelManager = {
                     <div class="duel-box-header">
                         <span class="duel-score opp-score" id="hud-opp-score">0 б.</span>
                         <span class="duel-name" id="hud-opp-name">Соперник</span>
-                        <span class="duel-crown">⚔️</span>
+                        <span class="duel-crown" id="hud-opp-net-dot" title="Статус соперника">⚔️</span>
                     </div>
                     <div class="duel-bar-track">
                         <div class="duel-bar-fill opp-fill" id="hud-opp-bar" style="width: 0%"></div>
                     </div>
-                    <div class="duel-sub-info" id="hud-opp-sub">Ожидание хода...</div>
+                    <div class="duel-sub-info" id="hud-opp-sub">Ожидание второго игрока...</div>
                 </div>
             </div>
             <div id="duel-live-event-banner" class="duel-event-banner"></div>
         `;
     },
 
-    updateHUDValues(myP, oppP) {
+    updateConnectionBadge(state) {
+        const el = document.getElementById('hud-conn-status');
+        if (!el) return;
+        if (state === 'connected') {
+            el.textContent = '🟢 WebSocket активен';
+            el.style.color = '#34D399';
+        } else if (state === 'polling') {
+            el.textContent = '🟡 HTTP-синхронизация';
+            el.style.color = '#FBBF24';
+        } else {
+            el.textContent = '🔄 Переподключение...';
+            el.style.color = '#FBBF24';
+        }
+    },
+
+    setOpponentStatusBadge(status) {
+        const dot = document.getElementById('hud-opp-net-dot');
+        if (dot) {
+            dot.textContent = status === 'online' ? '🟢' : '⚠️';
+            dot.title = status === 'online' ? 'Соперник в сети' : 'Соперник отключился';
+        }
+    },
+
+    updateHUDValues(myP, oppP, room = null) {
+        const myNameEl = document.getElementById('hud-my-name');
         const myScoreEl = document.getElementById('hud-my-score');
         const myBarEl = document.getElementById('hud-my-bar');
         const mySubEl = document.getElementById('hud-my-sub');
@@ -7839,14 +8502,18 @@ var DuelManager = {
         const oppBarEl = document.getElementById('hud-opp-bar');
         const oppSubEl = document.getElementById('hud-opp-sub');
         const roundBadgeEl = document.getElementById('hud-round-badge');
+        const modeLabelEl = document.getElementById('hud-mode-label');
 
         const totalItems = this.total || 7;
 
-        if (myP && myScoreEl && myBarEl && mySubEl) {
+        if (myP && myNameEl && myScoreEl && myBarEl && mySubEl) {
+            myNameEl.textContent = myP.name || 'Вы';
             myScoreEl.textContent = `${myP.score} б.`;
             const pct = Math.min(100, Math.round((myP.progress / totalItems) * 100));
             myBarEl.style.width = `${pct}%`;
-            mySubEl.textContent = `Прогресс: ${myP.progress} / ${totalItems}`;
+            mySubEl.textContent = this.mode === 'puzzle'
+                ? `Собрано: ${myP.progress} / ${totalItems} • Ошибок: ${myP.mistakes || 0}`
+                : `Прогресс: ${myP.progress} / ${totalItems}`;
         }
 
         if (oppP && oppScoreEl && oppBarEl && oppSubEl && oppNameEl) {
@@ -7854,133 +8521,245 @@ var DuelManager = {
             oppScoreEl.textContent = `${oppP.score} б.`;
             const pct = Math.min(100, Math.round((oppP.progress / totalItems) * 100));
             oppBarEl.style.width = `${pct}%`;
-            oppSubEl.textContent = `Прогресс: ${oppP.progress} / ${totalItems}`;
+            if (!oppP.online && !this.hasFinished) {
+                oppSubEl.textContent = `⚠️ Отключился (${oppP.progress}/${totalItems})`;
+            } else if (this.mode === 'puzzle') {
+                oppSubEl.textContent = `Собрано: ${oppP.progress} / ${totalItems} • Ошибок: ${oppP.mistakes || 0}`;
+            } else if (room && room.round_answers && typeof room.current_round === 'number') {
+                const ansMap = room.round_answers[String(room.current_round)] || {};
+                const oppAnsweredCur = !!ansMap[oppP.player_id];
+                oppSubEl.textContent = oppAnsweredCur
+                    ? `✓ Ответил в раунде ${room.current_round + 1}/${totalItems}`
+                    : `Думает над раундом ${room.current_round + 1}/${totalItems}`;
+            } else {
+                oppSubEl.textContent = `Прогресс: ${oppP.progress} / ${totalItems}`;
+            }
+        }
+
+        if (modeLabelEl) {
+            modeLabelEl.textContent = this.mode === 'puzzle' ? '🧩 ПАЗЛ 1V1' : '🎯 РАЙЦЕНТРЫ 1V1';
         }
 
         if (roundBadgeEl) {
             if (this.mode === 'center') {
-                const currentRound = Math.min(totalItems, (myP?.progress || 0) + 1);
-                roundBadgeEl.textContent = `РАУНД ${currentRound} / ${totalItems}`;
+                const curRound = room && typeof room.current_round === 'number'
+                    ? Math.min(totalItems, room.current_round + 1)
+                    : Math.min(totalItems, (myP?.progress || 0) + 1);
+                roundBadgeEl.textContent = `РАУНД ${curRound} / ${totalItems}`;
             } else {
                 roundBadgeEl.textContent = `ГОНКА ПАЗЛА`;
             }
         }
     },
 
-    submitCenterAnswer(questionIndex, points, distance, targetName) {
-        if (!this.active) return;
-        this.sendAction({
+    submitCenterAnswer(questionIndex, points, distance, targetName, lat = null, lon = null) {
+        if (!this.active || this.hasFinished) return;
+        const payload = {
             type: 'answer_center',
             question_index: questionIndex,
             points: points,
             distance: distance,
             target_name: targetName
-        });
+        };
+        if (typeof lat === 'number' && typeof lon === 'number') {
+            payload.lat = lat;
+            payload.lon = lon;
+        }
+        this.sendAction(payload);
     },
 
-    submitPuzzlePiece(placedCount, mistakes, districtName) {
-        if (!this.active) return;
+    submitPuzzlePiece(placedCount, mistakes, districtName, districtId = null) {
+        if (!this.active || this.hasFinished) return;
         this.sendAction({
             type: 'place_piece',
+            district_id: districtId,
             placed_count: placedCount,
             mistakes: mistakes,
             district_name: districtName
         });
     },
 
-    onOpponentAction(msg) {
+    submitPuzzleMistake(mistakes, districtName = '') {
+        if (!this.active || this.hasFinished) return;
+        this.sendAction({
+            type: 'puzzle_mistake',
+            mistakes: mistakes,
+            district_name: districtName
+        });
+    },
+
+    showDuelToast(type, text) {
         const banner = document.getElementById('duel-live-event-banner');
         if (!banner) return;
-
-        let text = '';
-        if (msg.action === 'answer_center') {
-            text = `⚡ Соперник: ${msg.target_name} (+${msg.points} б., ${Math.round(msg.distance)} км)`;
-        } else if (msg.action === 'place_piece') {
-            text = `🧩 Соперник собрал район «${msg.district_name}» (${msg.placed_count} всего)`;
-        }
-
+        banner.style.borderColor = type === 'error' ? '#EF4444' : (type === 'warning' ? '#F59E0B' : (type === 'success' ? '#10B981' : '#38BDF8'));
         banner.textContent = text;
         banner.style.opacity = '1';
         banner.style.transform = 'translateY(0)';
-        setTimeout(() => {
+        clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => {
             banner.style.opacity = '0';
             banner.style.transform = 'translateY(-10px)';
-        }, 2500);
+        }, 2800);
+    },
+
+    onOpponentAction(msg) {
+        if (!msg || msg.player_id === this.playerId) return;
+        let text = '';
+        if (msg.action === 'answer_center') {
+            text = `⚡ Соперник ответил в раунде ${(msg.question_index || 0) + 1} (+${msg.points} б., ${Math.round(msg.distance || 0)} км)`;
+        } else if (msg.action === 'place_piece') {
+            text = `🧩 Соперник собрал «${msg.district_name || 'район'}» (${msg.placed_count}/${this.total})`;
+        } else if (msg.action === 'puzzle_mistake') {
+            text = `⚠️ Ошибка соперника на «${msg.district_name || 'районе'}» (ошибок: ${msg.mistakes})`;
+        }
+        if (text) this.showDuelToast('info', text);
+    },
+
+    teardownGameplayUiAfterMatch() {
+        stopTimer();
+        stopPuzzleTimer();
+        if (window._clickBlocker) {
+            try {
+                if (window._clickHandler) window._clickBlocker.off('click', window._clickHandler);
+                const m = getMapObject();
+                if (m) m.removeLayer(window._clickBlocker);
+            } catch (e) {}
+            window._clickBlocker = null;
+            window._clickHandler = null;
+        }
+        if (typeof removePuzzleDropZone === 'function') removePuzzleDropZone();
+        if (typeof removePuzzleGhost === 'function') removePuzzleGhost();
+
+        const qm = document.getElementById('quiz-mode');
+        const pm = document.getElementById('puzzle-mode');
+        const nm = document.getElementById('normal-mode');
+        const rm = document.getElementById('results-mode');
+        if (qm) qm.style.display = 'none';
+        if (pm) pm.style.display = 'none';
+        if (rm) rm.style.display = 'none';
+        if (nm) nm.style.display = 'block';
     },
 
     onGameOver(room) {
-        if (this._wsTimeout) clearTimeout(this._wsTimeout);
-        this.hideWaitingOverlay();
         if (this.hasFinished) return;
         this.hasFinished = true;
         this.active = false;
-        if (this.pollTimer) clearInterval(this.pollTimer);
+        this.clearAllTimers();
+        this.hideWaitingOverlay();
+        this.removeCountdownOverlay();
 
-        const players = room.players || [];
-        const myP = players.find(p => p.player_id === this.playerId) || { score: 0 };
-        const oppP = players.find(p => p.player_id !== this.playerId) || { score: 0, name: 'Соперник' };
+        const confirmModal = document.getElementById('duel-surrender-confirm-modal');
+        if (confirmModal) confirmModal.remove();
 
-        const isWinner = room.winner === this.playerId;
-        const isDraw = room.winner === 'draw';
-
-        if (isWinner) {
-            unlockAchievement('duel_master');
-            // Бонус к очкам за победу
+        // Закрываем WebSocket корректно ПОСЛЕ установки hasFinished = true
+        if (this.ws) {
             try {
-                const curBonus = parseInt(localStorage.getItem('geoatlas_duel_bonus_xp') || '0');
-                localStorage.setItem('geoatlas_duel_bonus_xp', String(curBonus + 50));
-            } catch(e) {}
+                if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+                    this.ws.close(1000, 'game_over');
+                }
+            } catch (e) {}
+            this.ws = null;
         }
 
+        const players = (room && room.players) || [];
+        const myP = players.find(p => p.player_id === this.playerId) || { name: 'Вы', score: this.myScore, progress: this.myProgress, correct_answers: 0, mistakes: 0 };
+        const oppP = players.find(p => p.player_id !== this.playerId) || { name: 'Соперник', score: this.oppScore, progress: this.oppProgress, correct_answers: 0, mistakes: 0 };
+
+        this.updateHUDValues(myP, oppP, room);
+
+        const isWinner = room && room.winner === this.playerId;
+        const isDraw = room && room.winner === 'draw';
+
+        if (isWinner && typeof unlockAchievement === 'function') {
+            unlockAchievement('duel_master');
+            try {
+                const curBonus = parseInt(localStorage.getItem('geoatlas_duel_bonus_xp') || '0', 10);
+                localStorage.setItem('geoatlas_duel_bonus_xp', String(curBonus + 50));
+            } catch (e) {}
+        }
+
+        const existing = document.getElementById('duel-results-modal');
+        if (existing) existing.remove();
+
         const modal = document.createElement('div');
+        modal.id = 'duel-results-modal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
         modal.style.cssText = 'position: fixed; inset: 0; background: rgba(3, 7, 18, 0.92); backdrop-filter: blur(12px); z-index: 99999999; display: flex; align-items: center; justify-content: center; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;';
-        
+
         const headerTitle = isWinner ? '🏆 ПОБЕДА В ДУЭЛИ!' : (isDraw ? '🤝 БОЕВАЯ НИЧЬЯ!' : '⚔️ ПОБЕДА СОПЕРНИКА');
         const headerColor = isWinner ? '#F59E0B' : (isDraw ? '#38BDF8' : '#F87171');
-        const headerGlow = isWinner ? '0 0 30px rgba(245, 158, 11, 0.6)' : 'none';
+        const headerGlow = isWinner ? '0 0 30px rgba(245, 158, 11, 0.55)' : 'none';
+        const isSurrender = room && room.finish_reason === 'surrender';
+        const reasonBadge = isSurrender ? '🏳️ Завершено из-за сдачи игрока' : '✅ Обычное завершение матча';
+        const modeTitle = DUEL_MODE_LABELS[normalizeClientDuelMode((room && room.mode) || this.mode)] || DUEL_MODE_LABELS.center;
+        const regionTitle = typeof getRegionName === 'function' ? getRegionName((room && room.region) || this.region) : this.region;
+        const totalTarget = (room && room.total_items) || this.total || 7;
 
         modal.innerHTML = `
-            <div style="background: #0B1120; border: 2px solid ${headerColor}; border-radius: 24px; max-width: 540px; width: 100%; padding: 32px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), ${headerGlow}; color: #F8FAFC; text-align: center;">
-                <div style="font-size: 56px; margin-bottom: 8px;">${isWinner ? '👑' : (isDraw ? '🤝' : '⚔️')}</div>
-                <h2 style="font-size: 28px; font-weight: 900; color: ${headerColor}; margin: 0 0 8px 0; letter-spacing: -0.5px;">${headerTitle}</h2>
-                <div style="font-size: 13.5px; color: #94A3B8; margin-bottom: 24px;">${escapeHtml(room.winner_reason || '')}</div>
+            <div style="background: #0B1120; border: 2px solid ${headerColor}; border-radius: 24px; max-width: 580px; width: 100%; padding: 30px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), ${headerGlow}; color: #F8FAFC; text-align: center;">
+                <div style="font-size: 52px; margin-bottom: 6px;">${isWinner ? '👑' : (isDraw ? '🤝' : '⚔️')}</div>
+                <h2 id="duel-results-title" style="font-size: 27px; font-weight: 900; color: ${headerColor}; margin: 0 0 8px 0; letter-spacing: -0.5px;">${headerTitle}</h2>
+                <div style="display: inline-block; padding: 4px 12px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); font-size: 12px; font-weight: 700; color: #CBD5E1; margin-bottom: 8px;">
+                    ${reasonBadge}
+                </div>
+                <div id="duel-results-reason" style="font-size: 13.5px; color: #94A3B8; margin-bottom: 14px;">${escapeHtml((room && room.winner_reason) || '')}</div>
+                <div style="font-size: 12px; color: #93C5FD; margin-bottom: 18px;">${escapeHtml(modeTitle)} • 🌍 ${escapeHtml(regionTitle)}</div>
 
                 ${isWinner ? `
-                    <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(30, 41, 59, 0.8)); border: 1.5px solid #F59E0B; border-radius: 14px; padding: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 14px; text-align: left;">
-                        <div style="font-size: 32px;">⚔️</div>
+                    <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(30, 41, 59, 0.8)); border: 1.5px solid #F59E0B; border-radius: 14px; padding: 12px 14px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                        <div style="font-size: 28px;">⚔️</div>
                         <div>
-                            <div style="font-size: 11px; text-transform: uppercase; color: #FBBF24; font-weight: 800;">Ачивка разблокирована</div>
-                            <div style="font-size: 15px; font-weight: 700; color: #FFFFFF;">Гроза дуэлей (+50 XP)</div>
+                            <div style="font-size: 11px; text-transform: uppercase; color: #FBBF24; font-weight: 800;">Достижение разблокировано</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #FFFFFF;">Гроза дуэлей (+50 XP)</div>
                         </div>
                     </div>
                 ` : ''}
 
                 <!-- СРАВНЕНИЕ РЕЗУЛЬТАТОВ -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 26px;">
-                    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 16px;">
-                        <div style="font-size: 12px; color: #94A3B8;">Вы (${escapeHtml(myP.name || 'Вы')})</div>
-                        <div style="font-size: 32px; font-weight: 900; color: #34D399; margin: 4px 0;">${myP.score}</div>
-                        <div style="font-size: 11.5px; color: #64748B;">прогресс: ${myP.progress}/${this.total}</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 22px;">
+                    <div id="duel-res-my-card" style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 14px; padding: 16px;">
+                        <div style="font-size: 12.5px; color: #CBD5E1; font-weight: 700;">👑 ${escapeHtml(myP.name || 'Вы')}</div>
+                        <div style="font-size: 32px; font-weight: 900; color: #34D399; margin: 6px 0;">${myP.score ?? 0}</div>
+                        <div style="font-size: 11.5px; color: #94A3B8;">Прогресс: <b>${myP.progress ?? 0}/${totalTarget}</b></div>
+                        <div style="font-size: 11.5px; color: #94A3B8; margin-top: 2px;">Точных: <b>${myP.correct_answers ?? 0}</b> • Ошибок: <b>${myP.mistakes ?? 0}</b></div>
                     </div>
-                    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 16px;">
-                        <div style="font-size: 12px; color: #94A3B8;">Соперник (${escapeHtml(oppP.name || 'Соперник')})</div>
-                        <div style="font-size: 32px; font-weight: 900; color: #F87171; margin: 4px 0;">${oppP.score}</div>
-                        <div style="font-size: 11.5px; color: #64748B;">прогресс: ${oppP.progress}/${this.total}</div>
+                    <div id="duel-res-opp-card" style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(248, 113, 113, 0.35); border-radius: 14px; padding: 16px;">
+                        <div style="font-size: 12.5px; color: #CBD5E1; font-weight: 700;">⚔️ ${escapeHtml(oppP.name || 'Соперник')}</div>
+                        <div style="font-size: 32px; font-weight: 900; color: #F87171; margin: 6px 0;">${oppP.score ?? 0}</div>
+                        <div style="font-size: 11.5px; color: #94A3B8;">Прогресс: <b>${oppP.progress ?? 0}/${totalTarget}</b></div>
+                        <div style="font-size: 11.5px; color: #94A3B8; margin-top: 2px;">Точных: <b>${oppP.correct_answers ?? 0}</b> • Ошибок: <b>${oppP.mistakes ?? 0}</b></div>
                     </div>
                 </div>
 
-                <div style="display: flex; gap: 10px;">
-                    <button id="duel-rematch-btn" style="flex: 1; padding: 12px; background: #2563EB; border: none; border-radius: 12px; color: #FFFFFF; font-size: 14px; font-weight: 700; cursor: pointer;">⚔️ Новая дуэль</button>
-                    <button id="duel-exit-btn" style="flex: 1; padding: 12px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; color: #CBD5E1; font-size: 14px; font-weight: 600; cursor: pointer;">В меню атласа</button>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="duel-back-to-map-btn" type="button" style="flex: 1; min-width: 140px; padding: 12px; background: #2563EB; border: none; border-radius: 12px; color: #FFFFFF; font-size: 13.5px; font-weight: 700; cursor: pointer;">🗺️ Вернуться на карту</button>
+                    <button id="duel-rematch-btn" type="button" style="flex: 1; min-width: 130px; padding: 12px; background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 12px; color: #FBBF24; font-size: 13.5px; font-weight: 700; cursor: pointer;">⚔️ Новая дуэль</button>
+                    <button id="duel-exit-btn" type="button" style="flex: 1; min-width: 120px; padding: 12px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 12px; color: #CBD5E1; font-size: 13.5px; font-weight: 600; cursor: pointer;">🏠 На главную</button>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
 
-        document.getElementById('duel-rematch-btn').onclick = () => {
+        const cleanupMatchUI = () => {
             modal.remove();
             const hud = document.getElementById('geoatlas-duel-live-hud');
             if (hud) hud.remove();
+            clearDuelQueryParams();
+            if (isPuzzleMode) {
+                exitPuzzleMode(true);
+            } else {
+                this.teardownGameplayUiAfterMatch();
+                if (typeof exitQuizDirectly === 'function') exitQuizDirectly();
+            }
+        };
+
+        document.getElementById('duel-back-to-map-btn').onclick = () => {
+            cleanupMatchUI();
+        };
+
+        document.getElementById('duel-rematch-btn').onclick = () => {
+            cleanupMatchUI();
             this.openModal();
         };
 
@@ -7988,7 +8767,6 @@ var DuelManager = {
             modal.remove();
             const hud = document.getElementById('geoatlas-duel-live-hud');
             if (hud) hud.remove();
-            if (typeof resetQuiz === 'function') resetQuiz();
             window.location.href = '/index.html';
         };
     },
@@ -8000,20 +8778,28 @@ var DuelManager = {
         style.textContent = `
             #geoatlas-duel-live-hud {
                 position: fixed;
-                top: 15px;
-                left: 50%;
+                top: 14px;
+                left: calc(50% - 170px);
                 transform: translateX(-50%);
                 z-index: 99999;
-                width: 90%;
-                max-width: 920px;
+                width: min(740px, calc(100vw - 440px));
+                min-width: 480px;
                 pointer-events: none;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            }
+            @media (max-width: 1120px) {
+                #geoatlas-duel-live-hud {
+                    left: 50%;
+                    width: 94%;
+                    min-width: 0;
+                    max-width: 720px;
+                }
             }
             .duel-hud-container {
                 display: flex;
                 align-items: center;
                 gap: 16px;
-                background: rgba(11, 17, 32, 0.92);
+                background: rgba(11, 17, 32, 0.94);
                 border: 1.5px solid rgba(255, 255, 255, 0.14);
                 backdrop-filter: blur(12px);
                 border-radius: 18px;
@@ -8026,14 +8812,21 @@ var DuelManager = {
                 display: flex;
                 flex-direction: column;
                 gap: 4px;
+                min-width: 0;
             }
             .duel-box-header {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
+                gap: 6px;
                 font-size: 13.5px;
                 font-weight: 700;
                 color: #FFFFFF;
+            }
+            .duel-name {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
             .duel-score {
                 background: rgba(37, 99, 235, 0.2);
@@ -8042,6 +8835,7 @@ var DuelManager = {
                 padding: 2px 8px;
                 border-radius: 6px;
                 font-size: 11.5px;
+                flex-shrink: 0;
             }
             .opp-score {
                 background: rgba(239, 68, 68, 0.2);
@@ -8057,7 +8851,7 @@ var DuelManager = {
             }
             .duel-bar-fill {
                 height: 100%;
-                transition: width 0.4s ease;
+                transition: width 0.35s ease;
             }
             .my-fill {
                 background: linear-gradient(90deg, #2563EB, #10B981);
@@ -8073,13 +8867,13 @@ var DuelManager = {
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                gap: 3px;
+                gap: 4px;
                 flex-shrink: 0;
             }
             .duel-vs-title {
                 font-size: 10.5px;
                 font-weight: 900;
-                letter-spacing: 1px;
+                letter-spacing: 0.8px;
                 color: #F59E0B;
             }
             .duel-vs-badge {
@@ -8092,13 +8886,13 @@ var DuelManager = {
                 font-weight: 800;
             }
             .duel-surrender-btn {
-                margin-top: 4px;
+                margin-top: 2px;
                 background: rgba(239, 68, 68, 0.15);
                 border: 1px solid rgba(239, 68, 68, 0.5);
                 color: #FCA5A5;
-                font-size: 10px;
+                font-size: 10.5px;
                 font-weight: 700;
-                padding: 2px 8px;
+                padding: 3px 10px;
                 border-radius: 6px;
                 cursor: pointer;
                 transition: all 0.2s;
@@ -8111,7 +8905,7 @@ var DuelManager = {
             .duel-event-banner {
                 margin: 8px auto 0 auto;
                 width: max-content;
-                max-width: 420px;
+                max-width: 440px;
                 padding: 6px 14px;
                 background: rgba(15, 23, 42, 0.94);
                 border: 1px solid #38BDF8;
@@ -8125,6 +8919,16 @@ var DuelManager = {
                 transform: translateY(-10px);
                 transition: all 0.3s ease;
                 pointer-events: none;
+            }
+            @media (max-width: 720px) {
+                .duel-hud-container {
+                    flex-direction: column;
+                    gap: 8px;
+                    padding: 10px 12px;
+                }
+                .duel-player-box {
+                    width: 100%;
+                }
             }
         `;
         document.head.appendChild(style);

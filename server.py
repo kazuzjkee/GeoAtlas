@@ -23,6 +23,7 @@ import secrets
 import csv
 import io
 import re
+import math
 import collections
 import hashlib
 import threading
@@ -221,9 +222,10 @@ class DuelCreateRequest(BaseModel):
 
 class DuelJoinRequest(BaseModel):
     room_id: str
-    player_name: str = "Студент"
+    player_name: str = "Соперник"
     player_group: str = ""
     player_email: str = ""
+    player_id: Optional[str] = None
 
 class DuelActionRequest(BaseModel):
     player_id: str
@@ -925,10 +927,17 @@ def get_region_data(region_key: str) -> Optional[Dict[str, Any]]:
 
     target_meta_file = None
     if os.path.exists(MAPS_DIR):
-        for fname in os.listdir(MAPS_DIR):
-            if fname.lower().endswith('_meta.json'):
+        meta_files = [f for f in os.listdir(MAPS_DIR) if f.lower().endswith('_meta.json')]
+        for fname in meta_files:
+            stem = fname[:-10].lower()
+            if stem == clean:
+                target_meta_file = os.path.join(MAPS_DIR, fname)
+                clean = stem
+                break
+        if not target_meta_file:
+            for fname in meta_files:
                 stem = fname[:-10].lower()
-                if stem == clean or clean in stem or stem in clean:
+                if clean in stem or stem in clean:
                     target_meta_file = os.path.join(MAPS_DIR, fname)
                     clean = stem
                     break
@@ -1149,6 +1158,20 @@ window.GEOATLAS_BRANDING = {json.dumps(branding, ensure_ascii=False)};
         f'href="/public/map.css?v={css_ver}"',
         html
     )
+
+    # Заменяем вшитую при генерации статичную копию quiz.js на актуальный внешний /quiz.js?v=...
+    quiz_js_path = os.path.join(BASE_DIR, "quiz.js")
+    quiz_ver = int(os.path.getmtime(quiz_js_path)) if os.path.exists(quiz_js_path) else 1
+    inline_quiz_marker = "var _root = typeof window !== 'undefined'"
+    marker_idx = html.find(inline_quiz_marker)
+    if marker_idx != -1:
+        end_script_idx = html.find("</script>", marker_idx)
+        if end_script_idx != -1:
+            html = (
+                html[:marker_idx]
+                + f'</script>\n<script src="/quiz.js?v={quiz_ver}"></script>'
+                + html[end_script_idx + len("</script>"):]
+            )
 
     full_injected = f"{brand_script}\n{context_script}"
 
@@ -1436,6 +1459,44 @@ def get_service_worker():
 
 # Duel multiplayer (WebSockets & REST polling)
 
+_DUEL_MODE_ALIASES = {
+    "center": "center",
+    "centers": "center",
+    "райцентры": "center",
+    "puzzle": "puzzle",
+    "пазл": "puzzle",
+}
+
+
+def normalize_duel_mode(raw_mode: Optional[str]) -> str:
+    """Normalizes and validates a duel mode name without silently overwriting invalid modes."""
+    key = str(raw_mode or "center").strip().lower()
+    if key in _DUEL_MODE_ALIASES:
+        return _DUEL_MODE_ALIASES[key]
+    raise HTTPException(status_code=400, detail=f"Неподдерживаемый режим дуэли: '{raw_mode}'")
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    earth_r = 6371.0
+    d_lat = math.radians(lat2 - lat1)
+    d_lon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(d_lat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(d_lon / 2) ** 2
+    )
+    return earth_r * 2 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+
+
+def _score_center_distance(distance_km: float) -> int:
+    if distance_km <= 15.0:
+        return 3
+    if distance_km <= 40.0:
+        return 2
+    if distance_km <= 100.0:
+        return 1
+    return 0
+
+
 class DuelPlayer:
     def __init__(self, player_id: str, name: str, group: str = "", email: str = "", is_host: bool = False):
         self.player_id = player_id
@@ -1447,7 +1508,9 @@ class DuelPlayer:
         self.score = 0
         self.progress = 0
         self.total = 7
+        self.correct_answers = 0
         self.mistakes = 0
+        self.placed_ids: List[str] = []
         self.finished = False
         self.finish_time: Optional[float] = None
         self.ws: Optional[WebSocket] = None
@@ -1464,10 +1527,12 @@ class DuelPlayer:
             "score": self.score,
             "progress": self.progress,
             "total": self.total,
+            "correct_answers": self.correct_answers,
             "mistakes": self.mistakes,
+            "placed_ids": list(self.placed_ids),
             "finished": self.finished,
             "finish_time": self.finish_time,
-            "online": (self.ws is not None) or (time.time() - self.last_ping < 15)
+            "online": (self.ws is not None) or (time.time() - self.last_ping < 15),
         }
 
     @classmethod
@@ -1477,38 +1542,56 @@ class DuelPlayer:
             name=data.get("name", "Игрок"),
             group=data.get("group", "-"),
             email=data.get("email", ""),
-            is_host=bool(data.get("is_host", False))
+            is_host=bool(data.get("is_host", False)),
         )
         p.ready = bool(data.get("ready", False))
         p.score = int(data.get("score", 0))
         p.progress = int(data.get("progress", 0))
         p.total = int(data.get("total", 7))
+        p.correct_answers = int(data.get("correct_answers", 0))
         p.mistakes = int(data.get("mistakes", 0))
+        p.placed_ids = [str(x) for x in data.get("placed_ids", []) if x]
         p.finished = bool(data.get("finished", False))
         p.finish_time = data.get("finish_time")
         p.last_ping = data.get("last_ping", time.time())
         return p
 
+
 class DuelRoom:
     def __init__(self, room_id: str, mode: str, region: str, host: DuelPlayer):
         self.room_id = room_id.upper()
-        self.mode = mode if mode in ["center", "puzzle"] else "center"
-        self.region = region or "rostov"
+        self.mode = normalize_duel_mode(mode)
+        self.region = resolve_region_info(region)["id"] if region else "rostov"
         self.created_at = time.time()
-        self.status = "waiting"  # "waiting", "ready", "countdown", "playing", "finished"
+        self.status = "waiting"  # waiting, ready, countdown, playing, finished, cancelled
         self.players: Dict[str, DuelPlayer] = {host.player_id: host}
         self.questions: List[Dict[str, Any]] = []
+        self.puzzle_anchor_id: Optional[str] = None
+        self.puzzle_piece_ids: List[str] = []
+        self.puzzle_total: int = 25
+        self.current_round: int = 0
+        self.round_duration: int = 20
+        self.round_started_at: Optional[float] = None
+        self.round_answers: Dict[str, Dict[str, Dict[str, Any]]] = {}
         self.winner: Optional[str] = None
         self.winner_reason: str = ""
         self.winner_name: str = ""
+        self.finish_reason: str = ""  # completed | surrender | cancelled
         self.start_time: Optional[float] = None
         self.end_time: Optional[float] = None
         self.countdown: int = 3
+        self._round_timer_task: Optional[asyncio.Task] = None
+        self._advance_task: Optional[asyncio.Task] = None
 
         if self.mode == "center":
             self.generate_center_questions()
         else:
             self.init_puzzle_config()
+
+    def get_target_total(self) -> int:
+        if self.mode == "puzzle":
+            return max(1, self.puzzle_total)
+        return max(1, len(self.questions) or 7)
 
     def generate_center_questions(self):
         reg_data = get_region_data(self.region) or {}
@@ -1521,7 +1604,7 @@ class DuelRoom:
                 {"name": "Новочеркасск", "lat": 47.422, "lon": 40.093},
                 {"name": "Батайск", "lat": 47.139, "lon": 39.751},
                 {"name": "Волгодонск", "lat": 47.514, "lon": 42.153},
-                {"name": "Азов", "lat": 47.112, "lon": 39.424}
+                {"name": "Азов", "lat": 47.112, "lon": 39.424},
             ]
         sample_size = min(7, len(centers))
         selected = random.sample(centers, sample_size)
@@ -1531,19 +1614,38 @@ class DuelRoom:
                 "name": c.get("name", ""),
                 "lat": float(c.get("lat", 0.0)),
                 "lon": float(c.get("lon", 0.0)),
-                "status": c.get("status", "райцентр")
+                "status": c.get("status", "райцентр"),
             }
             for i, c in enumerate(selected)
         ]
+        total = self.get_target_total()
         for p in self.players.values():
-            p.total = len(self.questions)
+            p.total = total
 
     def init_puzzle_config(self):
         reg_data = get_region_data(self.region) or {}
         puz = reg_data.get("EMBEDDED_PUZZLE_DATA", [])
-        count = len(puz) if puz else 25
+        valid_ids = [str(item.get("id")) for item in puz if isinstance(item, dict) and item.get("id") is not None]
+        if len(valid_ids) >= 2:
+            anchor_idx = random.randrange(len(valid_ids))
+            self.puzzle_anchor_id = valid_ids[anchor_idx]
+            remaining = [pid for idx, pid in enumerate(valid_ids) if idx != anchor_idx]
+            random.shuffle(remaining)
+            self.puzzle_piece_ids = remaining
+            self.puzzle_total = len(remaining)
+        else:
+            self.puzzle_anchor_id = None
+            self.puzzle_piece_ids = []
+            self.puzzle_total = max(1, len(puz) if puz else 25)
         for p in self.players.values():
-            p.total = count
+            p.total = self.puzzle_total
+
+    def cancel_timers(self):
+        for attr in ("_round_timer_task", "_advance_task"):
+            task = getattr(self, attr, None)
+            if task and not task.done():
+                task.cancel()
+            setattr(self, attr, None)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -1554,29 +1656,49 @@ class DuelRoom:
             "created_at": self.created_at,
             "start_time": self.start_time,
             "end_time": self.end_time,
+            "server_now": time.time(),
+            "current_round": self.current_round,
+            "round_duration": self.round_duration,
+            "round_started_at": self.round_started_at,
+            "round_answers": self.round_answers,
+            "total_items": self.get_target_total(),
             "questions": self.questions if self.mode == "center" else [],
+            "puzzle_anchor_id": self.puzzle_anchor_id if self.mode == "puzzle" else None,
+            "puzzle_piece_ids": self.puzzle_piece_ids if self.mode == "puzzle" else [],
             "players": [p.to_dict() for p in self.players.values()],
             "winner": self.winner,
             "winner_name": self.winner_name,
             "winner_reason": self.winner_reason,
-            "countdown": self.countdown
+            "finish_reason": self.finish_reason,
+            "countdown": self.countdown,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "DuelRoom":
         room = cls.__new__(cls)
         room.room_id = str(data.get("room_id", "")).upper()
-        room.mode = data.get("mode", "center")
+        raw_mode = str(data.get("mode", "center")).strip().lower()
+        room.mode = _DUEL_MODE_ALIASES.get(raw_mode, "center")
         room.region = data.get("region", "rostov")
         room.created_at = float(data.get("created_at", time.time()))
         room.status = data.get("status", "waiting")
         room.questions = data.get("questions", [])
+        room.puzzle_anchor_id = data.get("puzzle_anchor_id")
+        room.puzzle_piece_ids = [str(x) for x in data.get("puzzle_piece_ids", []) if x is not None]
+        room.puzzle_total = int(data.get("puzzle_total", len(room.puzzle_piece_ids) or 25))
+        room.current_round = int(data.get("current_round", 0))
+        room.round_duration = int(data.get("round_duration", 20))
+        room.round_started_at = data.get("round_started_at")
+        room.round_answers = data.get("round_answers", {}) if isinstance(data.get("round_answers"), dict) else {}
         room.winner = data.get("winner")
         room.winner_reason = data.get("winner_reason", "")
         room.winner_name = data.get("winner_name", "")
+        room.finish_reason = data.get("finish_reason", "")
         room.start_time = data.get("start_time")
         room.end_time = data.get("end_time")
         room.countdown = int(data.get("countdown", 3))
+        room._round_timer_task = None
+        room._advance_task = None
         room.players = {}
         for p_data in data.get("players", []):
             if isinstance(p_data, dict):
@@ -1593,7 +1715,7 @@ class DuelRoom:
                     p.ws = None
 
     def check_finished(self):
-        if self.status == "finished":
+        if self.status in ("finished", "cancelled"):
             return
 
         players_list = list(self.players.values())
@@ -1605,61 +1727,76 @@ class DuelRoom:
         if self.mode == "center":
             if p1.finished and p2.finished:
                 self.status = "finished"
+                self.finish_reason = self.finish_reason or "completed"
                 self.end_time = time.time()
+                self.cancel_timers()
                 if p1.score > p2.score:
                     self.winner = p1.player_id
                     self.winner_name = p1.name
-                    self.winner_reason = f"{p1.name} победил(а) по баллам ({p1.score} : {p2.score})!"
+                    self.winner_reason = f"Обычное завершение: {p1.name} победил(а) по баллам ({p1.score} : {p2.score})."
                 elif p2.score > p1.score:
                     self.winner = p2.player_id
                     self.winner_name = p2.name
-                    self.winner_reason = f"{p2.name} победил(а) по баллам ({p2.score} : {p1.score})!"
+                    self.winner_reason = f"Обычное завершение: {p2.name} победил(а) по баллам ({p2.score} : {p1.score})."
+                elif p1.correct_answers != p2.correct_answers:
+                    top = p1 if p1.correct_answers > p2.correct_answers else p2
+                    self.winner = top.player_id
+                    self.winner_name = top.name
+                    self.winner_reason = f"При равных баллах ({p1.score}) {top.name} дал(а) больше точных ответов!"
                 else:
                     t1 = (p1.finish_time or 999999) - (self.start_time or 0)
                     t2 = (p2.finish_time or 999999) - (self.start_time or 0)
                     if t1 < t2:
                         self.winner = p1.player_id
                         self.winner_name = p1.name
-                        self.winner_reason = f"При равных баллах ({p1.score}) {p1.name} оказался(лась) быстрее!"
+                        self.winner_reason = f"При равных баллах ({p1.score}) {p1.name} ответил(а) быстрее!"
                     elif t2 < t1:
                         self.winner = p2.player_id
                         self.winner_name = p2.name
-                        self.winner_reason = f"При равных баллах ({p2.score}) {p2.name} оказался(лась) быстрее!"
+                        self.winner_reason = f"При равных баллах ({p2.score}) {p2.name} ответил(а) быстрее!"
                     else:
                         self.winner = "draw"
                         self.winner_name = "Ничья"
-                        self.winner_reason = f"Боевая ничья! ({p1.score} : {p2.score})"
+                        self.winner_reason = f"Боевая ничья по итогам 7 раундов ({p1.score} : {p2.score})."
 
         elif self.mode == "puzzle":
             if p1.finished or p2.finished or (p1.progress >= p1.total) or (p2.progress >= p2.total):
                 self.status = "finished"
+                self.finish_reason = self.finish_reason or "completed"
                 self.end_time = time.time()
+                self.cancel_timers()
                 if p1.progress > p2.progress:
                     self.winner = p1.player_id
                     self.winner_name = p1.name
-                    self.winner_reason = f"{p1.name} собрал(а) больше районов ({p1.progress}/{p1.total})!"
+                    self.winner_reason = f"Обычное завершение: {p1.name} собрал(а) регион первым(ой) ({p1.progress}/{p1.total})!"
                 elif p2.progress > p1.progress:
                     self.winner = p2.player_id
                     self.winner_name = p2.name
-                    self.winner_reason = f"{p2.name} собрал(а) больше районов ({p2.progress}/{p2.total})!"
+                    self.winner_reason = f"Обычное завершение: {p2.name} собрал(а) регион первым(ой) ({p2.progress}/{p2.total})!"
+                elif p1.score != p2.score:
+                    top = p1 if p1.score > p2.score else p2
+                    self.winner = top.player_id
+                    self.winner_name = top.name
+                    self.winner_reason = f"{top.name} победил(а) по баллам ({top.score})!"
+                elif p1.mistakes < p2.mistakes:
+                    self.winner = p1.player_id
+                    self.winner_name = p1.name
+                    self.winner_reason = f"{p1.name} допустил(а) меньше ошибок ({p1.mistakes} vs {p2.mistakes})!"
+                elif p2.mistakes < p1.mistakes:
+                    self.winner = p2.player_id
+                    self.winner_name = p2.name
+                    self.winner_reason = f"{p2.name} допустил(а) меньше ошибок ({p2.mistakes} vs {p1.mistakes})!"
                 else:
-                    if p1.mistakes < p2.mistakes:
-                        self.winner = p1.player_id
-                        self.winner_name = p1.name
-                        self.winner_reason = f"{p1.name} допустил(а) меньше ошибок ({p1.mistakes} vs {p2.mistakes})!"
-                    elif p2.mistakes < p1.mistakes:
-                        self.winner = p2.player_id
-                        self.winner_name = p2.name
-                        self.winner_reason = f"{p2.name} допустил(а) меньше ошибок ({p2.mistakes} vs {p1.mistakes})!"
-                    else:
-                        self.winner = "draw"
-                        self.winner_name = "Ничья"
-                        self.winner_reason = "Боевая ничья!"
+                    self.winner = "draw"
+                    self.winner_name = "Ничья"
+                    self.winner_reason = "Боевая ничья в сборке пазла!"
+
 
 DUEL_DATA_DIR = os.environ.get("DUEL_DATA_DIR", tempfile.gettempdir())
 os.makedirs(DUEL_DATA_DIR, exist_ok=True)
 DUEL_ROOMS_FILE = os.path.join(DUEL_DATA_DIR, "duel_rooms.json")
 active_duel_rooms: Dict[str, DuelRoom] = {}
+
 
 def save_duel_rooms_to_disk() -> None:
     try:
@@ -1673,6 +1810,7 @@ def save_duel_rooms_to_disk() -> None:
             json.dump(active_data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logger.error("Ошибка сохранения duel_rooms.json: %s", e)
+
 
 def load_duel_rooms_from_disk() -> None:
     global active_duel_rooms
@@ -1694,6 +1832,7 @@ def load_duel_rooms_from_disk() -> None:
     except Exception as e:
         logger.error("Ошибка загрузки duel_rooms.json: %s", e)
 
+
 def load_room_fresh(room_id: str) -> Optional["DuelRoom"]:
     """Возвращает комнату из памяти или с диска (для multi-worker / cold start)."""
     code = room_id.strip().upper()
@@ -1713,20 +1852,200 @@ def load_room_fresh(room_id: str) -> Optional["DuelRoom"]:
         logger.error("Ошибка lazy-load комнаты %s: %s", code, e)
     return None
 
+
 # Первичная загрузка с диска при старте приложения
 load_duel_rooms_from_disk()
+
 
 def clean_stale_duel_rooms():
     now = time.time()
     stale = [rid for rid, r in active_duel_rooms.items() if now - r.created_at > 7200]
     if stale:
         for rid in stale:
-            active_duel_rooms.pop(rid, None)
+            r = active_duel_rooms.pop(rid, None)
+            if r:
+                r.cancel_timers()
         save_duel_rooms_to_disk()
+
+
+def _record_center_answer(
+    room: DuelRoom,
+    player: DuelPlayer,
+    q_idx: int,
+    raw_points: Any,
+    raw_distance: Any,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+) -> tuple[bool, int, float, bool]:
+    """Records one player's answer for the active round and returns (accepted, pts, dist, round_complete)."""
+    if room.status != "playing" or room.mode != "center":
+        return False, 0, 0.0, False
+    total_q = len(room.questions)
+    if total_q <= 0 or q_idx != room.current_round or q_idx < 0 or q_idx >= total_q:
+        return False, 0, 0.0, False
+
+    round_key = str(q_idx)
+    answers_for_round = room.round_answers.setdefault(round_key, {})
+    if player.player_id in answers_for_round:
+        return False, 0, 0.0, False
+
+    if lat is not None and lon is not None:
+        q = room.questions[q_idx]
+        dist = _haversine_km(float(lat), float(lon), float(q["lat"]), float(q["lon"]))
+        pts = _score_center_distance(dist)
+    else:
+        dist = float(raw_distance if raw_distance is not None else 999.0)
+        pts = max(0, min(3, int(raw_points or 0)))
+
+    is_correct = pts > 0
+    answers_for_round[player.player_id] = {
+        "points": pts,
+        "distance": round(dist, 2),
+        "correct": is_correct,
+        "timed_out": False,
+    }
+    player.score += pts
+    if is_correct:
+        player.correct_answers += 1
+    else:
+        player.mistakes += 1
+    player.progress = sum(1 for r_map in room.round_answers.values() if player.player_id in r_map)
+    if q_idx >= total_q - 1:
+        player.finished = True
+        player.finish_time = time.time()
+
+    all_answered = len(room.players) >= 2 and all(pid in answers_for_round for pid in room.players)
+    return True, pts, dist, all_answered
+
+
+def _record_puzzle_piece(
+    room: DuelRoom,
+    player: DuelPlayer,
+    district_id: Optional[str],
+    placed_count: Any,
+    mistakes: Any,
+) -> bool:
+    """Records a placed puzzle piece, updates score/progress/mistakes and checks victory."""
+    if room.status != "playing" or room.mode != "puzzle":
+        return False
+
+    clean_did = str(district_id or "").strip()
+    if clean_did:
+        if clean_did in player.placed_ids:
+            return False
+        player.placed_ids.append(clean_did)
+        new_progress = min(player.total, max(player.progress + 1, int(placed_count or len(player.placed_ids))))
+    else:
+        new_progress = min(player.total, max(player.progress, int(placed_count or (player.progress + 1))))
+
+    delta = max(0, new_progress - player.progress)
+    player.progress = new_progress
+    player.correct_answers += delta
+    player.score += delta * 10
+    if mistakes is not None:
+        player.mistakes = max(player.mistakes, int(mistakes))
+
+    if player.progress >= player.total:
+        player.finished = True
+        player.finish_time = time.time()
+    room.check_finished()
+    return True
+
+
+def _apply_surrender(room: DuelRoom, player: DuelPlayer) -> None:
+    room.cancel_timers()
+    player.finished = True
+    player.finish_time = time.time()
+    opp = next((p for pid, p in room.players.items() if pid != player.player_id), None)
+    room.status = "finished"
+    room.finish_reason = "surrender"
+    room.end_time = time.time()
+    if opp:
+        room.winner = opp.player_id
+        room.winner_name = opp.name
+        room.winner_reason = f"Сдача игрока: {player.name} сдался(лась). Победа присуждена {opp.name}."
+    else:
+        room.winner = "draw"
+        room.winner_name = "Ничья"
+        room.winner_reason = f"{player.name} отказался от дуэли до подключения соперника."
+
+
+def _advance_center_round_sync(room: DuelRoom, timed_out: bool = False) -> bool:
+    """Advances synchronized center round or completes the match. Returns True if finished."""
+    if room.status != "playing" or room.mode != "center":
+        return room.status == "finished"
+
+    round_key = str(room.current_round)
+    answers_for_round = room.round_answers.setdefault(round_key, {})
+    for pid, p in room.players.items():
+        if pid not in answers_for_round:
+            answers_for_round[pid] = {"points": 0, "distance": 9999.0, "correct": False, "timed_out": timed_out}
+            p.mistakes += 1
+        p.progress = sum(1 for r_map in room.round_answers.values() if pid in r_map)
+
+    if room.current_round + 1 >= len(room.questions):
+        for p in room.players.values():
+            p.finished = True
+            p.finish_time = p.finish_time or time.time()
+        room.check_finished()
+        return True
+
+    room.current_round += 1
+    room.round_started_at = time.time()
+    return False
+
+
+async def _schedule_round_timeout(room: DuelRoom, round_idx: int) -> None:
+    try:
+        await asyncio.sleep(room.round_duration)
+        if room.status != "playing" or room.mode != "center" or room.current_round != round_idx:
+            return
+        finished = _advance_center_round_sync(room, timed_out=True)
+        save_duel_rooms_to_disk()
+        if finished:
+            await room.broadcast({"type": "game_over", "room": room.to_dict()})
+        else:
+            room._round_timer_task = asyncio.create_task(_schedule_round_timeout(room, room.current_round))
+            await room.broadcast({
+                "type": "round_next",
+                "round": room.current_round,
+                "timed_out_round": round_idx,
+                "round_started_at": room.round_started_at,
+                "round_duration": room.round_duration,
+                "room": room.to_dict(),
+            })
+    except asyncio.CancelledError:
+        return
+
+
+async def _delayed_advance_center_round(room: DuelRoom, round_idx: int) -> None:
+    try:
+        await asyncio.sleep(1.0)
+        if room.status != "playing" or room.mode != "center" or room.current_round != round_idx:
+            return
+        finished = _advance_center_round_sync(room, timed_out=False)
+        save_duel_rooms_to_disk()
+        if finished:
+            await room.broadcast({"type": "game_over", "room": room.to_dict()})
+        else:
+            room._round_timer_task = asyncio.create_task(_schedule_round_timeout(room, room.current_round))
+            await room.broadcast({
+                "type": "round_next",
+                "round": room.current_round,
+                "round_started_at": room.round_started_at,
+                "round_duration": room.round_duration,
+                "room": room.to_dict(),
+            })
+    except asyncio.CancelledError:
+        return
+
 
 @app.post("/api/duel/create")
 def create_duel_room(req: DuelCreateRequest) -> Dict[str, Any]:
     clean_stale_duel_rooms()
+    mode = normalize_duel_mode(req.mode)
+    region_id = resolve_region_info(req.region)["id"] if req.region else "rostov"
+
     room_code = f"DUEL-{random.randint(1000, 9999)}"
     while room_code in active_duel_rooms:
         room_code = f"DUEL-{random.randint(1000, 9999)}"
@@ -1737,14 +2056,14 @@ def create_duel_room(req: DuelCreateRequest) -> Dict[str, Any]:
         name=req.host_name,
         group=req.host_group,
         email=req.host_email,
-        is_host=True
+        is_host=True,
     )
-    room = DuelRoom(room_code, req.mode, req.region, host)
+    room = DuelRoom(room_code, mode, region_id, host)
     active_duel_rooms[room_code] = room
-    logger.info("Duel room created: %s (mode=%s, region=%s)", room_code, req.mode, req.region)
+    logger.info("Duel room created: %s (mode=%s, region=%s)", room_code, room.mode, room.region)
     save_duel_rooms_to_disk()
 
-    map_url = f"/map/{req.region}?duel={room_code}&player={player_id}&role=host"
+    map_url = f"/map/{room.region}?duel={room_code}&player={player_id}&role=host&mode={room.mode}"
     return {
         "status": "ok",
         "room_id": room_code,
@@ -1753,42 +2072,50 @@ def create_duel_room(req: DuelCreateRequest) -> Dict[str, Any]:
         "mode": room.mode,
         "region": room.region,
         "map_url": map_url,
-        "room": room.to_dict()
+        "room": room.to_dict(),
     }
+
 
 @app.post("/api/duel/join")
 def join_duel_room(req: DuelJoinRequest) -> Dict[str, Any]:
     clean_stale_duel_rooms()
-    code = req.room_id.strip().upper()
+    code = (req.room_id or "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="Введите корректный код комнаты")
+
     room = load_room_fresh(code)
     if not room:
-        raise HTTPException(status_code=404, detail=f"Комната дуэли '{code}' не найдена")
+        raise HTTPException(status_code=404, detail=f"Комната дуэли '{code}' не найдена. Проверьте код.")
 
+    if room.status == "cancelled":
+        raise HTTPException(status_code=400, detail="Создатель отменил эту комнату дуэли")
     if room.status == "finished":
         raise HTTPException(status_code=400, detail="Эта дуэль уже завершена")
 
-    existing_player = next((p for p in room.players.values() if p.name == req.player_name and p.email == req.player_email), None)
-    if existing_player:
+    req_pid = (req.player_id or "").strip()
+    if req_pid and req_pid in room.players:
+        existing_player = room.players[req_pid]
         player_id = existing_player.player_id
         role = "host" if existing_player.is_host else "join"
     else:
         if len(room.players) >= 2:
-            raise HTTPException(status_code=400, detail="В этой комнате уже находятся два игрока")
+            raise HTTPException(status_code=400, detail="Комната заполнена: в ней уже участвуют два игрока")
         player_id = f"p_{secrets.token_hex(4)}"
         join_player = DuelPlayer(
             player_id=player_id,
-            name=req.player_name,
+            name=req.player_name or "Соперник",
             group=req.player_group,
             email=req.player_email,
-            is_host=False
+            is_host=False,
         )
+        join_player.total = room.get_target_total()
         room.players[player_id] = join_player
         role = "join"
         if len(room.players) == 2 and room.status == "waiting":
             room.status = "ready"
         save_duel_rooms_to_disk()
 
-    map_url = f"/map/{room.region}?duel={code}&player={player_id}&role={role}"
+    map_url = f"/map/{room.region}?duel={code}&player={player_id}&role={role}&mode={room.mode}"
     return {
         "status": "ok",
         "room_id": code,
@@ -1797,8 +2124,9 @@ def join_duel_room(req: DuelJoinRequest) -> Dict[str, Any]:
         "mode": room.mode,
         "region": room.region,
         "map_url": map_url,
-        "room": room.to_dict()
+        "room": room.to_dict(),
     }
+
 
 @app.get("/api/duel/state/{room_id}")
 def get_duel_room_state(room_id: str, player_id: Optional[str] = None) -> Dict[str, Any]:
@@ -1811,6 +2139,7 @@ def get_duel_room_state(room_id: str, player_id: Optional[str] = None) -> Dict[s
         room.players[player_id].last_ping = time.time()
 
     return {"status": "ok", "room": room.to_dict()}
+
 
 @app.post("/api/duel/action/{room_id}")
 def handle_duel_action(room_id: str, req: DuelActionRequest) -> Dict[str, Any]:
@@ -1829,56 +2158,69 @@ def handle_duel_action(room_id: str, req: DuelActionRequest) -> Dict[str, Any]:
 
     if action == "ready":
         player.ready = bool(payload.get("ready", True))
-        if len(room.players) == 2 and all(p.ready for p in room.players.values()):
+        if room.status in ("waiting", "ready", "countdown") and len(room.players) == 2 and all(p.ready for p in room.players.values()):
             room.status = "playing"
             room.start_time = time.time()
+            room.current_round = 0
+            room.round_started_at = time.time()
+
+    elif action == "cancel":
+        if room.status in ("waiting", "ready") and player.is_host:
+            room.cancel_timers()
+            room.status = "cancelled"
+            room.finish_reason = "cancelled"
+            room.end_time = time.time()
+            room.winner_reason = "Комната отменена создателем до начала матча."
+        else:
+            _apply_surrender(room, player)
 
     elif action == "start":
-        room.status = "playing"
-        room.start_time = time.time()
+        if room.status in ("ready", "countdown") and len(room.players) == 2:
+            room.status = "playing"
+            room.start_time = time.time()
+            room.current_round = 0
+            room.round_started_at = time.time()
 
     elif action == "answer_center":
-        pts = int(payload.get("points", 0))
-        dist = float(payload.get("distance", 999))
-        player.score += pts
-        player.progress = int(payload.get("question_index", player.progress)) + 1
-        if dist > 80:
-            player.mistakes += 1
-        if player.progress >= player.total:
-            player.finished = True
-            player.finish_time = time.time()
-        room.check_finished()
+        q_idx = int(payload.get("question_index", room.current_round))
+        accepted, _, _, round_done = _record_center_answer(
+            room,
+            player,
+            q_idx,
+            payload.get("points"),
+            payload.get("distance"),
+            lat=payload.get("lat"),
+            lon=payload.get("lon"),
+        )
+        if accepted and round_done:
+            _advance_center_round_sync(room, timed_out=False)
 
     elif action == "place_piece":
-        player.progress = int(payload.get("placed_count", player.progress + 1))
-        player.mistakes = int(payload.get("mistakes", player.mistakes))
-        if player.progress >= player.total:
-            player.finished = True
-            player.finish_time = time.time()
-        room.check_finished()
+        _record_puzzle_piece(
+            room,
+            player,
+            payload.get("district_id"),
+            payload.get("placed_count"),
+            payload.get("mistakes"),
+        )
+
+    elif action == "puzzle_mistake":
+        if room.status == "playing" and room.mode == "puzzle":
+            player.mistakes += 1
 
     elif action == "surrender":
-        player.finished = True
-        player.finish_time = time.time()
-        opp = next((p for pid, p in room.players.items() if pid != player.player_id), None)
-        room.status = "finished"
-        room.end_time = time.time()
-        if opp:
-            room.winner = opp.player_id
-            room.winner_name = opp.name
-            room.winner_reason = f"{player.name} отказался от дуэли. Техническое поражение."
-        else:
-            room.winner = "draw"
-            room.winner_name = "Ничья"
-            room.winner_reason = "Игрок отказался от дуэли, соперник отсутствует."
+        if room.status != "finished":
+            _apply_surrender(room, player)
 
     elif action == "finish":
-        player.finished = True
-        player.finish_time = time.time()
-        room.check_finished()
+        if room.status == "playing":
+            player.finished = True
+            player.finish_time = time.time()
+            room.check_finished()
 
     save_duel_rooms_to_disk()
     return {"status": "ok", "room": room.to_dict()}
+
 
 @app.websocket("/ws/duel/{room_id}/{player_id}")
 async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id: str):
@@ -1891,6 +2233,11 @@ async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id:
         await websocket.close()
         return
 
+    if room.status == "cancelled":
+        await websocket.send_json({"type": "room_cancelled", "message": "Комната отменена создателем", "room": room.to_dict()})
+        await websocket.close()
+        return
+
     player = room.players[player_id]
     player.ws = websocket
     player.last_ping = time.time()
@@ -1899,129 +2246,179 @@ async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id:
         "type": "player_connected",
         "player_id": player_id,
         "player_name": player.name,
-        "room": room.to_dict()
+        "room": room.to_dict(),
     })
+
+    if room.status == "finished":
+        await websocket.send_json({"type": "game_over", "room": room.to_dict()})
 
     try:
         while True:
-            data = await websocket.receive_json()
+            raw_text = await websocket.receive_text()
+            try:
+                data = json.loads(raw_text)
+                if not isinstance(data, dict):
+                    raise ValueError("Payload must be a JSON object")
+            except Exception:
+                await websocket.send_json({"type": "error", "message": "Некорректный формат WebSocket-сообщения"})
+                continue
+
             msg_type = data.get("type", "")
             player.last_ping = time.time()
 
             if msg_type == "ping":
-                await websocket.send_json({"type": "pong", "time": time.time()})
+                await websocket.send_json({"type": "pong", "time": time.time(), "server_now": time.time()})
 
             elif msg_type == "ready":
+                if room.status in ("finished", "cancelled"):
+                    continue
                 player.ready = bool(data.get("ready", True))
-                await room.broadcast({"type": "player_ready_changed", "player_id": player_id, "ready": player.ready, "room": room.to_dict()})
+                await room.broadcast({
+                    "type": "player_ready_changed",
+                    "player_id": player_id,
+                    "ready": player.ready,
+                    "room": room.to_dict(),
+                })
 
                 if room.status in ("waiting", "ready") and len(room.players) == 2 and all(p.ready for p in room.players.values()):
                     room.status = "countdown"
 
                     async def _run_countdown():
-                        for sec in (3, 2, 1):
+                        try:
+                            for sec in (3, 2, 1):
+                                if room.status != "countdown":
+                                    return
+                                await room.broadcast({"type": "countdown", "seconds": sec, "room": room.to_dict()})
+                                await asyncio.sleep(1)
                             if room.status != "countdown":
                                 return
-                            await room.broadcast({"type": "countdown", "seconds": sec, "room": room.to_dict()})
-                            await asyncio.sleep(1)
-                        if room.status != "countdown":
+                            room.status = "playing"
+                            room.start_time = time.time()
+                            room.current_round = 0
+                            room.round_started_at = time.time()
+                            save_duel_rooms_to_disk()
+                            if room.mode == "center":
+                                room._round_timer_task = asyncio.create_task(_schedule_round_timeout(room, 0))
+                            await room.broadcast({"type": "game_start", "room": room.to_dict()})
+                        except asyncio.CancelledError:
                             return
-                        room.status = "playing"
-                        room.start_time = time.time()
-                        save_duel_rooms_to_disk()
-                        await room.broadcast({"type": "game_start", "room": room.to_dict()})
 
                     asyncio.create_task(_run_countdown())
 
             elif msg_type == "answer_center":
-                pts = int(data.get("points", 0))
-                dist = float(data.get("distance", 999))
-                q_idx = int(data.get("question_index", player.progress))
-                player.score += pts
-                player.progress = q_idx + 1
-                if dist > 80:
-                    player.mistakes += 1
-                if player.progress >= player.total:
-                    player.finished = True
-                    player.finish_time = time.time()
-                room.check_finished()
-                save_duel_rooms_to_disk()
+                q_idx = int(data.get("question_index", room.current_round))
+                accepted, pts, dist, round_done = _record_center_answer(
+                    room,
+                    player,
+                    q_idx,
+                    data.get("points"),
+                    data.get("distance"),
+                    lat=data.get("lat"),
+                    lon=data.get("lon"),
+                )
+                if not accepted:
+                    continue
 
+                save_duel_rooms_to_disk()
                 await room.broadcast({
                     "type": "opponent_action",
                     "player_id": player_id,
                     "action": "answer_center",
+                    "question_index": q_idx,
                     "points": pts,
-                    "distance": dist,
+                    "distance": round(dist, 2),
                     "score": player.score,
                     "progress": player.progress,
+                    "correct_answers": player.correct_answers,
+                    "mistakes": player.mistakes,
                     "target_name": data.get("target_name", ""),
-                    "room": room.to_dict()
+                    "room": room.to_dict(),
                 })
 
-                if room.status == "finished":
-                    await room.broadcast({"type": "game_over", "room": room.to_dict()})
+                if round_done:
+                    room.cancel_timers()
+                    room._advance_task = asyncio.create_task(_delayed_advance_center_round(room, q_idx))
 
             elif msg_type == "place_piece":
-                p_count = int(data.get("placed_count", player.progress + 1))
-                mistakes = int(data.get("mistakes", player.mistakes))
-                player.progress = p_count
-                player.mistakes = mistakes
-                if player.progress >= player.total:
-                    player.finished = True
-                    player.finish_time = time.time()
-                room.check_finished()
-                save_duel_rooms_to_disk()
+                accepted = _record_puzzle_piece(
+                    room,
+                    player,
+                    data.get("district_id"),
+                    data.get("placed_count"),
+                    data.get("mistakes"),
+                )
+                if not accepted:
+                    continue
 
+                save_duel_rooms_to_disk()
                 await room.broadcast({
                     "type": "opponent_action",
                     "player_id": player_id,
                     "action": "place_piece",
+                    "district_id": data.get("district_id", ""),
                     "district_name": data.get("district_name", ""),
                     "placed_count": player.progress,
+                    "score": player.score,
                     "mistakes": player.mistakes,
-                    "room": room.to_dict()
+                    "room": room.to_dict(),
                 })
 
                 if room.status == "finished":
                     await room.broadcast({"type": "game_over", "room": room.to_dict()})
 
+            elif msg_type == "puzzle_mistake":
+                if room.status == "playing" and room.mode == "puzzle":
+                    player.mistakes += 1
+                    save_duel_rooms_to_disk()
+                    await room.broadcast({
+                        "type": "opponent_action",
+                        "player_id": player_id,
+                        "action": "puzzle_mistake",
+                        "district_name": data.get("district_name", ""),
+                        "mistakes": player.mistakes,
+                        "score": player.score,
+                        "placed_count": player.progress,
+                        "room": room.to_dict(),
+                    })
+
             elif msg_type == "finish":
-                player.finished = True
-                player.finish_time = time.time()
-                room.check_finished()
-                save_duel_rooms_to_disk()
-                await room.broadcast({"type": "player_finished", "player_id": player_id, "room": room.to_dict()})
-                if room.status == "finished":
-                    await room.broadcast({"type": "game_over", "room": room.to_dict()})
+                if room.status == "playing":
+                    player.finished = True
+                    player.finish_time = time.time()
+                    room.check_finished()
+                    save_duel_rooms_to_disk()
+                    await room.broadcast({"type": "player_finished", "player_id": player_id, "room": room.to_dict()})
+                    if room.status == "finished":
+                        await room.broadcast({"type": "game_over", "room": room.to_dict()})
+
+            elif msg_type == "cancel":
+                if room.status in ("waiting", "ready") and player.is_host:
+                    room.cancel_timers()
+                    room.status = "cancelled"
+                    room.finish_reason = "cancelled"
+                    room.end_time = time.time()
+                    save_duel_rooms_to_disk()
+                    await room.broadcast({"type": "room_cancelled", "room": room.to_dict()})
 
             elif msg_type == "surrender":
-                player.finished = True
-                player.finish_time = time.time()
-                opp = next((p for pid, p in room.players.items() if pid != player_id), None)
-                room.status = "finished"
-                room.end_time = time.time()
-                if opp:
-                    room.winner = opp.player_id
-                    room.winner_name = opp.name
-                    room.winner_reason = f"{player.name} отказался от дуэли. Техническое поражение."
-                else:
-                    room.winner = "draw"
-                    room.winner_name = "Ничья"
-                    room.winner_reason = "Игрок отказался от дуэли, соперник отсутствует."
-                save_duel_rooms_to_disk()
+                if room.status != "finished":
+                    _apply_surrender(room, player)
+                    save_duel_rooms_to_disk()
                 await room.broadcast({"type": "game_over", "room": room.to_dict()})
 
     except WebSocketDisconnect:
-        player.ws = None
-        await room.broadcast({
-            "type": "player_disconnected",
-            "player_id": player_id,
-            "player_name": player.name,
-            "room": room.to_dict()
-        })
-    except Exception as e:
-        player.ws = None
+        if player.ws is websocket:
+            player.ws = None
+        if room.status not in ("finished", "cancelled"):
+            await room.broadcast({
+                "type": "player_disconnected",
+                "player_id": player_id,
+                "player_name": player.name,
+                "room": room.to_dict(),
+            })
+    except Exception:
+        if player.ws is websocket:
+            player.ws = None
 
 _CARTO_ALLOWED_STYLES = {"voyager", "dark_all", "light_all"}
 _CARTO_SUBDOMAINS = ("a", "b", "c", "d")
