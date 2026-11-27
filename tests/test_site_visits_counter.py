@@ -49,8 +49,9 @@ def test_home_page_increments_counter_and_read_api_is_idempotent(client, isolate
 
     r1 = client.get("/")
     assert r1.status_code == 200
-    assert "Посещений сайта:" in r1.text
+    assert "Посещений сайта" in r1.text
     assert 'id="site-visits-badge"' in r1.text
+    assert 'id="site-visits-value"' in r1.text
     assert client.get("/api/stats/visits").json()["visits"] == 1
     assert client.get("/api/stats/visits").json()["visits"] == 1
 
