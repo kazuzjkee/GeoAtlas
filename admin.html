@@ -83,6 +83,10 @@
             <span class="tab-icon">🔍</span>
             <span class="tab-text">Качество геоданных</span>
         </button>
+        <button type="button" class="admin-tab-btn" data-tab="tab-user-analytics" onclick="switchAdminTab('tab-user-analytics')">
+            <span class="tab-icon">👥</span>
+            <span class="tab-text">Статистика пользователей</span>
+        </button>
     </nav>
 
     <!-- ВКЛАДКА 1: ТЕСТИРОВАНИЕ И ГРУППЫ -->
@@ -786,6 +790,49 @@
                 </table>
             </div>
             <div id="dq-detail-panel" style="display: none; margin-top: 16px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-sunken);"></div>
+        </section>
+    </div>
+
+    <!-- ВКЛАДКА 7: СТАТИСТИКА ПОЛЬЗОВАТЕЛЕЙ -->
+    <div class="admin-tab-pane" id="tab-user-analytics" style="display: none;">
+        <section class="panel-card" style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
+                <div>
+                    <h2 style="margin: 0; font-size: 18px;">👥 Статистика пользователей и активности</h2>
+                    <p style="margin: 4px 0 0; font-size: 13px; color: var(--text-light);">
+                        Агрегированные показатели без раскрытия персональных данных. Активность рассчитывается по сессиям входа (<code>user_sessions</code>).
+                    </p>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <select id="ua-period-select" class="form-control" style="width: auto; min-width: 140px;" onchange="loadUserAnalytics(Number(this.value))">
+                        <option value="7">За 7 дней</option>
+                        <option value="14">За 14 дней</option>
+                        <option value="30" selected>За 30 дней</option>
+                        <option value="90">За 90 дней</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" onclick="loadUserAnalytics()">🔄 Обновить</button>
+                </div>
+            </div>
+
+            <div id="ua-empty-banner" style="display: none; padding: 14px 16px; border-radius: 10px; border: 1px dashed var(--border); background: var(--bg-sunken); color: var(--text-light); margin-bottom: 16px; font-size: 13px;"></div>
+
+            <div id="ua-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 12px; margin-bottom: 20px;"></div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+                <div style="padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-sunken);">
+                    <h3 id="ua-reg-chart-title" style="margin: 0 0 12px; font-size: 14px; font-weight: 700;">Динамика регистраций и активности по дням</h3>
+                    <div style="position: relative; height: 260px;">
+                        <canvas id="ua-registrations-chart"></canvas>
+                    </div>
+                </div>
+                <div style="padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-sunken);">
+                    <h3 style="margin: 0 0 12px; font-size: 14px; font-weight: 700;">Использование карт в тестах</h3>
+                    <div id="ua-maps-empty" style="display: none; padding: 24px 12px; text-align: center; color: var(--text-light); font-size: 13px;">Пока нет завершённых тестов по картам.</div>
+                    <div id="ua-maps-chart-wrap" style="position: relative; height: 260px;">
+                        <canvas id="ua-maps-chart"></canvas>
+                    </div>
+                </div>
+            </div>
         </section>
     </div>
 

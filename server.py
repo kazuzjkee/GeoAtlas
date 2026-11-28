@@ -1251,6 +1251,20 @@ def _import_geodata_monitor():
     return importlib.import_module("geodata_monitor")
 
 
+@app.get("/api/admin/user-analytics")
+def get_admin_user_analytics(
+    days: int = 30,
+    teacher: Dict[str, Any] = Depends(check_admin),
+) -> Dict[str, Any]:
+    data = db.get_user_analytics_stats(days=days)
+    duel_rooms = list(active_duel_rooms.values())
+    finished_duels = sum(1 for r in duel_rooms if getattr(r, "status", "") == "finished")
+    data["platform"]["duels_total"] = len(duel_rooms)
+    data["platform"]["duels_finished"] = finished_duels
+    data["platform"]["duels_note"] = "Активные и сохранённые комнаты дуэлей (duel_rooms.json)"
+    return data
+
+
 @app.get("/api/admin/data-quality")
 def get_admin_data_quality(
     check_remote: bool = False,

@@ -5212,24 +5212,28 @@
                 <span class="hud-tooltip">01 • Главная</span>
                 <span class="hud-pip"></span>
             </button>
-            <button type="button" class="hud-dot" data-slide="1" aria-label="02 • Песочница">
-                <span class="hud-tooltip">02 • Песочница</span>
+            <button type="button" class="hud-dot" data-slide="1" aria-label="02 • Каталог карт">
+                <span class="hud-tooltip">02 • Каталог карт</span>
                 <span class="hud-pip"></span>
             </button>
-            <button type="button" class="hud-dot" data-slide="2" aria-label="03 • Модули">
-                <span class="hud-tooltip">03 • Модули</span>
+            <button type="button" class="hud-dot" data-slide="2" aria-label="03 • Паспорт территории">
+                <span class="hud-tooltip">03 • Паспорт территории</span>
                 <span class="hud-pip"></span>
             </button>
-            <button type="button" class="hud-dot" data-slide="3" aria-label="04 • Архитектура">
-                <span class="hud-tooltip">04 • Архитектура</span>
+            <button type="button" class="hud-dot" data-slide="3" aria-label="04 • Песочница">
+                <span class="hud-tooltip">04 • Песочница</span>
                 <span class="hud-pip"></span>
             </button>
-            <button type="button" class="hud-dot" data-slide="4" aria-label="05 • Атласы">
-                <span class="hud-tooltip">05 • Атласы</span>
+            <button type="button" class="hud-dot" data-slide="4" aria-label="05 • Модули">
+                <span class="hud-tooltip">05 • Модули</span>
                 <span class="hud-pip"></span>
             </button>
-            <button type="button" class="hud-dot" data-slide="5" aria-label="06 • О проекте">
-                <span class="hud-tooltip">06 • О проекте</span>
+            <button type="button" class="hud-dot" data-slide="5" aria-label="06 • Архитектура">
+                <span class="hud-tooltip">06 • Архитектура</span>
+                <span class="hud-pip"></span>
+            </button>
+            <button type="button" class="hud-dot" data-slide="6" aria-label="07 • О проекте">
+                <span class="hud-tooltip">07 • О проекте</span>
                 <span class="hud-pip"></span>
             </button>
         </div>
@@ -6757,7 +6761,7 @@
                 '.region-card'
             ];
 
-            const slides = document.querySelectorAll('#hero-section, #sandbox-section, #features-bento, #architecture-section, #regions-section, .footer');
+            const slides = document.querySelectorAll('#hero-section, #regions-section, #passport-showcase-section, #sandbox-section, #features-bento, #architecture-section, .footer');
             slides.forEach(section => {
                 const items = section.querySelectorAll(targetSelectors.join(', '));
                 items.forEach(item => {
@@ -6931,9 +6935,24 @@
             requestAnimationFrame(step);
         }
 
+        function syncSlideIndexToScroll() {
+            const slides = window.slideElementsList;
+            if (!slides || !slides.length) return;
+            const nav = document.querySelector('.top-navbar');
+            const navHeight = nav ? nav.offsetHeight : 68;
+            const probeY = window.pageYOffset + navHeight + Math.min(180, window.innerHeight * 0.25);
+            let bestIdx = 0;
+            for (let i = 0; i < slides.length; i++) {
+                const top = slides[i].getBoundingClientRect().top + window.pageYOffset;
+                if (top <= probeY) bestIdx = i;
+            }
+            currentSlideIndex = bestIdx;
+        }
+
         function handleSlideWheel(e) {
             if (window.innerWidth < 1024) return;
             if (isModalOpen()) return;
+            if (e.ctrlKey) return;
 
             const now = performance.now();
             if (isSlideAnimating || now - lastSlideSwitchTime < 1000) {
@@ -6946,6 +6965,7 @@
             const slides = window.slideElementsList;
             if (!slides || !slides.length) return;
 
+            syncSlideIndexToScroll();
             const currentSlide = slides[currentSlideIndex];
             if (!currentSlide) return;
 
@@ -6985,10 +7005,11 @@
         function setupSlidePresentationController() {
             const slideIds = [
                 '#hero-section',
+                '#regions-section',
+                '#passport-showcase-section',
                 '#sandbox-section',
                 '#features-bento',
                 '#architecture-section',
-                '#regions-section',
                 '.footer'
             ];
             window.slideElementsList = slideIds.map(id => document.querySelector(id)).filter(Boolean);

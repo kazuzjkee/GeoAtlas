@@ -1375,3 +1375,118 @@ def pop_oidc_state(state_hash: str) -> Optional[Dict[str, Any]]:
             raise
         finally:
             conn.close()
+
+
+def get_user_analytics_stats(days: int = 30) -> Dict[str, Any]:
+    """Aggregated, non-PII user, activity, test and map usage metrics for the admin dashboard."""
+    from datetime import datetime, timedelta, timezone
+
+    allowed_days = {7, 14, 30, 90}
+    period_days = days if days in allowed_days else 30
+
+    now_dt = datetime.now(timezone.utc)
+    today_start_dt = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start_ts = today_start_dt.timestamp()
+    cutoff_7d_ts = (now_dt - timedelta(days=7)).timestamp()
+    cutoff_30d_ts = (now_dt - timedelta(days=30)).timestamp()
+    series_start_dt = today_start_dt - timedelta(days=period_days - 1)
+    series_start_ts = series_start_dt.timestamp()
+
+    with _lock:
+        conn = _conn()
+        try:
+            u_row = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_users,
+                    COALESCE(SUM(CASE WHEN email_verified = 1 THEN 1 ELSE 0 END), 0) AS verified_users,
+                    COALESCE(SUM(CASE WHEN email_verified = 0 THEN 1 ELSE 0 END), 0) AS unverified_users,
+                    COALESCE(SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END), 0) AS reg_today,
+                    COALESCE(SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END), 0) AS reg_7d,
+                    COALESCE(SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END), 0) AS reg_30d
+                FROM users
+                """,
+                (today_start_ts, cutoff_7d_ts, cutoff_30d_ts),
+            ).fetchone()
+
+            act_row = conn.execute(
+                """
+                SELECT
+                    COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) AS active_7d,
+                    COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) AS active_30d
+                FROM user_sessions
+                """,
+                (cutoff_7d_ts, cutoff_30d_ts),
+            ).fetchone()
+
+            reg_daily_rows = conn.execute(
+                """
+                SELECT strftime('%Y-%m-%d', created_at, 'unixepoch') AS day, COUNT(*) AS cnt
+                FROM users
+                WHERE created_at >= ?
+                GROUP BY day
+                """,
+                (series_start_ts,),
+            ).fetchall()
+            reg_by_day = {r["day"]: int(r["cnt"]) for r in reg_daily_rows if r["day"]}
+
+            act_daily_rows = conn.execute(
+                """
+                SELECT strftime('%Y-%m-%d', created_at, 'unixepoch') AS day, COUNT(DISTINCT user_id) AS cnt
+                FROM user_sessions
+                WHERE created_at >= ?
+                GROUP BY day
+                """,
+                (series_start_ts,),
+            ).fetchall()
+            act_by_day = {r["day"]: int(r["cnt"]) for r in act_daily_rows if r["day"]}
+
+            completed_tests = int(conn.execute("SELECT COUNT(*) FROM results").fetchone()[0])
+
+            map_rows = conn.execute(
+                """
+                SELECT quiz_type AS region, COUNT(*) AS cnt
+                FROM results
+                WHERE quiz_type IS NOT NULL AND TRIM(quiz_type) != ''
+                GROUP BY quiz_type
+                ORDER BY cnt DESC
+                LIMIT 12
+                """
+            ).fetchall()
+            map_usage = [{"region": r["region"], "count": int(r["cnt"])} for r in map_rows]
+
+            stat_row = conn.execute("SELECT value FROM site_stats WHERE key = 'site_visits'").fetchone()
+            site_visits = int(stat_row["value"]) if stat_row else 0
+        finally:
+            conn.close()
+
+    registrations_series = []
+    active_users_series = []
+    for offset in range(period_days):
+        day_str = (series_start_dt + timedelta(days=offset)).strftime("%Y-%m-%d")
+        registrations_series.append({"date": day_str, "count": reg_by_day.get(day_str, 0)})
+        active_users_series.append({"date": day_str, "count": act_by_day.get(day_str, 0)})
+
+    return {
+        "period_days": period_days,
+        "users": {
+            "total": int(u_row["total_users"] or 0),
+            "verified": int(u_row["verified_users"] or 0),
+            "unverified": int(u_row["unverified_users"] or 0),
+            "registrations_today": int(u_row["reg_today"] or 0),
+            "registrations_7d": int(u_row["reg_7d"] or 0),
+            "registrations_30d": int(u_row["reg_30d"] or 0),
+            "active_7d": int(act_row["active_7d"] or 0),
+            "active_30d": int(act_row["active_30d"] or 0),
+            "activity_source": "user_sessions",
+        },
+        "charts": {
+            "registrations_by_day": registrations_series,
+            "active_users_by_day": active_users_series,
+        },
+        "platform": {
+            "completed_tests": completed_tests,
+            "site_visits": site_visits,
+            "map_usage": map_usage,
+        },
+    }

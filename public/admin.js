@@ -1731,7 +1731,7 @@ let allResults = [];
     window.generateExecutivePDFReport = generateExecutivePDFReport;
 
     // Admin tabs navigation
-    const ADMIN_VALID_TABS = ['tab-testing', 'tab-journal', 'tab-overview', 'tab-maps', 'tab-branding', 'tab-data-quality'];
+    const ADMIN_VALID_TABS = ['tab-testing', 'tab-journal', 'tab-overview', 'tab-maps', 'tab-branding', 'tab-data-quality', 'tab-user-analytics'];
 
     function switchAdminTab(tabId) {
         if (!ADMIN_VALID_TABS.includes(tabId)) tabId = 'tab-testing';
@@ -1758,6 +1758,8 @@ let allResults = [];
             setTimeout(() => renderExecutiveCharts(allResults), 60);
         } else if (tabId === 'tab-data-quality') {
             loadDataQualityReport(false);
+        } else if (tabId === 'tab-user-analytics') {
+            loadUserAnalytics();
         }
     }
     window.switchAdminTab = switchAdminTab;
@@ -1861,6 +1863,148 @@ let allResults = [];
         panel.style.display = 'block';
     }
     window.showDataQualityDetails = showDataQualityDetails;
+
+    let uaRegChartInstance = null;
+    let uaMapsChartInstance = null;
+
+    async function loadUserAnalytics(daysOverride) {
+        const kpiGrid = document.getElementById('ua-kpi-grid');
+        const emptyBanner = document.getElementById('ua-empty-banner');
+        const periodSel = document.getElementById('ua-period-select');
+        const days = Number.isFinite(daysOverride) ? daysOverride : Number(periodSel ? periodSel.value : 30) || 30;
+        if (!kpiGrid) return;
+
+        kpiGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:18px;color:var(--text-light);">⏳ Загрузка статистики...</div>';
+
+        try {
+            const res = await fetch(`/api/admin/user-analytics?days=${encodeURIComponent(days)}`, { credentials: 'same-origin' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const u = data.users || {};
+            const p = data.platform || {};
+            const charts = data.charts || {};
+
+            if (emptyBanner) {
+                if ((u.total || 0) === 0 && (p.completed_tests || 0) === 0) {
+                    emptyBanner.textContent = 'В базе данных пока нет зарегистрированных пользователей и завершённых тестов.';
+                    emptyBanner.style.display = 'block';
+                } else {
+                    emptyBanner.style.display = 'none';
+                }
+            }
+
+            const cards = [
+                { label: 'ВСЕГО ПОЛЬЗОВАТЕЛЕЙ', value: u.total ?? 0, sub: `Подтверждено: ${u.verified ?? 0} · Не подтверждено: ${u.unverified ?? 0}`, color: 'var(--text-main)' },
+                { label: 'ПОДТВЕРЖДЁННЫЕ EMAIL', value: u.verified ?? 0, sub: u.total ? `${Math.round(((u.verified || 0) / u.total) * 100)}% от всех аккаунтов` : 'Нет аккаунтов', color: '#059669' },
+                { label: 'НЕПОДТВЕРЖДЁННЫЕ', value: u.unverified ?? 0, sub: 'Ожидают подтверждения почты', color: (u.unverified || 0) > 0 ? '#D97706' : 'var(--text-light)' },
+                { label: 'РЕГИСТРАЦИИ (СЕГОДНЯ / 7Д / 30Д)', value: `${u.registrations_today ?? 0} / ${u.registrations_7d ?? 0} / ${u.registrations_30d ?? 0}`, sub: 'Новые регистрации по периодам', color: '#2563EB' },
+                { label: 'АКТИВНЫЕ (7Д / 30Д)', value: `${u.active_7d ?? 0} / ${u.active_30d ?? 0}`, sub: 'Уникальные пользователи по сессиям входа', color: '#7C3AED' },
+                { label: 'ЗАВЕРШЁННЫЕ ТЕСТЫ', value: p.completed_tests ?? 0, sub: `Посещений главной: ${p.site_visits ?? 0}`, color: '#059669' },
+                { label: 'ДУЭЛИ (ВСЕГО / ЗАВЕРШЕНО)', value: `${p.duels_total ?? 0} / ${p.duels_finished ?? 0}`, sub: p.duels_note || 'Активные и сохранённые комнаты', color: '#D97706' },
+            ];
+
+            kpiGrid.innerHTML = cards.map(c => `
+                <div class="exec-metric-card" style="background: var(--bg-sunken); border: 1px solid var(--border); padding: 14px; border-radius: 10px;">
+                    <div style="font-size: 11px; color: var(--text-light); font-weight: 700;">${escapeHtml(c.label)}</div>
+                    <div style="font-size: 21px; font-weight: 800; color: ${c.color}; margin-top: 4px;">${escapeHtml(String(c.value))}</div>
+                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px;">${escapeHtml(c.sub)}</div>
+                </div>
+            `).join('');
+
+            const titleEl = document.getElementById('ua-reg-chart-title');
+            if (titleEl) {
+                titleEl.textContent = `Динамика регистраций и активности за ${data.period_days || days} дн.`;
+            }
+
+            if (typeof Chart !== 'undefined') {
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.body.classList.contains('dark-theme');
+                const gridColor = isDark ? 'rgba(148,163,184,0.18)' : 'rgba(15,23,42,0.08)';
+                const tickColor = isDark ? '#94A3B8' : '#64748B';
+
+                const regSeries = charts.registrations_by_day || [];
+                const actSeries = charts.active_users_by_day || [];
+                const regCanvas = document.getElementById('ua-registrations-chart');
+                if (regCanvas) {
+                    if (uaRegChartInstance) uaRegChartInstance.destroy();
+                    uaRegChartInstance = new Chart(regCanvas.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: regSeries.map(pt => pt.date.slice(5)),
+                            datasets: [
+                                {
+                                    label: 'Регистрации',
+                                    data: regSeries.map(pt => pt.count),
+                                    borderColor: '#2563EB',
+                                    backgroundColor: 'rgba(37, 99, 235, 0.14)',
+                                    fill: true,
+                                    tension: 0.3,
+                                    borderWidth: 2,
+                                },
+                                {
+                                    label: 'Активные пользователи',
+                                    data: actSeries.map(pt => pt.count),
+                                    borderColor: '#7C3AED',
+                                    backgroundColor: 'rgba(124, 58, 237, 0.08)',
+                                    fill: false,
+                                    tension: 0.3,
+                                    borderWidth: 2,
+                                },
+                            ],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { labels: { color: tickColor } } },
+                            scales: {
+                                x: { ticks: { color: tickColor, maxTicksLimit: 10 }, grid: { color: gridColor } },
+                                y: { beginAtZero: true, ticks: { precision: 0, color: tickColor }, grid: { color: gridColor } },
+                            },
+                        },
+                    });
+                }
+
+                const mapUsage = p.map_usage || [];
+                const mapsEmpty = document.getElementById('ua-maps-empty');
+                const mapsWrap = document.getElementById('ua-maps-chart-wrap');
+                const mapsCanvas = document.getElementById('ua-maps-chart');
+                if (mapUsage.length === 0) {
+                    if (mapsEmpty) mapsEmpty.style.display = 'block';
+                    if (mapsWrap) mapsWrap.style.display = 'none';
+                } else {
+                    if (mapsEmpty) mapsEmpty.style.display = 'none';
+                    if (mapsWrap) mapsWrap.style.display = 'block';
+                    if (mapsCanvas) {
+                        if (uaMapsChartInstance) uaMapsChartInstance.destroy();
+                        uaMapsChartInstance = new Chart(mapsCanvas.getContext('2d'), {
+                            type: 'bar',
+                            data: {
+                                labels: mapUsage.map(m => m.region),
+                                datasets: [{
+                                    label: 'Завершённых тестов',
+                                    data: mapUsage.map(m => m.count),
+                                    backgroundColor: 'rgba(5, 150, 105, 0.72)',
+                                    borderRadius: 6,
+                                }],
+                            },
+                            options: {
+                                indexAxis: 'y',
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    x: { beginAtZero: true, ticks: { precision: 0, color: tickColor }, grid: { color: gridColor } },
+                                    y: { ticks: { color: tickColor }, grid: { display: false } },
+                                },
+                            },
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            kpiGrid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#DC2626;padding:18px;">Ошибка загрузки статистики: ${escapeHtml(err.message)}</div>`;
+        }
+    }
+    window.loadUserAnalytics = loadUserAnalytics;
 
     function initAdminTabs() {
         const hash = (window.location.hash || '').replace('#', '').trim();
