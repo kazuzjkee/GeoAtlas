@@ -154,8 +154,106 @@ def test_admin_bootstrap_production_creates_once_no_duplicates(tmp_path, monkeyp
     assert teachers_second[0]["username"] == "bootadmin"
     assert auth_service.verify_password("StrongBootPass123!", teachers_second[0]["password_hash"])
 
-    # Verify HTTP access with bootstrapped admin credentials
+    # Verify HTTP access with bootstrapped admin credentials (Basic Auth & form login)
     cred = base64.b64encode(b"bootadmin:StrongBootPass123!").decode()
     headers = {"Authorization": f"Basic {cred}"}
     assert anon_client.get("/admin", headers=headers).status_code == 200
     assert anon_client.get("/api/admin/user-analytics", headers=headers).status_code == 200
+
+    # Login via /api/auth/login (HTTPS in production) -> /api/auth/me returns role='admin' -> /admin & API accessible
+    from fastapi.testclient import TestClient
+    import server as srv
+    prod_client = TestClient(srv.app, base_url="https://testserver")
+    login_res = prod_client.post("/api/auth/login", json={"email": "bootadmin", "password": "StrongBootPass123!"})
+    assert login_res.status_code == 200
+    assert login_res.json()["user"]["role"] == "admin"
+    assert prod_client.get("/api/auth/me").json()["user"]["role"] == "admin"
+    assert prod_client.get("/admin").status_code == 200
+    assert prod_client.get("/api/admin/user-analytics").status_code == 200
+
+
+def test_admin_bootstrap_with_populated_teachers_and_existing_email(tmp_path, monkeypatch, anon_client):
+    import auth_service
+    import db
+
+    monkeypatch.setattr(db, "DB_FILE", str(tmp_path / "boot_populated.db"))
+    db.init_db()
+    monkeypatch.setenv("ENVIRONMENT", "production")
+
+    # 1. Pre-populate teachers table with another teacher
+    conn = db._conn()
+    try:
+        conn.execute(
+            "INSERT INTO teachers (teacher_id, username, password_hash, full_name, organization, department, role) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("t-1", "existing_teacher", auth_service.hash_password("TeacherPass123!"), "T1", "SFEDU", "Geo", "teacher"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # 2. Register an existing student with email & verified status
+    pw_hash = auth_service.hash_password("UserSecretPass123!")
+    u, _ = db.upsert_pending_registration_user("promo@sfedu.ru", "Promo User", pw_hash, "G1")
+    db.mark_user_email_verified("promo@sfedu.ru", university_email_verified=True)
+    # Normal sfedu.ru user must stay student
+    assert db.get_user_by_email("promo@sfedu.ru")["role"] == "student"
+
+    # 3. Wrong bootstrap password must NOT promote existing user
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_USERNAME", "promo@sfedu.ru")
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "WrongBootstrapPass!")
+    db.ensure_bootstrap_admin()
+    assert db.get_user_by_email("promo@sfedu.ru")["role"] == "student"
+
+    # 4. Exact bootstrap password promotes existing user to admin even when teachers is non-empty
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "UserSecretPass123!")
+    db.ensure_bootstrap_admin()
+    promoted = db.get_user_by_email("promo@sfedu.ru")
+    assert promoted["role"] == "admin"
+    assert auth_service.verify_password("UserSecretPass123!", promoted["password_hash"])
+
+    # 5. Subsequent run with different password must NOT reset promoted user's password
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "AttemptReset999!")
+    db.ensure_bootstrap_admin()
+    assert auth_service.verify_password("UserSecretPass123!", db.get_user_by_email("promo@sfedu.ru")["password_hash"])
+
+    # 6. Bootstrap a brand-new admin by email on a DB where teachers already has non-admin rows
+    monkeypatch.setattr(db, "DB_FILE", str(tmp_path / "boot_new_email_admin.db"))
+    db.init_db()
+    conn = db._conn()
+    try:
+        conn.execute(
+            "INSERT INTO teachers (teacher_id, username, password_hash, full_name, organization, department, role) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("t-2", "other_teacher", auth_service.hash_password("TeacherPass123!"), "T2", "SFEDU", "Geo", "teacher"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_USERNAME", "newadmin@sfedu.ru")
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "BrandNewAdmin123!")
+    db.ensure_bootstrap_admin()
+    new_admin = db.get_user_by_email("newadmin@sfedu.ru")
+    assert new_admin is not None
+    assert new_admin["role"] == "admin"
+
+    # 7. Login via /api/auth/login with email (over HTTPS in production mode) -> role='admin' -> /admin 200
+    from fastapi.testclient import TestClient
+    import server as srv
+    prod_client = TestClient(srv.app, base_url="https://testserver")
+    l_res = prod_client.post("/api/auth/login", json={"email": "newadmin@sfedu.ru", "password": "BrandNewAdmin123!"})
+    assert l_res.status_code == 200
+    assert l_res.json()["user"]["role"] == "admin"
+    assert prod_client.get("/api/auth/me").json()["user"]["role"] == "admin"
+    assert prod_client.get("/admin").status_code == 200
+    assert prod_client.get("/api/admin/user-analytics").status_code == 200
+
+    # 8. Another sfedu.ru student must remain student and get 403 on /admin
+    prod_client.post("/api/auth/logout")
+    s_hash = auth_service.hash_password("StudentPass123!")
+    db.upsert_pending_registration_user("ordinary@sfedu.ru", "Ordinary", s_hash, "G2")
+    db.mark_user_email_verified("ordinary@sfedu.ru", university_email_verified=True)
+    sl_res = prod_client.post("/api/auth/login", json={"email": "ordinary@sfedu.ru", "password": "StudentPass123!"})
+    assert sl_res.status_code == 200
+    assert sl_res.json()["user"]["role"] == "student"
+    assert prod_client.get("/admin").status_code == 403
+    assert prod_client.get("/api/admin/user-analytics").status_code == 403

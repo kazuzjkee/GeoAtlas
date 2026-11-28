@@ -643,7 +643,127 @@ DEFAULT_TEACHERS = [
     }
 ]
 
+def ensure_bootstrap_admin() -> None:
+    """Idempotently bootstraps an admin account in production without overwriting existing passwords/roles."""
+    env_mode = os.environ.get("ENVIRONMENT", "development").strip().lower()
+    if env_mode != "production":
+        return
+
+    boot_user = os.environ.get("ADMIN_BOOTSTRAP_USERNAME", "").strip()
+    boot_pass = os.environ.get("ADMIN_BOOTSTRAP_PASSWORD", "").strip()
+    if not boot_user or not boot_pass:
+        return
+
+    import auth_service
+
+    is_email = "@" in boot_user
+    target_email = boot_user.lower() if is_email else f"{boot_user.lower()}@geoatlas.local"
+    now = time.time()
+
+    with _lock:
+        conn = _conn()
+        try:
+            # Idempotency guard: if an admin already exists in users or teachers, never create another or reset credentials
+            has_admin_user = conn.execute("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1").fetchone()
+            has_admin_teacher = conn.execute("SELECT 1 FROM teachers WHERE role = 'admin' LIMIT 1").fetchone()
+            if has_admin_user is not None and has_admin_teacher is not None:
+                return
+
+            existing_user = conn.execute(
+                "SELECT * FROM users WHERE lower(email) = ?",
+                (target_email,),
+            ).fetchone()
+
+            allow_teacher_sync = False
+
+            if existing_user is not None:
+                user_dict = dict(existing_user)
+                if user_dict.get("role") == "admin":
+                    allow_teacher_sync = True
+                else:
+                    # Existing non-admin user matched by exact email: require exact password match before promoting
+                    stored_hash = user_dict.get("password_hash") or ""
+                    if stored_hash and auth_service.verify_password(boot_pass, stored_hash):
+                        conn.execute(
+                            "UPDATE users SET role = 'admin', email_verified = 1, email_verified_at = COALESCE(email_verified_at, ?), updated_at = ? WHERE id = ?",
+                            (now, now, user_dict["id"]),
+                        )
+                        conn.commit()
+                        allow_teacher_sync = True
+                    else:
+                        return
+            else:
+                if has_admin_user is not None or has_admin_teacher is not None:
+                    return
+                existing_teacher = conn.execute(
+                    "SELECT * FROM teachers WHERE username = ?",
+                    (boot_user,),
+                ).fetchone()
+                if existing_teacher is not None:
+                    t_dict = dict(existing_teacher)
+                    t_hash = t_dict.get("password_hash") or ""
+                    if t_dict.get("role") == "admin" and t_hash:
+                        # Sync into users using existing teacher hash without resetting password
+                        conn.execute(
+                            """
+                            INSERT OR IGNORE INTO users (
+                                email, full_name, grp, password_hash, role, email_verified, email_verified_at,
+                                university_verified, university_email_verified, created_at, updated_at
+                            ) VALUES (?, ?, '', ?, 'admin', 1, ?, 0, 0, ?, ?)
+                            """,
+                            (target_email, t_dict.get("full_name") or "Администратор платформы", t_hash, now, now, now),
+                        )
+                        conn.commit()
+                    return
+
+                pw_hash = auth_service.hash_password(boot_pass)
+                conn.execute(
+                    """
+                    INSERT INTO users (
+                        email, full_name, grp, password_hash, role, email_verified, email_verified_at,
+                        university_verified, university_email_verified, created_at, updated_at
+                    ) VALUES (?, ?, '', ?, 'admin', 1, ?, 0, 0, ?, ?)
+                    """,
+                    (target_email, "Администратор платформы", pw_hash, now, now, now),
+                )
+                conn.commit()
+                allow_teacher_sync = True
+
+            if allow_teacher_sync:
+                existing_teacher = conn.execute(
+                    "SELECT 1 FROM teachers WHERE username = ?",
+                    (boot_user,),
+                ).fetchone()
+                if existing_teacher is None:
+                    u_row = conn.execute(
+                        "SELECT password_hash, full_name FROM users WHERE lower(email) = ?",
+                        (target_email,),
+                    ).fetchone()
+                    t_hash = u_row["password_hash"] if u_row else auth_service.hash_password(boot_pass)
+                    t_name = (u_row["full_name"] if u_row and u_row["full_name"] else "Администратор платформы")
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO teachers (
+                            teacher_id, username, password_hash, full_name, organization, department, role
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            f"admin-{boot_user}",
+                            boot_user,
+                            t_hash,
+                            t_name,
+                            "GeoAtlas",
+                            "",
+                            "admin",
+                        ),
+                    )
+                    conn.commit()
+        finally:
+            conn.close()
+
+
 def load_teachers_db() -> List[Dict[str, Any]]:
+    ensure_bootstrap_admin()
     with _lock:
         conn = _conn()
         try:
@@ -651,26 +771,7 @@ def load_teachers_db() -> List[Dict[str, Any]]:
             rows = [dict(r) for r in cur.fetchall()]
             if not rows:
                 env_mode = os.environ.get("ENVIRONMENT", "development").strip().lower()
-                if env_mode == "production":
-                    boot_user = os.environ.get("ADMIN_BOOTSTRAP_USERNAME", "").strip()
-                    boot_pass = os.environ.get("ADMIN_BOOTSTRAP_PASSWORD", "").strip()
-                    if boot_user and boot_pass:
-                        import auth_service
-                        conn.execute("""
-                            INSERT OR IGNORE INTO teachers (
-                                teacher_id, username, password_hash, full_name, organization, department, role
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            f"admin-{boot_user}",
-                            boot_user,
-                            auth_service.hash_password(boot_pass),
-                            "Администратор платформы",
-                            "GeoAtlas",
-                            "",
-                            "admin",
-                        ))
-                        conn.commit()
-                else:
+                if env_mode != "production":
                     for t in DEFAULT_TEACHERS:
                         conn.execute("""
                             INSERT OR REPLACE INTO teachers (

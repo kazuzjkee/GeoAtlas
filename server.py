@@ -915,6 +915,15 @@ def login_account(req: LoginRequest, request: Request, response: Response) -> Di
                     finally:
                         conn.close()
                 existing_u = db.get_user_by_id(int(existing_u["id"]))
+            elif existing_u.get("role") == "student" and t.get("role") in ("teacher", "dean", "admin"):
+                with db._lock:
+                    conn = db._conn()
+                    try:
+                        conn.execute("UPDATE users SET role = ? WHERE id = ?", (t["role"], existing_u["id"]))
+                        conn.commit()
+                    finally:
+                        conn.close()
+                existing_u = db.get_user_by_id(int(existing_u["id"]))
             _issue_user_session(response, existing_u, auth_method="password")
             return {"status": "ok", "user": _build_public_user_dict(existing_u)}
 

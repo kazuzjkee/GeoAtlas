@@ -3045,10 +3045,11 @@
             }
 
             #hero-section,
+            #regions-section,
+            #passport-showcase-section,
             #sandbox-section,
             #features-bento,
-            #architecture-section,
-            #regions-section {
+            #architecture-section {
                 min-height: calc(100vh - 68px);
                 display: flex;
                 flex-direction: column;
@@ -3106,10 +3107,11 @@
                 padding: 44px 16px 36px 16px !important;
             }
 
+            #regions-section,
+            #passport-showcase-section,
             #sandbox-section,
             #features-bento,
-            #architecture-section,
-            #regions-section {
+            #architecture-section {
                 min-height: auto !important;
                 display: block !important;
                 padding: 48px 0 !important;
@@ -4088,15 +4090,26 @@
             outline-offset: 2px;
         }
         .passport-showcase-card {
-            background: var(--surface);
+            background: #FFFFFF;
             border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 24px;
+            border-radius: var(--radius-lg);
+            padding: 24px 28px;
             box-shadow: var(--shadow-md);
             display: grid;
             grid-template-columns: 1.15fr 1fr;
             gap: 24px;
             align-items: stretch;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        [data-theme="dark"] .passport-showcase-card {
+            background: #111C33;
+            border-color: #1E293B;
+        }
+        [data-theme="dark"] .passport-demo-kpi,
+        [data-theme="dark"] .passport-showcase-chart-box {
+            background: #0F172A;
+            border-color: #1E293B;
         }
         .passport-showcase-header {
             display: flex;
