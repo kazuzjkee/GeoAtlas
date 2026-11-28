@@ -4784,7 +4784,8 @@ function showDistrictInfoCard(districtName, explicitOktmo) {
     highlightDistrictOnMapByName(district.name);
     window._currentDistrictForChart = district;
     const oktmo8 = resolveDistrictOktmo(district.name, explicitOktmo);
-    const passportBtnHtml = oktmo8.startsWith('60')
+    const regionCfg = getPassportRegionConfig(oktmo8);
+    const passportBtnHtml = regionCfg
         ? `<button type="button" id="btn-open-passport" class="passport-trigger-btn" onclick="openTerritoryPassport('${oktmo8}', '${escapeHtml(district.center || '')}')">📋 Географический паспорт</button>`
         : '';
 
@@ -9224,28 +9225,63 @@ if (typeof window !== 'undefined') {
 }
 
 // ================= ГЕОГРАФИЧЕСКИЙ ПАСПОРТ ТЕРРИТОРИИ (ЭТАП 2) =================
+const PASSPORT_REGIONS = {
+    '60': {
+        key: 'rostov',
+        url: '/public/maps/rostov_passports.json',
+        legacyOktmoMap: {},
+    },
+    '03': {
+        key: 'krasnodar',
+        url: '/public/maps/krasnodar_passports.json',
+        legacyOktmoMap: {
+            '03703000': '03501000',
+            '03709000': '03504000',
+            '03632000': '03532000',
+            '03641000': '03541000',
+            '03655000': '03555000',
+        },
+    },
+};
+
+window._passportsCacheByRegion = {};
+window._passportsPromiseByRegion = {};
 window._rostovPassportsCache = null;
-window._rostovPassportsPromise = null;
 window._passportCharts = [];
-window._passportState = { oktmo: '', center: '', tab: 'overview' };
+window._passportState = { regionKey: '', oktmo: '', center: '', tab: 'overview' };
 window._passportEscBound = false;
 
-async function loadRostovPassportsData() {
-    if (window._rostovPassportsCache) return window._rostovPassportsCache;
-    if (!window._rostovPassportsPromise) {
-        window._rostovPassportsPromise = fetch('/public/maps/rostov_passports.json', { credentials: 'same-origin' })
+function getPassportRegionConfig(oktmo8) {
+    const clean = normalizeOktmo8(oktmo8);
+    if (!clean) return null;
+    return PASSPORT_REGIONS[clean.slice(0, 2)] || null;
+}
+
+function canonicalizePassportOktmo(oktmo8, regionCfg) {
+    const clean = normalizeOktmo8(oktmo8);
+    if (!clean || !regionCfg) return clean;
+    return (regionCfg.legacyOktmoMap && regionCfg.legacyOktmoMap[clean]) || clean;
+}
+
+async function loadRegionPassportsData(regionCfg) {
+    if (!regionCfg) throw new Error('Регион паспорта не определён');
+    const rk = regionCfg.key;
+    if (window._passportsCacheByRegion[rk]) return window._passportsCacheByRegion[rk];
+    if (!window._passportsPromiseByRegion[rk]) {
+        window._passportsPromiseByRegion[rk] = fetch(regionCfg.url, { credentials: 'same-origin' })
             .then(async (res) => {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
-                window._rostovPassportsCache = data;
+                window._passportsCacheByRegion[rk] = data;
+                if (rk === 'rostov') window._rostovPassportsCache = data;
                 return data;
             })
             .catch((err) => {
-                window._rostovPassportsPromise = null;
+                window._passportsPromiseByRegion[rk] = null;
                 throw err;
             });
     }
-    return window._rostovPassportsPromise;
+    return window._passportsPromiseByRegion[rk];
 }
 
 function destroyPassportCharts() {
@@ -9404,7 +9440,8 @@ function renderPassportLineChart(canvasId, labels, datasets, unitLabel, beginAtZ
 
 function renderActivePassportView() {
     destroyPassportCharts();
-    const data = window._rostovPassportsCache;
+    const rk = window._passportState.regionKey || 'rostov';
+    const data = window._passportsCacheByRegion[rk] || (rk === 'rostov' ? window._rostovPassportsCache : null);
     const body = document.getElementById('passport-modal-body');
     const titleEl = document.getElementById('passport-modal-title');
     const subEl = document.getElementById('passport-modal-subtitle');
@@ -9430,11 +9467,12 @@ function renderActivePassportView() {
     }
 
     const centerText = window._passportState.center ? ` · Центр: ${escapeHtml(window._passportState.center)}` : '';
+    const legacyText = territory.legacy_oktmo ? ` (до 2025 г.: ${escapeHtml(territory.legacy_oktmo)})` : '';
     if (titleEl) titleEl.textContent = territory.name;
     if (subEl) {
         subEl.innerHTML = `
             <span class="passport-badge">${escapeHtml(territory.type)}</span>
-            <span>ОКТМО: <strong>${escapeHtml(territory.oktmo)}</strong>${centerText}</span>
+            <span>ОКТМО: <strong>${escapeHtml(territory.oktmo)}</strong>${legacyText}${centerText}</span>
         `;
     }
 
@@ -9605,17 +9643,21 @@ function renderActivePassportView() {
     }
 
     if (footerEl) {
+        const siriusNote = meta.sirius_limitation ? ` ${escapeHtml(meta.sirius_limitation)}` : '';
         footerEl.innerHTML = `
             <strong>Источники и лицензии:</strong> ${escapeHtml(meta.attribution || 'Росстат; обработка: «Если быть точным»')} (лицензия <strong>${escapeHtml(meta.license || 'CC BY 4.0')}</strong>, версия ${escapeHtml(meta.dataset_version || 'v20260928')}).
             Границы: OpenStreetMap (лицензия <strong>ODbL 1.0</strong>).
-            Отсутствующие значения отображаются как «Нет данных» и не заменяются нулями.
+            Отсутствующие значения отображаются как «Нет данных» и не заменяются нулями.${siriusNote}
         `;
     }
 }
 
 async function openTerritoryPassport(oktmo8, centerName) {
     const cleanOktmo = normalizeOktmo8(oktmo8);
-    window._passportState = { oktmo: cleanOktmo, center: centerName || '', tab: 'overview' };
+    const regionCfg = getPassportRegionConfig(cleanOktmo);
+    const canonicalOktmo = canonicalizePassportOktmo(cleanOktmo, regionCfg);
+    const rk = regionCfg ? regionCfg.key : '';
+    window._passportState = { regionKey: rk, oktmo: canonicalOktmo, center: centerName || '', tab: 'overview' };
     const overlay = ensurePassportModalDom();
     overlay.classList.add('open');
 
@@ -9624,16 +9666,25 @@ async function openTerritoryPassport(oktmo8, centerName) {
     const bodyEl = document.getElementById('passport-modal-body');
     const footerEl = document.getElementById('passport-modal-footer');
 
-    if (!window._rostovPassportsCache) {
+    if (!regionCfg) {
+        destroyPassportCharts();
+        if (titleEl) titleEl.textContent = 'Паспорт территории недоступен';
+        if (subEl) subEl.textContent = `ОКТМО: ${cleanOktmo || '—'}`;
+        if (bodyEl) bodyEl.innerHTML = '<div class="passport-state-box">Для выбранного региона набор данных географического паспорта пока не подключён.</div>';
+        if (footerEl) footerEl.textContent = '';
+        return;
+    }
+
+    if (!window._passportsCacheByRegion[rk]) {
         destroyPassportCharts();
         if (titleEl) titleEl.textContent = 'Географический паспорт территории';
-        if (subEl) subEl.textContent = `ОКТМО: ${cleanOktmo || '—'}`;
+        if (subEl) subEl.textContent = `ОКТМО: ${canonicalOktmo || '—'}`;
         if (bodyEl) bodyEl.innerHTML = '<div class="passport-state-box">⏳ Загрузка статистических данных паспорта...</div>';
         if (footerEl) footerEl.textContent = '';
     }
 
     try {
-        await loadRostovPassportsData();
+        await loadRegionPassportsData(regionCfg);
         renderActivePassportView();
     } catch (err) {
         destroyPassportCharts();

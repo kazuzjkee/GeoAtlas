@@ -1,0 +1,205 @@
+import csv
+import io
+import json
+import sys
+import zipfile
+from pathlib import Path
+
+import geopandas as gpd
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+import build_krasnodar_passports as etl  # noqa: E402
+
+PASSPORTS_PATH = REPO_ROOT / "public" / "maps" / "krasnodar_passports.json"
+SHP_PATH = REPO_ROOT / "Py_Geo" / "shape" / "krasnodar" / "boundary-3857.shp"
+
+
+def _make_csv_zip(rows: list[dict], fieldnames: list[str]) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        sio = io.StringIO()
+        writer = csv.DictWriter(sio, fieldnames=fieldnames, delimiter=";")
+        writer.writeheader()
+        writer.writerows(rows)
+        zf.writestr("fixture.csv", sio.getvalue().encode("utf-8"))
+    return buf.getvalue()
+
+
+def test_generated_krasnodar_passports_structure_reform_and_sirius():
+    assert PASSPORTS_PATH.exists(), "public/maps/krasnodar_passports.json must exist"
+    data = json.loads(PASSPORTS_PATH.read_text(encoding="utf-8"))
+
+    meta = data["metadata"]
+    assert meta["total_territories"] == 44
+    assert meta["region_code"] == "03"
+    assert meta["license"] == "CC BY 4.0"
+    assert "Росстат" in meta["attribution"]
+    assert "Если быть точным" in meta["attribution"]
+    assert "OpenStreetMap" in meta["geometry_source"]
+    assert "Сириус" in meta["sirius_limitation"]
+    assert "номинальн" in meta["monetary_values_note"].lower()
+
+    territories = data["territories"]
+    assert len(territories) == 44
+    assert "03731000" not in territories
+    assert "02000000" not in territories
+
+    # Verify all 5 municipal reform mappings
+    expected_reforms = {
+        "03501000": "03703000",
+        "03504000": "03709000",
+        "03532000": "03632000",
+        "03541000": "03641000",
+        "03555000": "03655000",
+    }
+    for new_ok, old_ok in expected_reforms.items():
+        assert new_ok in territories
+        assert old_ok not in territories
+        assert territories[new_ok]["legacy_oktmo"] == old_ok
+        assert territories[new_ok]["type"] == "Муниципальный округ"
+
+    # Exact 44 OKTMO match against boundary-3857.shp via reform crosswalk
+    gdf = gpd.read_file(SHP_PATH)
+    shp_canonical = {etl.resolve_canonical_oktmo(ok) for ok in gdf["oktmo"]}
+    assert len(shp_canonical) == 44
+    assert set(territories.keys()) == shp_canonical
+
+    types = [t["type"] for t in territories.values()]
+    assert types.count("Городской округ") == 5
+    assert types.count("Муниципальный округ") == 5
+    assert types.count("Муниципальный район") == 34
+
+    expected_units = {
+        "population_avg": "Человек",
+        "births": "Человек",
+        "deaths": "Человек",
+        "investments_per_capita": "Рубль",
+        "agriculture_output": "Тысяча рублей",
+        "housing_commissioned": "Квадратный метр общей площади",
+        "population_density": "Человек на кв. км",
+        "natural_growth": "Человек",
+    }
+
+    for key, unit in expected_units.items():
+        ind_meta = meta["indicators"][key]
+        assert ind_meta["unit"] == unit
+        assert ind_meta["coverage_latest"] == 44
+        assert ind_meta["total_territories"] == 44
+
+    # Historical continuity across 2024->2025 reform for converted okrugs (e.g. Anapa 03501000)
+    anapa_housing = territories["03501000"]["indicators"]["housing_commissioned"]["series"]
+    assert anapa_housing.get("2024") is not None and anapa_housing.get("2025") is not None
+
+    non_negative_keys = {
+        "population_avg",
+        "births",
+        "deaths",
+        "investments_per_capita",
+        "agriculture_output",
+        "housing_commissioned",
+        "population_density",
+    }
+
+    for ok, t in territories.items():
+        assert len(ok) == 8 and ok.isdigit()
+        assert t["area_km2"] > 0
+
+        for key in expected_units:
+            ind = t["indicators"][key]
+            assert ind["latest_value"] is not None
+            for yr, val in ind["series"].items():
+                if val is not None and key in non_negative_keys:
+                    assert val >= 0, f"Negative value for {ok}/{key}/{yr}: {val}"
+
+        pop_series = t["indicators"]["population_avg"]["series"]
+        dens_series = t["indicators"]["population_density"]["series"]
+        for yr, pval in pop_series.items():
+            if pval is not None:
+                assert dens_series[yr] == round(float(pval) / t["area_km2"], 2)
+
+        b_series = t["indicators"]["births"]["series"]
+        d_series = t["indicators"]["deaths"]["series"]
+        g_series = t["indicators"]["natural_growth"]["series"]
+        for yr in set(b_series) & set(d_series):
+            if b_series[yr] is not None and d_series[yr] is not None:
+                assert g_series[yr] == b_series[yr] - d_series[yr]
+
+
+def test_krasnodar_etl_fixture_oktmo_stable_sirius_exclusion_and_nulls():
+    territories = etl.load_krasnodar_territories(SHP_PATH)
+    valid_oktmos = sorted(territories.keys())
+
+    base_fields = [
+        "region_name", "mun_level", "municipality", "oktmo", "oktmo_stable",
+        "year", "indicator_value", "indicator_unit",
+    ]
+    agri_fields = base_fields + ["kategor"]
+
+    def _build_rows(unit: str, with_kategor: bool = False):
+        rows = []
+        for i, ok in enumerate(valid_oktmos):
+            val = "" if i == 0 else str(200 + i)
+            # Simulate pre-reform oktmo mapped via oktmo_stable
+            raw_ok = territories[ok].get("legacy_oktmo", ok)
+            row = {
+                "region_name": "Краснодарский край",
+                "mun_level": "Муниципальное образование верхнего уровня",
+                "municipality": territories[ok]["name"],
+                "oktmo": raw_ok,
+                "oktmo_stable": ok,
+                "year": "2024",
+                "indicator_value": val,
+                "indicator_unit": unit,
+            }
+            if with_kategor:
+                row["kategor"] = "Хозяйства всех категорий"
+                rows.append(row)
+                rows.append({**row, "kategor": "Хозяйства населения (граждане)", "indicator_value": "88888"})
+            else:
+                rows.append(row)
+        # Sirius row must be excluded cleanly without colliding with Sochi
+        rows.append({
+            "region_name": "Краснодарский край",
+            "mun_level": "Муниципальное образование верхнего уровня",
+            "municipality": "Сириус",
+            "oktmo": "03731000",
+            "oktmo_stable": "02000000",
+            "year": "2024",
+            "indicator_value": "13500",
+            "indicator_unit": unit,
+            **({"kategor": "Хозяйства всех категорий"} if with_kategor else {}),
+        })
+        return rows
+
+    overrides = {
+        "population_avg": _make_csv_zip(_build_rows("Человек"), base_fields),
+        "births": _make_csv_zip(_build_rows("Человек"), base_fields),
+        "deaths": _make_csv_zip(_build_rows("Человек"), base_fields),
+        "investments_per_capita": _make_csv_zip(_build_rows("Рубль"), base_fields),
+        "agriculture_output": _make_csv_zip(_build_rows("Тысяча рублей", with_kategor=True), agri_fields),
+        "housing_commissioned": _make_csv_zip(_build_rows("Квадратный метр общей площади"), base_fields),
+    }
+
+    res = etl.build_passports(shp_path=SHP_PATH, zip_overrides=overrides)
+    assert len(res["territories"]) == 44
+    assert "03731000" not in res["territories"]
+    assert res["territories"][valid_oktmos[0]]["indicators"]["population_avg"]["series"]["2024"] is None
+    assert res["territories"][valid_oktmos[1]]["indicators"]["agriculture_output"]["series"]["2024"] == 201
+
+    dup_rows = _build_rows("Человек")
+    dup_rows.append({**dup_rows[0], "indicator_value": "777"})
+    dup_zip = _make_csv_zip(dup_rows, base_fields)
+    with pytest.raises(ValueError, match="Duplicate observation"):
+        etl.parse_indicator_zip(dup_zip, etl.INDICATORS_SPEC[0], set(valid_oktmos))
+
+
+def test_krasnodar_passports_endpoint_auth_and_payload(anon_client, client):
+    assert anon_client.get("/public/maps/krasnodar_passports.json").status_code == 401
+    ok = client.get("/public/maps/krasnodar_passports.json")
+    assert ok.status_code == 200
+    body = ok.json()
+    assert body["metadata"]["total_territories"] == 44
+    assert len(body["territories"]) == 44
