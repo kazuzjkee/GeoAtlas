@@ -5431,10 +5431,9 @@
         // ========================================================
         // 3. АВТОРИЗАЦИЯ СТУДЕНТА (СЕССИЯ localStorage + ЮФУ API)
         // ========================================================
-        function openAuthModal() {
-            const modal = document.getElementById('auth-modal');
-            if (modal) modal.style.display = 'flex';
-            resetAuthForms();
+        function openAuthModal(mode) {
+            const target = mode === 'register' ? '/register' : '/login';
+            window.location.href = target;
         }
 
         function closeAuthModal() {
@@ -5520,11 +5519,28 @@
             }
         }
 
-        function logoutStudent() {
-            if (confirm('Выйти из студенческого профиля?')) {
+        async function logoutStudent() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+            } catch (e) {}
+            localStorage.removeItem('sfeduStudent');
+            updateStudentHeader();
+        }
+
+        async function syncAuthSession() {
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.user) {
+                        localStorage.setItem('sfeduStudent', JSON.stringify(data.user));
+                        updateStudentHeader();
+                        return;
+                    }
+                }
                 localStorage.removeItem('sfeduStudent');
                 updateStudentHeader();
-            }
+            } catch (e) {}
         }
 
         function getCurrentStudentInfo() {
@@ -6230,12 +6246,14 @@
                     const nameEl = document.getElementById('student-badge-name');
                     const groupEl = document.getElementById('student-badge-group');
                     if (nameEl) {
-                        nameEl.textContent = student.name;
-                        nameEl.title = student.name;
+                        nameEl.textContent = student.name || student.email || 'Пользователь';
+                        nameEl.title = student.name || student.email || '';
                     }
                     if (groupEl) {
-                        groupEl.textContent = student.group;
-                        groupEl.title = student.group;
+                        const metaParts = [student.group, student.badge].filter(Boolean);
+                        const metaText = metaParts.join(' · ');
+                        groupEl.textContent = metaText;
+                        groupEl.title = metaText;
                     }
                 }
             } else {
@@ -7461,6 +7479,7 @@
             setupSandboxDropZone();
             setupSandboxInspector();
             updateStudentHeader();
+            syncAuthSession();
             setupCardSpotlight();
             setupCardTilt();
             setupRevealObserver();

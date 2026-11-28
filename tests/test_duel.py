@@ -38,12 +38,19 @@ def _live_uvicorn():
         thread.join(timeout=5)
 
 
+def _test_auth_header() -> dict:
+    import base64
+    return {"Authorization": f"Basic {base64.b64encode(b'admin:admin').decode()}"}
+
+
 def _http_json(port: int, path: str, body: dict | None = None):
     data = json.dumps(body).encode("utf-8") if body is not None else None
+    headers = {"Content-Type": "application/json", "Host": f"127.0.0.1:{port}"}
+    headers.update(_test_auth_header())
     req = urllib.request.Request(
         f"http://127.0.0.1:{port}{path}",
         data=data,
-        headers={"Content-Type": "application/json", "Host": f"127.0.0.1:{port}"},
+        headers=headers,
         method="POST" if data is not None else "GET",
     )
     with urllib.request.urlopen(req, timeout=8) as resp:
@@ -158,7 +165,10 @@ def test_duel_websocket_center_all_rounds_normal_finish():
         async def run_match():
             u1 = f"ws://127.0.0.1:{port}/ws/duel/{room_id}/{p1_id}"
             u2 = f"ws://127.0.0.1:{port}/ws/duel/{room_id}/{p2_id}"
-            async with websockets.connect(u1) as ws1, websockets.connect(u2) as ws2:
+            async with (
+                websockets.connect(u1, additional_headers=_test_auth_header()) as ws1,
+                websockets.connect(u2, additional_headers=_test_auth_header()) as ws2,
+            ):
                 await _drain_until(ws1, "player_connected", player_filter=p1_id)
                 await _drain_until(ws2, "player_connected", player_filter=p2_id)
 
@@ -245,7 +255,10 @@ def test_duel_websocket_puzzle_mode_sync_and_finish():
         async def run_puzzle():
             u1 = f"ws://127.0.0.1:{port}/ws/duel/{room_id}/{p1_id}"
             u2 = f"ws://127.0.0.1:{port}/ws/duel/{room_id}/{p2_id}"
-            async with websockets.connect(u1) as ws1, websockets.connect(u2) as ws2:
+            async with (
+                websockets.connect(u1, additional_headers=_test_auth_header()) as ws1,
+                websockets.connect(u2, additional_headers=_test_auth_header()) as ws2,
+            ):
                 await _drain_until(ws1, "player_connected", player_filter=p1_id)
                 await _drain_until(ws2, "player_connected", player_filter=p2_id)
 
@@ -300,7 +313,10 @@ def test_duel_websocket_surrender_both_sides(surrender_who):
         async def run_surrender():
             u1 = f"ws://127.0.0.1:{port}/ws/duel/{room_id}/{p1_id}"
             u2 = f"ws://127.0.0.1:{port}/ws/duel/{room_id}/{p2_id}"
-            async with websockets.connect(u1) as ws1, websockets.connect(u2) as ws2:
+            async with (
+                websockets.connect(u1, additional_headers=_test_auth_header()) as ws1,
+                websockets.connect(u2, additional_headers=_test_auth_header()) as ws2,
+            ):
                 await _drain_until(ws1, "player_connected", player_filter=p1_id)
                 await _drain_until(ws2, "player_connected", player_filter=p2_id)
                 await ws1.send(json.dumps({"type": "ready", "ready": True}))
@@ -350,7 +366,7 @@ def test_duel_websocket_round_timeout_and_reverse_proxy_headers():
             try:
                 u1 = f"ws://127.0.0.1:{proxy_port}/ws/duel/{room_id}/{p1_id}"
                 u2 = f"ws://127.0.0.1:{proxy_port}/ws/duel/{room_id}/{p2_id}"
-                extra_headers = {"X-Forwarded-Proto": "https", "X-Forwarded-For": "10.0.0.5"}
+                extra_headers = {"X-Forwarded-Proto": "https", "X-Forwarded-For": "10.0.0.5", **_test_auth_header()}
                 async with (
                     websockets.connect(u1, additional_headers=extra_headers) as ws1,
                     websockets.connect(u2, additional_headers=extra_headers) as ws2,

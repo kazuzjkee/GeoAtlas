@@ -1,5 +1,5 @@
-def test_admin_groups_unauthorized(client):
-    res = client.get("/api/admin/groups")
+def test_admin_groups_unauthorized(anon_client):
+    res = anon_client.get("/api/admin/groups")
     assert res.status_code == 401
 
 def test_admin_groups_ok(client, auth_headers):

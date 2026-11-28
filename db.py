@@ -102,13 +102,71 @@ def init_db():
                     value INTEGER NOT NULL DEFAULT 0,
                     updated_at REAL
                 );
+
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT UNIQUE NOT NULL,
+                    full_name TEXT NOT NULL DEFAULT '',
+                    grp TEXT NOT NULL DEFAULT '',
+                    password_hash TEXT NOT NULL DEFAULT '',
+                    role TEXT NOT NULL DEFAULT 'student',
+                    email_verified INTEGER NOT NULL DEFAULT 0,
+                    email_verified_at REAL,
+                    university_verified INTEGER NOT NULL DEFAULT 0,
+                    university_email_verified INTEGER NOT NULL DEFAULT 0,
+                    university_auth_provider TEXT NOT NULL DEFAULT '',
+                    university_verified_at REAL,
+                    oidc_subject TEXT,
+                    oidc_issuer TEXT,
+                    accepted_terms_at REAL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_issuer, oidc_subject) WHERE oidc_subject IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS user_sessions (
+                    session_id_hash TEXT PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    created_at REAL NOT NULL,
+                    expires_at REAL NOT NULL,
+                    revoked INTEGER NOT NULL DEFAULT 0,
+                    auth_method TEXT NOT NULL DEFAULT 'password'
+                );
+                CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
+
+                CREATE TABLE IF NOT EXISTS email_verifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT NOT NULL,
+                    purpose TEXT NOT NULL,
+                    code_hash TEXT NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 5,
+                    expires_at REAL NOT NULL,
+                    used_at REAL,
+                    created_at REAL NOT NULL,
+                    resend_available_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_email_verif_lookup ON email_verifications(email, purpose, created_at);
+
+                CREATE TABLE IF NOT EXISTS oidc_states (
+                    state_hash TEXT PRIMARY KEY,
+                    nonce TEXT NOT NULL,
+                    code_verifier TEXT NOT NULL,
+                    next_url TEXT NOT NULL DEFAULT '/',
+                    expires_at REAL NOT NULL,
+                    used_at REAL
+                );
             """)
             conn.commit()
-            try:
-                conn.execute("ALTER TABLE results ADD COLUMN is_adaptive INTEGER DEFAULT 0")
-                conn.commit()
-            except Exception:
-                pass
+            for alter_sql in (
+                "ALTER TABLE results ADD COLUMN is_adaptive INTEGER DEFAULT 0",
+                "ALTER TABLE results ADD COLUMN user_id INTEGER DEFAULT NULL",
+            ):
+                try:
+                    conn.execute(alter_sql)
+                    conn.commit()
+                except Exception:
+                    pass
         finally:
             conn.close()
 
@@ -592,17 +650,38 @@ def load_teachers_db() -> List[Dict[str, Any]]:
             cur = conn.execute("SELECT * FROM teachers ORDER BY teacher_id ASC")
             rows = [dict(r) for r in cur.fetchall()]
             if not rows:
-                for t in DEFAULT_TEACHERS:
-                    conn.execute("""
-                        INSERT OR REPLACE INTO teachers (
-                            teacher_id, username, password_hash, full_name, organization, department, role
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        t["teacher_id"], t["username"], t["password_hash"],
-                        t.get("full_name", ""), t.get("organization", ""),
-                        t.get("department", ""), t.get("role", "teacher")
-                    ))
-                conn.commit()
+                env_mode = os.environ.get("ENVIRONMENT", "development").strip().lower()
+                if env_mode == "production":
+                    boot_user = os.environ.get("ADMIN_BOOTSTRAP_USERNAME", "").strip()
+                    boot_pass = os.environ.get("ADMIN_BOOTSTRAP_PASSWORD", "").strip()
+                    if boot_user and boot_pass:
+                        import auth_service
+                        conn.execute("""
+                            INSERT OR REPLACE INTO teachers (
+                                teacher_id, username, password_hash, full_name, organization, department, role
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            f"admin-{boot_user}",
+                            boot_user,
+                            auth_service.hash_password(boot_pass),
+                            "Администратор платформы",
+                            "GeoAtlas",
+                            "",
+                            "dean",
+                        ))
+                        conn.commit()
+                else:
+                    for t in DEFAULT_TEACHERS:
+                        conn.execute("""
+                            INSERT OR REPLACE INTO teachers (
+                                teacher_id, username, password_hash, full_name, organization, department, role
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            t["teacher_id"], t["username"], t["password_hash"],
+                            t.get("full_name", ""), t.get("organization", ""),
+                            t.get("department", ""), t.get("role", "teacher")
+                        ))
+                    conn.commit()
                 cur = conn.execute("SELECT * FROM teachers ORDER BY teacher_id ASC")
                 rows = [dict(r) for r in cur.fetchall()]
             return rows
@@ -823,6 +902,474 @@ def increment_site_stat(key: str = "site_visits") -> int:
             ).fetchone()
             conn.commit()
             return int(row["value"]) if row else 1
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+# ==================== AUTHENTICATION 2.0 (USERS, SESSIONS, CODES, OIDC) ====================
+
+def _format_user_row(row: Optional[sqlite3.Row]) -> Optional[Dict[str, Any]]:
+    if not row:
+        return None
+    d = dict(row)
+    d["group"] = d.pop("grp", "")
+    d["email_verified"] = bool(d.get("email_verified"))
+    d["university_verified"] = bool(d.get("university_verified"))
+    d["university_email_verified"] = bool(d.get("university_email_verified"))
+    return d
+
+
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    clean = (email or "").strip().lower()
+    if not clean:
+        return None
+    with _lock:
+        conn = _conn()
+        try:
+            row = conn.execute("SELECT * FROM users WHERE LOWER(email) = ?", (clean,)).fetchone()
+            return _format_user_row(row)
+        finally:
+            conn.close()
+
+
+def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
+    with _lock:
+        conn = _conn()
+        try:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            return _format_user_row(row)
+        finally:
+            conn.close()
+
+
+def get_user_by_oidc(issuer: str, subject: str) -> Optional[Dict[str, Any]]:
+    with _lock:
+        conn = _conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM users WHERE oidc_issuer = ? AND oidc_subject = ?",
+                (issuer, subject),
+            ).fetchone()
+            return _format_user_row(row)
+        finally:
+            conn.close()
+
+
+def upsert_pending_registration_user(
+    email: str,
+    full_name: str,
+    password_hash: str,
+    grp: str = "",
+    accepted_terms_at: Optional[float] = None,
+) -> Tuple[Dict[str, Any], bool]:
+    """Creates an unverified student user or updates an unverified pending record.
+    Returns (user_dict, is_already_verified). Never overwrites an already verified account!"""
+    clean_email = (email or "").strip().lower()
+    now = time.time()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            existing = conn.execute(
+                "SELECT * FROM users WHERE LOWER(email) = ?",
+                (clean_email,),
+            ).fetchone()
+            if existing:
+                if existing["email_verified"]:
+                    conn.commit()
+                    return _format_user_row(existing), True
+                conn.execute(
+                    """
+                    UPDATE users
+                    SET full_name = ?, grp = ?, password_hash = ?, accepted_terms_at = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (full_name, grp, password_hash, accepted_terms_at or now, now, existing["id"]),
+                )
+                row = conn.execute("SELECT * FROM users WHERE id = ?", (existing["id"],)).fetchone()
+                conn.commit()
+                return _format_user_row(row), False
+
+            cur = conn.execute(
+                """
+                INSERT INTO users (
+                    email, full_name, grp, password_hash, role,
+                    email_verified, university_verified, university_email_verified,
+                    accepted_terms_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 'student', 0, 0, 0, ?, ?, ?)
+                """,
+                (clean_email, full_name, grp, password_hash, accepted_terms_at or now, now, now),
+            )
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
+            conn.commit()
+            return _format_user_row(row), False
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def upsert_oidc_user(
+    email: str,
+    full_name: str,
+    issuer: str,
+    subject: str,
+    university_verified: bool = True,
+) -> Dict[str, Any]:
+    clean_email = (email or "").strip().lower()
+    now = time.time()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM users WHERE oidc_issuer = ? AND oidc_subject = ?",
+                (issuer, subject),
+            ).fetchone()
+            if not row:
+                row = conn.execute(
+                    "SELECT * FROM users WHERE LOWER(email) = ?",
+                    (clean_email,),
+                ).fetchone()
+
+            if row:
+                conn.execute(
+                    """
+                    UPDATE users
+                    SET full_name = CASE WHEN full_name = '' THEN ? ELSE full_name END,
+                        email_verified = 1,
+                        email_verified_at = COALESCE(email_verified_at, ?),
+                        university_verified = CASE WHEN ? THEN 1 ELSE university_verified END,
+                        university_email_verified = 1,
+                        university_auth_provider = 'oidc',
+                        university_verified_at = COALESCE(university_verified_at, ?),
+                        oidc_issuer = ?,
+                        oidc_subject = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        full_name,
+                        now,
+                        1 if university_verified else 0,
+                        now,
+                        issuer,
+                        subject,
+                        now,
+                        row["id"],
+                    ),
+                )
+                updated = conn.execute("SELECT * FROM users WHERE id = ?", (row["id"],)).fetchone()
+                conn.commit()
+                return _format_user_row(updated)
+
+            cur = conn.execute(
+                """
+                INSERT INTO users (
+                    email, full_name, grp, password_hash, role,
+                    email_verified, email_verified_at,
+                    university_verified, university_email_verified,
+                    university_auth_provider, university_verified_at,
+                    oidc_issuer, oidc_subject, accepted_terms_at, created_at, updated_at
+                ) VALUES (?, ?, '', '', 'student', 1, ?, ?, 1, 'oidc', ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    clean_email,
+                    full_name or clean_email,
+                    now,
+                    1 if university_verified else 0,
+                    now,
+                    issuer,
+                    subject,
+                    now,
+                    now,
+                    now,
+                ),
+            )
+            created = conn.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
+            conn.commit()
+            return _format_user_row(created)
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def mark_user_email_verified(email: str, university_email_verified: bool = False) -> Optional[Dict[str, Any]]:
+    clean_email = (email or "").strip().lower()
+    now = time.time()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                """
+                UPDATE users
+                SET email_verified = 1,
+                    email_verified_at = COALESCE(email_verified_at, ?),
+                    university_email_verified = CASE WHEN ? THEN 1 ELSE university_email_verified END,
+                    updated_at = ?
+                WHERE LOWER(email) = ?
+                """,
+                (now, 1 if university_email_verified else 0, now, clean_email),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM users WHERE LOWER(email) = ?", (clean_email,)).fetchone()
+            return _format_user_row(row)
+        finally:
+            conn.close()
+
+
+def update_user_password(user_id: int, new_password_hash: str) -> None:
+    now = time.time()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+                (new_password_hash, now, user_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def set_user_university_verified(user_id: int, verified: bool, provider: str = "admin") -> Optional[Dict[str, Any]]:
+    now = time.time()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                """
+                UPDATE users
+                SET university_verified = ?,
+                    university_auth_provider = ?,
+                    university_verified_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (1 if verified else 0, provider if verified else "", now if verified else None, now, user_id),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            return _format_user_row(row)
+        finally:
+            conn.close()
+
+
+def create_email_verification_code(
+    email: str,
+    purpose: str,
+    code_hash: str,
+    ttl_seconds: int = 600,
+    resend_cooldown: int = 60,
+    max_attempts: int = 5,
+) -> Tuple[bool, int]:
+    """Stores a single-use hashed verification/reset code. Returns (created, retry_after_seconds)."""
+    clean_email = (email or "").strip().lower()
+    now = time.time()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            latest = conn.execute(
+                """
+                SELECT resend_available_at FROM email_verifications
+                WHERE email = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (clean_email, purpose, now),
+            ).fetchone()
+            if latest and latest["resend_available_at"] > now:
+                retry_after = max(1, int(latest["resend_available_at"] - now))
+                conn.commit()
+                return False, retry_after
+
+            # Invalidate prior active codes for the same email/purpose
+            conn.execute(
+                "UPDATE email_verifications SET used_at = ? WHERE email = ? AND purpose = ? AND used_at IS NULL",
+                (now, clean_email, purpose),
+            )
+            conn.execute(
+                """
+                INSERT INTO email_verifications (
+                    email, purpose, code_hash, attempts, max_attempts,
+                    expires_at, used_at, created_at, resend_available_at
+                ) VALUES (?, ?, ?, 0, ?, ?, NULL, ?, ?)
+                """,
+                (clean_email, purpose, code_hash, max_attempts, now + ttl_seconds, now, now + resend_cooldown),
+            )
+            conn.commit()
+            return True, 0
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def verify_email_code_atomic(email: str, purpose: str, candidate_code_hash: str) -> Tuple[bool, str]:
+    """Verifies a hashed single-use code atomically with max_attempts enforcement."""
+    clean_email = (email or "").strip().lower()
+    now = time.time()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                """
+                SELECT * FROM email_verifications
+                WHERE email = ? AND purpose = ? AND used_at IS NULL
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (clean_email, purpose),
+            ).fetchone()
+            if not row:
+                conn.commit()
+                return False, "Код подтверждения не найден или уже использован."
+            if now > row["expires_at"]:
+                conn.execute("UPDATE email_verifications SET used_at = ? WHERE id = ?", (now, row["id"]))
+                conn.commit()
+                return False, "Срок действия кода истёк. Запросите новый код."
+            if row["attempts"] >= row["max_attempts"]:
+                conn.execute("UPDATE email_verifications SET used_at = ? WHERE id = ?", (now, row["id"]))
+                conn.commit()
+                return False, "Превышено максимальное количество попыток (5). Запросите новый код."
+
+            import hmac as _hmac
+            if not _hmac.compare_digest(row["code_hash"], candidate_code_hash):
+                new_attempts = row["attempts"] + 1
+                if new_attempts >= row["max_attempts"]:
+                    conn.execute(
+                        "UPDATE email_verifications SET attempts = ?, used_at = ? WHERE id = ?",
+                        (new_attempts, now, row["id"]),
+                    )
+                    conn.commit()
+                    return False, "Превышено максимальное количество попыток (5). Запросите новый код."
+                conn.execute("UPDATE email_verifications SET attempts = ? WHERE id = ?", (new_attempts, row["id"]))
+                conn.commit()
+                return False, "Неверный код подтверждения."
+
+            conn.execute("UPDATE email_verifications SET used_at = ? WHERE id = ?", (now, row["id"]))
+            conn.commit()
+            return True, "ok"
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def create_user_session(session_id_hash: str, user_id: int, ttl_seconds: int = 7 * 24 * 3600, auth_method: str = "password") -> None:
+    now = time.time()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                """
+                INSERT INTO user_sessions (session_id_hash, user_id, created_at, expires_at, revoked, auth_method)
+                VALUES (?, ?, ?, ?, 0, ?)
+                """,
+                (session_id_hash, user_id, now, now + ttl_seconds, auth_method),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def get_active_user_by_session_hash(session_id_hash: str) -> Optional[Dict[str, Any]]:
+    if not session_id_hash:
+        return None
+    now = time.time()
+    with _lock:
+        conn = _conn()
+        try:
+            row = conn.execute(
+                """
+                SELECT u.*, s.auth_method as session_auth_method, s.expires_at as session_expires_at
+                FROM user_sessions s
+                JOIN users u ON u.id = s.user_id
+                WHERE s.session_id_hash = ? AND s.revoked = 0 AND s.expires_at > ?
+                """,
+                (session_id_hash, now),
+            ).fetchone()
+            return _format_user_row(row)
+        finally:
+            conn.close()
+
+
+def revoke_session_by_hash(session_id_hash: str) -> None:
+    if not session_id_hash:
+        return
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute("UPDATE user_sessions SET revoked = 1 WHERE session_id_hash = ?", (session_id_hash,))
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def revoke_all_user_sessions(user_id: int) -> None:
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute("UPDATE user_sessions SET revoked = 1 WHERE user_id = ?", (user_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def update_teacher_password_hash(teacher_id: str, new_password_hash: str) -> None:
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                "UPDATE teachers SET password_hash = ? WHERE teacher_id = ?",
+                (new_password_hash, teacher_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def save_oidc_state(state_hash: str, nonce: str, code_verifier: str, next_url: str = "/", ttl_seconds: int = 600) -> None:
+    now = time.time()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                """
+                INSERT INTO oidc_states (state_hash, nonce, code_verifier, next_url, expires_at, used_at)
+                VALUES (?, ?, ?, ?, ?, NULL)
+                """,
+                (state_hash, nonce, code_verifier, next_url, now + ttl_seconds),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def pop_oidc_state(state_hash: str) -> Optional[Dict[str, Any]]:
+    now = time.time()
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM oidc_states WHERE state_hash = ? AND used_at IS NULL AND expires_at > ?",
+                (state_hash, now),
+            ).fetchone()
+            if not row:
+                conn.commit()
+                return None
+            conn.execute("UPDATE oidc_states SET used_at = ? WHERE state_hash = ?", (now, state_hash))
+            conn.commit()
+            return dict(row)
         except Exception:
             conn.rollback()
             raise

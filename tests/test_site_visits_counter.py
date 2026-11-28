@@ -13,7 +13,7 @@ import websockets
 
 import db
 import server
-from tests.test_duel import _http_json, _live_uvicorn
+from tests.test_duel import _http_json, _live_uvicorn, _test_auth_header
 
 
 @pytest.fixture
@@ -114,7 +114,10 @@ def test_static_assets_tiles_apis_and_websocket_do_not_increment(client, isolate
         pid = created["player_id"]
 
         async def _ws_ping():
-            async with websockets.connect(f"ws://127.0.0.1:{port}/ws/duel/{rid}/{pid}") as ws:
+            async with websockets.connect(
+                f"ws://127.0.0.1:{port}/ws/duel/{rid}/{pid}",
+                additional_headers=_test_auth_header(),
+            ) as ws:
                 await ws.send(json.dumps({"type": "ping"}))
                 raw = await asyncio.wait_for(ws.recv(), timeout=5)
                 assert json.loads(raw)["type"] in ("pong", "player_connected", "game_start")

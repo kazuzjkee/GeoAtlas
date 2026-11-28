@@ -5434,14 +5434,35 @@ function openWelcomeModal() {
 }
 
 function goToMainAuth() {
-    window.location.href = 'index.html';
+    const nextUrl = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `/login?next=${nextUrl}`;
 }
 
-function logoutStudent() {
-    if (confirm('Выйти из профиля студента?')) {
-        localStorage.removeItem('sfeduStudent');
-        updateStudentHeader();
-    }
+async function logoutStudent() {
+    try {
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch (e) {}
+    localStorage.removeItem('sfeduStudent');
+    updateStudentHeader();
+    window.location.href = '/';
+}
+
+async function syncQuizAuthSession() {
+    try {
+        const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.user) {
+                localStorage.setItem('sfeduStudent', JSON.stringify(data.user));
+                updateStudentHeader();
+                return;
+            }
+        }
+        if (res.status === 401) {
+            localStorage.removeItem('sfeduStudent');
+            updateStudentHeader();
+        }
+    } catch (e) {}
 }
 
 function getCurrentStudentInfo() {
@@ -5475,8 +5496,11 @@ function updateStudentHeader() {
             profileBox.onclick = openStudentProfileModal;
             const nameEl = document.getElementById('student-badge-name');
             const groupEl = document.getElementById('student-badge-group');
-            if (nameEl) nameEl.textContent = student.name || 'Студент';
-            if (groupEl) groupEl.textContent = `${student.group || ''}`;
+            if (nameEl) nameEl.textContent = student.name || student.email || 'Студент';
+            if (groupEl) {
+                const metaParts = [student.group, student.badge].filter(Boolean);
+                groupEl.textContent = metaParts.join(' · ');
+            }
         }
     } else {
         if (authBtn) {
@@ -5515,10 +5539,14 @@ window.updateStudentHeader = updateStudentHeader;
 if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
         if (typeof document.addEventListener === 'function') {
-            document.addEventListener('DOMContentLoaded', updateStudentHeader);
+            document.addEventListener('DOMContentLoaded', () => {
+                updateStudentHeader();
+                syncQuizAuthSession();
+            });
         }
     } else {
         updateStudentHeader();
+        syncQuizAuthSession();
     }
 }
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {

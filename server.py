@@ -26,12 +26,14 @@ import re
 import math
 import collections
 import hashlib
+import base64
 import threading
 import urllib.request
 import urllib.error
 import urllib.parse
 import ssl
 import db
+import auth_service
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db.init_db()
@@ -296,8 +298,7 @@ app.add_middleware(
 async def csrf_guard(request: Request, call_next):
     if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
         path = request.url.path
-        if path.startswith("/api/") and not path.startswith("/api/auth/") \
-           and not path.startswith("/api/duel/"):
+        if path.startswith("/api/"):
             origin = request.headers.get("origin", "")
             referer = request.headers.get("referer", "")
             host = request.headers.get("host", "")
@@ -308,13 +309,17 @@ async def csrf_guard(request: Request, call_next):
     return await call_next(request)
 
 @app.middleware("http")
-async def russia_static_guard(request: Request, call_next):
-    if not RUSSIA_MAP_ENABLED:
-        path = urllib.parse.unquote(request.url.path).lower()
-        if path.startswith("/public/maps/") and is_russia_map_target(path):
+async def auth_and_feature_static_guard(request: Request, call_next):
+    path = urllib.parse.unquote(request.url.path).lower()
+    if path.startswith("/public/maps/"):
+        if not RUSSIA_MAP_ENABLED and is_russia_map_target(path):
             if path.endswith(".json"):
                 return JSONResponse({"detail": _RUSSIA_UNAVAILABLE_MSG}, status_code=503)
             return render_russia_unavailable_page(status_code=503)
+        if get_optional_current_user(request) is None:
+            if path.endswith(".json") or path.endswith(".geojson"):
+                return JSONResponse({"detail": "Требуется авторизация"}, status_code=401)
+            return _redirect_to_login(request)
     return await call_next(request)
 
 @app.middleware("http")
@@ -406,12 +411,36 @@ DEFAULT_GROUPS = [
 
 class AuthRequest(BaseModel):
     email: str
-    full_name: str
-    group_num: str
+    full_name: str = ""
+    group_num: str = ""
 
 class VerifyRequest(BaseModel):
     email: str
     code: str
+
+class RegisterRequest(BaseModel):
+    full_name: str
+    email: str
+    password: str
+    password_confirm: str
+    accept_terms: bool = False
+    group_num: str = ""
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    code: str
+    new_password: str
+    new_password_confirm: str
+
+class UniversityVerifyRequest(BaseModel):
+    verified: bool = True
 
 class ResultSubmit(BaseModel):
     email: str
@@ -496,82 +525,523 @@ def save_groups_to_file(groups_data: List[Dict[str, Any]]) -> None:
     for g in groups_data:
         db.save_group(g)
 
-def check_admin(credentials: HTTPBasicCredentials = Depends(security)) -> Dict[str, Any]:
-    teachers = db.load_teachers_db()
-    for t in teachers:
-        stored = t.get("password", "")
-        stored_hash = t.get("password_hash", "")
-        candidate_ok = (
-            (stored_hash and secrets.compare_digest(_hash_pw(credentials.password), stored_hash))
-            or (not stored_hash and secrets.compare_digest(credentials.password, stored))
-        )
-        if secrets.compare_digest(credentials.username, t.get("username", "")) and candidate_ok:
-            return t
-    raise HTTPException(status_code=401, detail="Неверный логин или пароль", 
-                        headers={"WWW-Authenticate": "Basic"})
+SESSION_COOKIE_NAME = "geoatlas_session"
+SESSION_TTL_SECONDS = 7 * 24 * 3600
 
-def check_admin_optional(credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)) -> Optional[Dict[str, Any]]:
-    if not credentials:
+
+def _is_safe_next_url(raw_next: Optional[str]) -> str:
+    val = (raw_next or "").strip()
+    if val.startswith("/") and not val.startswith("//") and "\n" not in val and "\r" not in val:
+        return val
+    return "/"
+
+
+def _build_public_user_dict(user: Dict[str, Any]) -> Dict[str, Any]:
+    uni_verified = bool(user.get("university_verified"))
+    uni_email_verified = bool(user.get("university_email_verified"))
+    badge = ""
+    if uni_verified:
+        badge = "Сообщество ЮФУ"
+    elif uni_email_verified:
+        badge = "Почта ЮФУ подтверждена"
+
+    return {
+        "id": user.get("id"),
+        "email": user.get("email", ""),
+        "name": user.get("full_name", "") or user.get("name", ""),
+        "group": user.get("group", ""),
+        "role": user.get("role", "student"),
+        "email_verified": bool(user.get("email_verified")),
+        "university_verified": uni_verified,
+        "university_email_verified": uni_email_verified,
+        "university_auth_provider": user.get("university_auth_provider", ""),
+        "university_verified_at": user.get("university_verified_at"),
+        "badge": badge,
+    }
+
+
+def _set_session_cookie(response: Response, raw_token: str) -> None:
+    is_prod = os.environ.get("ENVIRONMENT", "").strip().lower() == "production"
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=raw_token,
+        max_age=SESSION_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=is_prod,
+        path="/",
+    )
+
+
+def _issue_user_session(response: Response, user: Dict[str, Any], auth_method: str = "password") -> None:
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = auth_service.hash_token(raw_token, "session")
+    db.create_user_session(token_hash, int(user["id"]), ttl_seconds=SESSION_TTL_SECONDS, auth_method=auth_method)
+    _set_session_cookie(response, raw_token)
+
+
+def _verify_basic_teacher_header(auth_header: str) -> Optional[Dict[str, Any]]:
+    if not auth_header or not auth_header.lower().startswith("basic "):
         return None
-    teachers = db.load_teachers_db()
-    for t in teachers:
-        stored = t.get("password", "")
+    try:
+        decoded = base64.b64decode(auth_header.split(" ", 1)[1].strip()).decode("utf-8")
+        username, password = decoded.split(":", 1)
+    except Exception:
+        return None
+
+    for t in db.load_teachers_db():
         stored_hash = t.get("password_hash", "")
-        candidate_ok = (
-            (stored_hash and secrets.compare_digest(_hash_pw(credentials.password), stored_hash))
-            or (not stored_hash and secrets.compare_digest(credentials.password, stored))
-        )
-        if secrets.compare_digest(credentials.username, t.get("username", "")) and candidate_ok:
+        if not secrets.compare_digest(username, t.get("username", "")):
+            continue
+        if stored_hash and auth_service.verify_password(password, stored_hash):
+            if auth_service.needs_password_upgrade(stored_hash) and t.get("teacher_id"):
+                db.update_teacher_password_hash(t["teacher_id"], auth_service.hash_password(password))
             return t
     return None
+
+
+def get_optional_current_user(request: Any) -> Optional[Dict[str, Any]]:
+    cookies = getattr(request, "cookies", None) or {}
+    raw_cookie = cookies.get(SESSION_COOKIE_NAME)
+    if raw_cookie:
+        token_hash = auth_service.hash_token(raw_cookie, "session")
+        user = db.get_active_user_by_session_hash(token_hash)
+        if user:
+            return user
+
+    headers = getattr(request, "headers", None) or {}
+    auth_header = headers.get("authorization", "")
+    teacher = _verify_basic_teacher_header(auth_header)
+    if teacher:
+        return {
+            "id": None,
+            "teacher_id": teacher.get("teacher_id"),
+            "username": teacher.get("username"),
+            "email": f"{teacher.get('username', 'teacher')}@geoatlas.local",
+            "full_name": teacher.get("full_name", teacher.get("username", "Преподаватель")),
+            "organization": teacher.get("organization", ""),
+            "group": teacher.get("department", ""),
+            "role": teacher.get("role", "teacher"),
+            "email_verified": True,
+            "university_verified": False,
+            "university_email_verified": False,
+        }
+    return None
+
+
+def require_authenticated_user(request: Request) -> Dict[str, Any]:
+    user = get_optional_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Требуется авторизация")
+    return user
+
+
+def _redirect_to_login(request: Request) -> RedirectResponse:
+    target = request.url.path
+    if request.url.query:
+        target = f"{target}?{request.url.query}"
+    safe_next = _is_safe_next_url(target)
+    return RedirectResponse(
+        url=f"/login?next={urllib.parse.quote(safe_next, safe='/?=&')}",
+        status_code=302,
+    )
+
+
+def check_admin(
+    request: Request,
+    credentials: Optional[HTTPBasicCredentials] = Depends(security_optional),
+) -> Dict[str, Any]:
+    if credentials:
+        for t in db.load_teachers_db():
+            stored_hash = t.get("password_hash", "")
+            if secrets.compare_digest(credentials.username, t.get("username", "")) and stored_hash and auth_service.verify_password(credentials.password, stored_hash):
+                if auth_service.needs_password_upgrade(stored_hash) and t.get("teacher_id"):
+                    db.update_teacher_password_hash(t["teacher_id"], auth_service.hash_password(credentials.password))
+                return t
+        raise HTTPException(
+            status_code=401,
+            detail="Неверный логин или пароль",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    user = get_optional_current_user(request)
+    if user:
+        if user.get("role") in ("teacher", "dean", "admin"):
+            return user
+        raise HTTPException(status_code=403, detail="Недостаточно прав для доступа к разделу преподавателя")
+
+    raise HTTPException(
+        status_code=401,
+        detail="Неверный логин или пароль",
+        headers={"WWW-Authenticate": "Basic"},
+    )
+
+
+def check_admin_optional(
+    request: Request,
+    credentials: Optional[HTTPBasicCredentials] = Depends(security_optional),
+) -> Optional[Dict[str, Any]]:
+    try:
+        return check_admin(request, credentials)
+    except HTTPException:
+        return None
+
+
+def _render_auth_page() -> HTMLResponse:
+    auth_path = os.path.join(BASE_DIR, "auth.html")
+    if os.path.exists(auth_path):
+        with open(auth_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read(), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    return HTMLResponse("<h1>Вход в GeoAtlas</h1>", status_code=200)
+
+
+@app.get("/login", response_class=HTMLResponse, response_model=None)
+@app.get("/register", response_class=HTMLResponse, response_model=None)
+@app.get("/forgot-password", response_class=HTMLResponse, response_model=None)
+@app.get("/reset-password", response_class=HTMLResponse, response_model=None)
+def auth_pages():
+    return _render_auth_page()
+
+
+@app.get("/api/auth/config")
+def get_auth_public_config() -> Dict[str, Any]:
+    oidc = auth_service.get_oidc_config()
+    return {
+        "status": "ok",
+        "oidc_enabled": oidc["enabled"],
+        "oidc_provider_label": "Войти через аккаунт ЮФУ",
+        "trusted_university_domains": auth_service.get_trusted_university_domains(),
+        "min_password_length": 8,
+    }
+
+
+@app.get("/api/auth/me")
+def get_current_user_me(user: Dict[str, Any] = Depends(require_authenticated_user)) -> Dict[str, Any]:
+    return {"status": "ok", "authenticated": True, "user": _build_public_user_dict(user)}
+
+
+@app.post("/api/auth/register")
+def register_account(req: RegisterRequest, request: Request) -> Dict[str, Any]:
+    client_ip = request.client.host if request.client else "unknown"
+    email = auth_service.normalize_email(req.email)
+    if not check_rate_limit(f"reg:{client_ip}") or not check_rate_limit(f"reg:{email}"):
+        raise HTTPException(status_code=429, detail="Слишком много запросов. Подождите минуту.")
+
+    if not auth_service.is_valid_email(email):
+        raise HTTPException(status_code=400, detail="Введите корректный адрес электронной почты.")
+    if not req.full_name.strip():
+        raise HTTPException(status_code=400, detail="Укажите имя пользователя.")
+    pw_err = auth_service.validate_password_strength(req.password)
+    if pw_err:
+        raise HTTPException(status_code=400, detail=pw_err)
+    if req.password != req.password_confirm:
+        raise HTTPException(status_code=400, detail="Пароли не совпадают.")
+    if not req.accept_terms:
+        raise HTTPException(status_code=400, detail="Необходимо согласиться с условиями использования и политикой обработки данных.")
+
+    pw_hash = auth_service.hash_password(req.password)
+    _, already_verified = db.upsert_pending_registration_user(
+        email=email,
+        full_name=req.full_name.strip(),
+        password_hash=pw_hash,
+        grp=req.group_num.strip(),
+    )
+
+    generic_msg = "Если указанный адрес доступен для регистрации, мы отправили на него 6-значный код подтверждения."
+    if already_verified:
+        return {"status": "ok", "message": generic_msg}
+
+    code = f"{secrets.randbelow(900000) + 100000}"
+    code_hash = auth_service.hash_token(code, f"register:{email}")
+    created, retry_after = db.create_email_verification_code(email, "register", code_hash, ttl_seconds=600, resend_cooldown=60)
+    if not created:
+        raise HTTPException(status_code=429, detail=f"Повторная отправка доступна через {retry_after} сек.")
+
+    try:
+        auth_service.send_auth_email(email, code, "register", full_name=req.full_name.strip())
+    except auth_service.EmailNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except auth_service.EmailDeliveryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    return {"status": "ok", "message": generic_msg}
+
 
 @app.post("/api/auth/send-code")
 def send_code(req: AuthRequest, request: Request) -> Dict[str, Any]:
     client_ip = request.client.host if request.client else "unknown"
-    if not check_rate_limit(f"send:{client_ip}") or not check_rate_limit(f"send:{req.email.lower()}"):
+    email = auth_service.normalize_email(req.email)
+    if not check_rate_limit(f"send:{client_ip}") or not check_rate_limit(f"send:{email}"):
         raise HTTPException(status_code=429, detail="Слишком много запросов. Подождите минуту.")
-    email = req.email.strip().lower()
-    branding = db.load_branding_db()
-    allowed_domain = (branding.get("allowed_email_domain") or "").strip().lower()
-    if allowed_domain:
-        domain_suffix = allowed_domain if allowed_domain.startswith("@") else f"@{allowed_domain}"
-        domain_bare = domain_suffix.lstrip("@")
-        if not (email.endswith(domain_suffix) or email.endswith(f".{domain_bare}")):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Разрешена авторизация только по корпоративной почте учебного заведения ({domain_suffix})"
-            )
-    
-    code = f"{random.randint(100000, 999999)}"
-    db.save_auth_session(email, {
-        "code": code,
-        "expires_at": time.time() + 600,
-        "name": req.full_name.strip(),
-        "group": req.group_num.strip()
-    })
-    db.cleanup_expired_auth()
-    logger.info("Авторизация: сгенерирован код подтверждения для %s", email)
-    is_dev = os.environ.get("ENVIRONMENT") == "development"
+    if not auth_service.is_valid_email(email):
+        raise HTTPException(status_code=400, detail="Введите корректный адрес электронной почты.")
 
-    response_data = {"status": "ok", "message": "Код подтверждения отправлен"}
-    if is_dev:
-        response_data["dev_code"] = code
-        logger.info(f"DEV MODE: Код для {email} = {code}")
+    code = f"{secrets.randbelow(900000) + 100000}"
+    code_hash = auth_service.hash_token(code, f"register:{email}")
+    created, retry_after = db.create_email_verification_code(email, "register", code_hash, ttl_seconds=600, resend_cooldown=60)
+    if not created:
+        raise HTTPException(status_code=429, detail=f"Повторная отправка кода возможна через {retry_after} сек.")
 
-    return response_data
+    # Create pending unverified user if none exists yet (legacy send-code compatibility)
+    if not db.get_user_by_email(email):
+        db.upsert_pending_registration_user(
+            email=email,
+            full_name=req.full_name.strip() or email.split("@", 1)[0],
+            password_hash="",
+            grp=req.group_num.strip(),
+        )
+
+    try:
+        auth_service.send_auth_email(email, code, "register", full_name=req.full_name.strip())
+    except auth_service.EmailNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except auth_service.EmailDeliveryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    return {"status": "ok", "message": "Код подтверждения отправлен на указанную почту."}
+
 
 @app.post("/api/auth/verify-code")
-def verify_code(req: VerifyRequest, request: Request) -> Dict[str, Any]:
+def verify_code(req: VerifyRequest, request: Request, response: Response) -> Dict[str, Any]:
     client_ip = request.client.host if request.client else "unknown"
     if not check_rate_limit(f"verify:{client_ip}"):
-        raise HTTPException(status_code=429, detail="Слишком много попыток ввода кода")
-    email = req.email.strip().lower()
-    record = db.pop_auth_session(email)
-    if not record or time.time() > record.get("expires_at", 0) or record.get("code") != req.code.strip():
-        raise HTTPException(status_code=400, detail="Неверный или просроченный код")
-    
-    user_data = {"email": email, "name": record.get("name", ""), "group": record.get("group", "")}
-    return {"status": "ok", "user": user_data}
+        raise HTTPException(status_code=429, detail="Слишком много попыток ввода кода. Подождите минуту.")
+
+    email = auth_service.normalize_email(req.email)
+    candidate_hash = auth_service.hash_token(req.code.strip(), f"register:{email}")
+    ok, msg = db.verify_email_code_atomic(email, "register", candidate_hash)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+
+    is_uni_email = auth_service.is_trusted_university_email(email)
+    user = db.mark_user_email_verified(email, university_email_verified=is_uni_email)
+    if not user:
+        user, _ = db.upsert_pending_registration_user(email=email, full_name=email.split("@", 1)[0], password_hash="")
+        user = db.mark_user_email_verified(email, university_email_verified=is_uni_email)
+
+    _issue_user_session(response, user, auth_method="email_code")
+    return {"status": "ok", "user": _build_public_user_dict(user)}
+
+
+@app.post("/api/auth/login")
+def login_account(req: LoginRequest, request: Request, response: Response) -> Dict[str, Any]:
+    client_ip = request.client.host if request.client else "unknown"
+    identifier = auth_service.normalize_email(req.email)
+    if not check_rate_limit(f"login:{client_ip}") or not check_rate_limit(f"login:{identifier}"):
+        raise HTTPException(status_code=429, detail="Слишком много попыток входа. Подождите минуту.")
+
+    user = db.get_user_by_email(identifier)
+    if user and user.get("password_hash") and auth_service.verify_password(req.password, user["password_hash"]):
+        if not user.get("email_verified"):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Электронная почта ещё не подтверждена. Введите код из письма.", "needs_verification": True},
+            )
+        if auth_service.needs_password_upgrade(user["password_hash"]):
+            db.update_user_password(int(user["id"]), auth_service.hash_password(req.password))
+        _issue_user_session(response, user, auth_method="password")
+        return {"status": "ok", "user": _build_public_user_dict(user)}
+
+    # Teacher / admin fallback login via username
+    for t in db.load_teachers_db():
+        stored_hash = t.get("password_hash", "")
+        if secrets.compare_digest(req.email.strip(), t.get("username", "")) and stored_hash and auth_service.verify_password(req.password, stored_hash):
+            if auth_service.needs_password_upgrade(stored_hash) and t.get("teacher_id"):
+                db.update_teacher_password_hash(t["teacher_id"], auth_service.hash_password(req.password))
+            teacher_email = f"{t['username'].lower()}@geoatlas.local"
+            existing_u = db.get_user_by_email(teacher_email)
+            if not existing_u:
+                existing_u, _ = db.upsert_pending_registration_user(
+                    email=teacher_email,
+                    full_name=t.get("full_name", t["username"]),
+                    password_hash=auth_service.hash_password(req.password),
+                    grp=t.get("department", ""),
+                )
+                existing_u = db.mark_user_email_verified(teacher_email, university_email_verified=False)
+                # Preserve explicit role from teachers table
+                with db._lock:
+                    conn = db._conn()
+                    try:
+                        conn.execute("UPDATE users SET role = ? WHERE id = ?", (t.get("role", "teacher"), existing_u["id"]))
+                        conn.commit()
+                    finally:
+                        conn.close()
+                existing_u = db.get_user_by_id(int(existing_u["id"]))
+            _issue_user_session(response, existing_u, auth_method="password")
+            return {"status": "ok", "user": _build_public_user_dict(existing_u)}
+
+    raise HTTPException(status_code=401, detail="Неверный email или пароль.")
+
+
+@app.post("/api/auth/logout")
+def logout_account(request: Request, response: Response) -> Dict[str, str]:
+    raw_cookie = request.cookies.get(SESSION_COOKIE_NAME)
+    if raw_cookie:
+        token_hash = auth_service.hash_token(raw_cookie, "session")
+        db.revoke_session_by_hash(token_hash)
+    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+    return {"status": "ok"}
+
+
+@app.post("/api/auth/forgot-password")
+def forgot_password(req: ForgotPasswordRequest, request: Request) -> Dict[str, str]:
+    client_ip = request.client.host if request.client else "unknown"
+    email = auth_service.normalize_email(req.email)
+    if not check_rate_limit(f"forgot:{client_ip}") or not check_rate_limit(f"forgot:{email}"):
+        raise HTTPException(status_code=429, detail="Слишком много запросов. Подождите минуту.")
+    if not auth_service.is_valid_email(email):
+        raise HTTPException(status_code=400, detail="Введите корректный адрес электронной почты.")
+
+    generic_msg = "Если аккаунт с таким адресом существует, мы отправили одноразовый код для сброса пароля."
+    user = db.get_user_by_email(email)
+    if not user or not user.get("email_verified"):
+        return {"status": "ok", "message": generic_msg}
+
+    code = f"{secrets.randbelow(900000) + 100000}"
+    code_hash = auth_service.hash_token(code, f"password_reset:{email}")
+    created, retry_after = db.create_email_verification_code(email, "password_reset", code_hash, ttl_seconds=600, resend_cooldown=60)
+    if not created:
+        raise HTTPException(status_code=429, detail=f"Повторная отправка доступна через {retry_after} сек.")
+
+    try:
+        auth_service.send_auth_email(email, code, "password_reset", full_name=user.get("full_name", ""))
+    except auth_service.EmailNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except auth_service.EmailDeliveryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    return {"status": "ok", "message": generic_msg}
+
+
+@app.post("/api/auth/reset-password")
+def reset_password(req: ResetPasswordRequest, request: Request) -> Dict[str, str]:
+    client_ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(f"reset:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Слишком много попыток. Подождите минуту.")
+
+    pw_err = auth_service.validate_password_strength(req.new_password)
+    if pw_err:
+        raise HTTPException(status_code=400, detail=pw_err)
+    if req.new_password != req.new_password_confirm:
+        raise HTTPException(status_code=400, detail="Пароли не совпадают.")
+
+    email = auth_service.normalize_email(req.email)
+    candidate_hash = auth_service.hash_token(req.code.strip(), f"password_reset:{email}")
+    ok, msg = db.verify_email_code_atomic(email, "password_reset", candidate_hash)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+
+    user = db.get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=400, detail="Не удалось обновить пароль.")
+
+    db.update_user_password(int(user["id"]), auth_service.hash_password(req.new_password))
+    db.revoke_all_user_sessions(int(user["id"]))
+    return {"status": "ok", "message": "Пароль успешно изменён. Все прежние сессии завершены."}
+
+
+@app.get("/api/auth/oidc/login")
+def oidc_login(next: str = "/"):
+    cfg = auth_service.get_oidc_config()
+    if not cfg["enabled"]:
+        raise HTTPException(status_code=503, detail="Университетская авторизация ЮФУ (OIDC) пока не настроена.")
+
+    disc = auth_service.fetch_oidc_discovery(cfg["issuer"])
+    auth_endpoint = disc.get("authorization_endpoint")
+    if not auth_endpoint:
+        raise HTTPException(status_code=502, detail="Не удалось получить authorization_endpoint провайдера OIDC.")
+
+    raw_state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    code_verifier, code_challenge = auth_service.build_oidc_pkce_pair()
+    db.save_oidc_state(auth_service.hash_token(raw_state, "oidc_state"), nonce, code_verifier, _is_safe_next_url(next))
+
+    params = urllib.parse.urlencode({
+        "client_id": cfg["client_id"],
+        "response_type": "code",
+        "redirect_uri": cfg["redirect_uri"],
+        "scope": "openid profile email",
+        "state": raw_state,
+        "nonce": nonce,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    })
+    sep = "&" if "?" in auth_endpoint else "?"
+    return RedirectResponse(url=f"{auth_endpoint}{sep}{params}", status_code=302)
+
+
+@app.get("/api/auth/oidc/callback")
+def oidc_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+):
+    cfg = auth_service.get_oidc_config()
+    if not cfg["enabled"]:
+        raise HTTPException(status_code=503, detail="Университетская авторизация ЮФУ (OIDC) отключена.")
+    if error:
+        return RedirectResponse(url=f"/login?error={urllib.parse.quote('Ошибка университетской авторизации')}", status_code=302)
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Отсутствуют обязательные параметры OIDC callback.")
+
+    saved_state = db.pop_oidc_state(auth_service.hash_token(state, "oidc_state"))
+    if not saved_state:
+        raise HTTPException(status_code=400, detail="Недействительный или просроченный OIDC state.")
+
+    disc = auth_service.fetch_oidc_discovery(cfg["issuer"])
+    token_endpoint = disc.get("token_endpoint")
+    if not token_endpoint:
+        raise HTTPException(status_code=502, detail="Не найден token_endpoint провайдера OIDC.")
+
+    token_resp = auth_service._http_post_form_json(
+        token_endpoint,
+        {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": cfg["redirect_uri"],
+            "client_id": cfg["client_id"],
+            "client_secret": cfg["client_secret"],
+            "code_verifier": saved_state["code_verifier"],
+        },
+    )
+    id_token = token_resp.get("id_token")
+    if not id_token:
+        raise HTTPException(status_code=400, detail="Провайдер OIDC не вернул ID token.")
+
+    try:
+        claims = auth_service.verify_oidc_id_token(
+            id_token=id_token,
+            expected_nonce=saved_state["nonce"],
+            cfg=cfg,
+            jwks_uri=disc.get("jwks_uri"),
+        )
+    except auth_service.OIDCVerificationError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+
+    email = auth_service.normalize_email(claims.get("email") or claims.get("preferred_username"))
+    full_name = str(claims.get("name") or email.split("@", 1)[0]).strip()
+    user = db.upsert_oidc_user(
+        email=email,
+        full_name=full_name,
+        issuer=cfg["issuer"],
+        subject=str(claims["sub"]),
+        university_verified=True,
+    )
+    resp = RedirectResponse(url=_is_safe_next_url(saved_state.get("next_url")), status_code=302)
+    _issue_user_session(resp, user, auth_method="oidc")
+    return resp
+
+
+@app.post("/api/admin/users/{user_id}/university-verify")
+def admin_verify_university_user(
+    user_id: int,
+    req: UniversityVerifyRequest,
+    teacher: Dict[str, Any] = Depends(check_admin),
+) -> Dict[str, Any]:
+    updated = db.set_user_university_verified(user_id, req.verified, provider="admin")
+    if not updated:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    return {"status": "ok", "user": _build_public_user_dict(updated)}
 
 def process_quiz_result(res: ResultSubmit) -> Dict[str, Any]:
     assigned_teacher_id = res.teacher_id or "teacher-geo-01"
@@ -618,15 +1088,20 @@ def process_quiz_result(res: ResultSubmit) -> Dict[str, Any]:
     return save_result_to_file(data)
 
 @app.post("/api/results/save")
-def save_quiz_result(res: ResultSubmit) -> Dict[str, Any]:
+def save_quiz_result(res: ResultSubmit, user: Dict[str, Any] = Depends(require_authenticated_user)) -> Dict[str, Any]:
+    if user.get("role") == "student" and user.get("email"):
+        res.email = user["email"]
+        res.name = user.get("full_name") or res.name
     outcome = process_quiz_result(res)
     return {"status": "ok", "deduplicated": outcome.get("deduplicated", False)}
 
 @app.post("/api/results/sync-batch")
-def sync_batch_results(req: SyncBatchRequest) -> Dict[str, Any]:
+def sync_batch_results(req: SyncBatchRequest, user: Dict[str, Any] = Depends(require_authenticated_user)) -> Dict[str, Any]:
     synced = 0
     duplicates = 0
     for item in req.items:
+        if user.get("role") == "student" and user.get("email"):
+            item.email = user["email"]
         outcome = process_quiz_result(item)
         if outcome.get("deduplicated"):
             duplicates += 1
@@ -640,7 +1115,7 @@ def sync_batch_results(req: SyncBatchRequest) -> Dict[str, Any]:
     }
 
 @app.get("/api/results/leaderboard")
-def get_leaderboard() -> List[Dict[str, Any]]:
+def get_leaderboard(user: Dict[str, Any] = Depends(require_authenticated_user)) -> List[Dict[str, Any]]:
     results = load_results()
     sorted_res = sorted(results, key=lambda x: (x.get("accuracy", 0), x.get("score", 0)), reverse=True)
     return sorted_res[:25]
@@ -751,7 +1226,11 @@ def launch_exam_session(req: LaunchSessionRequest, teacher: Dict[str, Any] = Dep
     return {"status": "ok", "session": session_data, "server_time": now_ms}
 
 @app.get("/api/exam/active-session")
-def get_active_exam_session(teacher: Optional[Dict[str, Any]] = Depends(check_admin_optional)) -> Dict[str, Any]:
+def get_active_exam_session(
+    request: Request,
+    user: Dict[str, Any] = Depends(require_authenticated_user),
+    teacher: Optional[Dict[str, Any]] = Depends(check_admin_optional),
+) -> Dict[str, Any]:
     session = db.load_active_session_db()
     now_ms = int(time.time() * 1000)
     if not session or session.get("status") in ["stopped", "completed"]:
@@ -790,7 +1269,13 @@ def stop_exam_session(teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[st
 
 @app.get("/admin", response_class=HTMLResponse, response_model=None)
 @app.get("/admin.html", response_class=HTMLResponse, response_model=None)
-def admin_panel(teacher: Dict[str, Any] = Depends(check_admin)):
+def admin_panel(request: Request, credentials: Optional[HTTPBasicCredentials] = Depends(security_optional)):
+    try:
+        teacher = check_admin(request, credentials)
+    except HTTPException as exc:
+        if exc.status_code == 401 and not credentials:
+            return _redirect_to_login(request)
+        raise
     t_id = teacher.get("teacher_id")
     is_super = is_dean_or_admin(teacher)
     all_results = load_results()
@@ -834,12 +1319,19 @@ def get_branding_endpoint() -> Dict[str, Any]:
     return db.load_branding_db()
 
 @app.post("/api/branding")
-def update_branding_endpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
+def update_branding_endpoint(payload: Dict[str, Any], teacher: Dict[str, Any] = Depends(check_admin)) -> Dict[str, Any]:
     db.save_branding_db(payload)
     return {"status": "ok", "branding": db.load_branding_db()}
 
 @app.get("/api/student/dashboard")
-def get_student_dashboard(email: Optional[str] = None, name: Optional[str] = None) -> Dict[str, Any]:
+def get_student_dashboard(
+    email: Optional[str] = None,
+    name: Optional[str] = None,
+    user: Dict[str, Any] = Depends(require_authenticated_user),
+) -> Dict[str, Any]:
+    if user.get("role") == "student" and user.get("email"):
+        email = user["email"]
+        name = user.get("full_name") or name
     all_results = load_results()
     student_records = []
     clean_email = (email or "").strip().lower()
@@ -937,13 +1429,12 @@ def get_student_dashboard(email: Optional[str] = None, name: Optional[str] = Non
 def get_student_heatmap(
     email: Optional[str] = None,
     region: Optional[str] = None,
-    teacher: Optional[Dict[str, Any]] = Depends(check_admin_optional)
+    user: Dict[str, Any] = Depends(require_authenticated_user),
 ) -> Dict[str, Any]:
-    """
-    Возвращает статистику ошибок студента по объектам.
-    Если email не передан, но передан teacher — возвращает агрегат по группе
-    (пока не реализовано, будет позже).
-    """
+    if user.get("role") == "student":
+        if email and auth_service.normalize_email(email) != auth_service.normalize_email(user.get("email")):
+            raise HTTPException(status_code=403, detail="Доступ к чужой статистике запрещён")
+        email = user.get("email") or email
     if not email:
         raise HTTPException(status_code=400, detail="Параметр email обязателен")
     
@@ -1211,7 +1702,7 @@ def get_region_data(region_key: str) -> Optional[Dict[str, Any]]:
         return None
 
 @app.get("/api/region/{region_id}/data")
-def api_region_data(region_id: str) -> Dict[str, Any]:
+def api_region_data(region_id: str, user: Dict[str, Any] = Depends(require_authenticated_user)) -> Dict[str, Any]:
     if not RUSSIA_MAP_ENABLED and is_russia_map_target(region_id):
         raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
     data = get_region_data(region_id)
@@ -1556,7 +2047,7 @@ async def upload_map(
         }
 
 @app.get("/api/maps")
-def get_maps_list(teacher: Optional[Dict[str, Any]] = Depends(check_admin_optional)) -> List[Dict[str, Any]]:
+def get_maps_list(user: Dict[str, Any] = Depends(require_authenticated_user)) -> List[Dict[str, Any]]:
     if not os.path.exists(MAPS_DIR):
         return []
 
@@ -1639,11 +2130,15 @@ def delete_map(
     }
 
 @app.get("/public/maps/{file_name}", response_model=None)
-def get_public_map_file(file_name: str):
+def get_public_map_file(file_name: str, request: Request):
     if not RUSSIA_MAP_ENABLED and is_russia_map_target(file_name):
         if file_name.lower().endswith(".json"):
             raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
         return render_russia_unavailable_page(status_code=503)
+    if get_optional_current_user(request) is None:
+        if file_name.lower().endswith(".json") or file_name.lower().endswith(".geojson"):
+            raise HTTPException(status_code=401, detail="Требуется авторизация")
+        return _redirect_to_login(request)
     target = os.path.join("public", "maps", file_name)
     if os.path.exists(target) and os.path.isfile(target):
         return FileResponse(target)
@@ -1654,6 +2149,8 @@ def get_public_map_file(file_name: str):
 @app.get("/", response_model=None)
 def get_index(request: Request, region: Optional[str] = None):
     if region:
+        if get_optional_current_user(request) is None:
+            return _redirect_to_login(request)
         return render_dynamic_map_response(region)
     return render_index_page(request, increment_visits=True)
 
@@ -1672,19 +2169,25 @@ def api_get_site_visits() -> JSONResponse:
     )
 
 @app.get("/map", response_model=None)
-def get_map_query(region: Optional[str] = "rostov"):
+def get_map_query(request: Request, region: Optional[str] = "rostov"):
+    if get_optional_current_user(request) is None:
+        return _redirect_to_login(request)
     return render_dynamic_map_response(region)
 
 @app.get("/map/{region}", response_model=None)
-def get_map_path(region: str):
+def get_map_path(region: str, request: Request):
+    if get_optional_current_user(request) is None:
+        return _redirect_to_login(request)
     return render_dynamic_map_response(region)
 
 @app.get("/region/{region}", response_model=None)
-def get_region_path(region: str):
+def get_region_path(region: str, request: Request):
+    if get_optional_current_user(request) is None:
+        return _redirect_to_login(request)
     return render_dynamic_map_response(region)
 
 @app.get("/api/region/context", response_model=None)
-def api_get_region_context(region: Optional[str] = "rostov") -> Dict[str, Any]:
+def api_get_region_context(region: Optional[str] = "rostov", user: Dict[str, Any] = Depends(require_authenticated_user)) -> Dict[str, Any]:
     if not RUSSIA_MAP_ENABLED and is_russia_map_target(region):
         raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
     info = resolve_region_info(region)
@@ -1693,7 +2196,7 @@ def api_get_region_context(region: Optional[str] = "rostov") -> Dict[str, Any]:
     return {"status": "ok", "context": info}
 
 @app.get("/api/region/{region_id}/context", response_model=None)
-def api_get_region_context_by_id(region_id: str) -> Dict[str, Any]:
+def api_get_region_context_by_id(region_id: str, user: Dict[str, Any] = Depends(require_authenticated_user)) -> Dict[str, Any]:
     if not RUSSIA_MAP_ENABLED and is_russia_map_target(region_id):
         raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
     info = resolve_region_info(region_id)
@@ -2305,7 +2808,7 @@ async def _delayed_advance_center_round(room: DuelRoom, round_idx: int) -> None:
 
 
 @app.post("/api/duel/create")
-def create_duel_room(req: DuelCreateRequest) -> Dict[str, Any]:
+def create_duel_room(req: DuelCreateRequest, user: Dict[str, Any] = Depends(require_authenticated_user)) -> Dict[str, Any]:
     clean_stale_duel_rooms()
     if not RUSSIA_MAP_ENABLED and is_russia_map_target(req.region):
         raise HTTPException(status_code=503, detail=_RUSSIA_UNAVAILABLE_MSG)
@@ -2343,7 +2846,7 @@ def create_duel_room(req: DuelCreateRequest) -> Dict[str, Any]:
 
 
 @app.post("/api/duel/join")
-def join_duel_room(req: DuelJoinRequest) -> Dict[str, Any]:
+def join_duel_room(req: DuelJoinRequest, user: Dict[str, Any] = Depends(require_authenticated_user)) -> Dict[str, Any]:
     clean_stale_duel_rooms()
     code = (req.room_id or "").strip().upper()
     if not code:
@@ -2409,7 +2912,7 @@ def _sync_center_round_timeout_if_elapsed(room: DuelRoom) -> bool:
 
 
 @app.get("/api/duel/state/{room_id}")
-def get_duel_room_state(room_id: str, player_id: Optional[str] = None) -> Dict[str, Any]:
+def get_duel_room_state(room_id: str, player_id: Optional[str] = None, user: Dict[str, Any] = Depends(require_authenticated_user)) -> Dict[str, Any]:
     code = room_id.strip().upper()
     room = load_room_fresh(code)
     if not room:
@@ -2423,7 +2926,7 @@ def get_duel_room_state(room_id: str, player_id: Optional[str] = None) -> Dict[s
 
 
 @app.post("/api/duel/action/{room_id}")
-def handle_duel_action(room_id: str, req: DuelActionRequest) -> Dict[str, Any]:
+def handle_duel_action(room_id: str, req: DuelActionRequest, user: Dict[str, Any] = Depends(require_authenticated_user)) -> Dict[str, Any]:
     code = room_id.strip().upper()
     room = load_room_fresh(code)
     if not room:
@@ -2506,6 +3009,9 @@ def handle_duel_action(room_id: str, req: DuelActionRequest) -> Dict[str, Any]:
 
 @app.websocket("/ws/duel/{room_id}/{player_id}")
 async def websocket_duel_endpoint(websocket: WebSocket, room_id: str, player_id: str):
+    if get_optional_current_user(websocket) is None:
+        await websocket.close(code=4401)
+        return
     await websocket.accept()
     code = room_id.strip().upper()
     room = load_room_fresh(code)
@@ -2800,6 +3306,9 @@ def get_slug_route(slug: str, request: Request):
         return render_index_page(request, increment_visits=True)
     if clean == "quiz.js":
         return get_quiz_js()
+
+    if get_optional_current_user(request) is None:
+        return _redirect_to_login(request)
 
     if clean in REGIONS_INFO or any(clean in info.get("aliases", []) for info in REGIONS_INFO.values()):
         return render_dynamic_map_response(clean)
