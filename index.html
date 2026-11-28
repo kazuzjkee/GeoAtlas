@@ -18,6 +18,8 @@
     <!-- Leaflet.js для живой интерактивной картографической подложки -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js для демонстрации географического паспорта -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
 
     <style>
         :root {
@@ -4079,6 +4081,89 @@
         [data-theme="dark"] .lb-styled-table tr:hover {
             background: #1E293B;
         }
+
+        /* ================= Демонстрация Географического паспорта и фокус ================= */
+        a:focus-visible, button:focus-visible, input:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+        .passport-showcase-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: var(--shadow-md);
+            display: grid;
+            grid-template-columns: 1.15fr 1fr;
+            gap: 24px;
+            align-items: stretch;
+        }
+        .passport-showcase-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        .passport-showcase-kpis {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .passport-demo-kpi {
+            background: var(--bg-sunken);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+        }
+        .passport-demo-kpi-lbl {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        .passport-demo-kpi-val {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--text-main);
+            margin-top: 3px;
+        }
+        .passport-demo-kpi-yr {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 2px;
+        }
+        .passport-showcase-chart-box {
+            background: var(--bg-sunken);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .passport-showcase-canvas-wrap {
+            position: relative;
+            height: 210px;
+            width: 100%;
+            margin-top: 8px;
+        }
+        .passport-showcase-source {
+            margin-top: 12px;
+            font-size: 11.5px;
+            color: var(--text-light);
+            line-height: 1.45;
+        }
+        @media (max-width: 900px) {
+            .passport-showcase-card {
+                grid-template-columns: 1fr;
+                padding: 16px;
+                gap: 16px;
+            }
+            .passport-showcase-kpis {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -4178,24 +4263,24 @@
         
         <div class="hero-content">
             <div class="academic-badge">
-                <span class="badge-dot"></span> ЮФУ • Институт наук о Земле • Масштабируемый геоинформационный комплекс
+                <span class="badge-dot"></span> ЮФУ • Институт наук о Земле (ИНоЗ) • Кафедра социально-экономической географии и природопользования
             </div>
             
             <h1 class="hero-title">
-                Учебно-картографический комплекс <span class="gradient-text">GeoAtlas</span>
+                Изучайте территории через <span class="gradient-text">карты и данные</span>
             </h1>
             
             <p class="hero-description">
-                Универсальная геоинформационная среда с пилотным полигоном в ЮФО (Ростовская область): сквозная топологическая сборка, ВРП-аналитика и масштабирование на любые субъекты РФ, страны мира и морские акватории.
+                Интерактивная географическая среда для исследования территорий, анализа статистики и изучения пространственных закономерностей.
             </p>
             
             <div class="hero-actions">
                 <a href="#regions-section" class="btn btn-primary btn-glow hero-btn-main">
-                    <span>🗺️ Перейти к атласу</span>
+                    <span>🗺️ Открыть атлас</span>
                     <span>→</span>
                 </a>
-                <a href="#sandbox-section" class="btn btn-secondary hero-btn-secondary">
-                    <span>🧩 Попробовать пазл</span>
+                <a href="#features-bento" class="btn btn-secondary hero-btn-secondary">
+                    <span>✨ Возможности комплекса</span>
                 </a>
             </div>
 
@@ -4248,6 +4333,150 @@
 
     <!-- ОСНОВНОЙ КОНТЕНТ ЛЕНДИНГА -->
     <main class="container">
+
+        <!-- 4. КАРТОГРАФИЧЕСКИЙ КАТАЛОГ РЕГИОНОВ -->
+        <section class="regions-catalog-section snap-slide" id="regions-section">
+            <div class="section-header-block">
+                <span class="section-tag-pill">📍 Картографический каталог</span>
+                <h2 class="section-h2">Интерактивные карты комплексов</h2>
+                <p class="section-sub">
+                    Пилотный макрорегион Юга России с модульным масштабированием на любые субъекты РФ, страны мира и морские акватории
+                </p>
+            </div>
+
+        <!-- RUSSIA_MAP_FEATURE_START -->
+        <!-- МАКРОКАРТА: ВСЯ РОССИЯ -->
+        <a href="russia_quiz_map.html" class="hero-card" title="Открыть карту Российской Федерации">
+            <div class="hero-info">
+                <div class="hero-pill">✨ Базовый общероссийский курс</div>
+                <h2>Российская Федерация</h2>
+                <p>
+                    Интерактивное картографирование 85+ субъектов РФ, административные центры, гидрография равнинных и горных бассейнов, а также аналитический Choropleth-слой численности населения.
+                </p>
+                <div class="hero-features">
+                    <span class="feature-chip">🧩 Пазл «Собери регион»</span>
+                    <span class="feature-chip">📊 Choropleth-аналитика</span>
+                    <span class="feature-chip">📈 Chart.js графики</span>
+                    <span class="feature-chip">🛰️ Спутник Esri / Тёмная тема</span>
+                    <span class="feature-chip">🎯 4 режима тестирования</span>
+                </div>
+            </div>
+            <div class="hero-btn btn btn-primary">
+                <span>Перейти к карте</span>
+                <span>→</span>
+            </div>
+        </a>
+        <!-- RUSSIA_MAP_FEATURE_END -->
+
+        <!-- РЕГИОНАЛЬНЫЙ УРОВЕНЬ И ПОИСК -->
+        <div class="regions-header">
+            <h3 class="regions-header-title">
+                <span class="title-dot"></span>
+                <span>Региональная детализация:</span>
+            </h3>
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="Поиск региона или района..." autocomplete="off">
+            </div>
+        </div>
+
+        <div class="regions-grid" id="regionsGrid">
+
+            <!-- РОСТОВСКАЯ ОБЛАСТЬ -->
+            <a href="rostov_quiz_map.html" class="region-card" data-name="ростовская область ростов дон" data-tags="ростовская юфо районы пилотный паспорт">
+                <div class="region-icon">🌻</div>
+                <div class="region-info">
+                    <h3>Ростовская область</h3>
+                    <p>55 муниципальных территорий верхнего уровня: географические паспорта по ОКТМО (Росстат), гидрографическая сеть Дона, тематические слои и режим пазла.</p>
+                    <div class="region-meta">
+                        <span class="meta-pill">55 территорий</span>
+                        <span class="meta-pill">📋 Паспорта ОКТМО</span>
+                        <span class="meta-pill">Choropleth</span>
+                        <span class="meta-pill meta-pill-puzzle">🧩 Пазл</span>
+                    </div>
+                </div>
+                <div class="region-arrow">→</div>
+            </a>
+
+            <!-- КРАСНОДАРСКИЙ КРАЙ -->
+            <a href="krasnodar_quiz_map.html" class="region-card" data-name="краснодарский край кубань краснодар" data-tags="краснодарский кубань сочи новороссийск паспорт">
+                <div class="region-icon">🍇</div>
+                <div class="region-info">
+                    <h3>Краснодарский край</h3>
+                    <p>44 муниципальные территории: речная сеть Кубани и Причерноморья, учёт муниципальной реформы ОКТМО, географические паспорта и пазл региона.</p>
+                    <div class="region-meta">
+                        <span class="meta-pill">44 территории</span>
+                        <span class="meta-pill">📋 Паспорта ОКТМО</span>
+                        <span class="meta-pill">Кубань</span>
+                        <span class="meta-pill meta-pill-puzzle">🧩 Пазл</span>
+                    </div>
+                </div>
+                <div class="region-arrow">→</div>
+            </a>
+
+            <!-- КАРТОЧКА ПЕРСПЕКТИВНОГО РАСШИРЕНИЯ (СКОРО) -->
+            <div class="region-card region-card-soon" onclick="showFeatureNotice('region')" data-name="мировые регионы страны мира моря океаны масштабирование акватории московская область подмосковье москва ставропольский крым" data-tags="глобальное расширение мировые моря акватории">
+                <div class="region-icon">🌐</div>
+                <div class="region-info">
+                    <h3>Глобальное расширение: поддержка мировых регионов и морских акваторий по кастомным SHP/GeoJSON слоям</h3>
+                    <p>Архитектура комплекса не ограничена пилотной базой Юга: поддерживается импорт границ любых стран, субъектов РФ и акваторий морей Мирового океана.</p>
+                    <div class="region-meta">
+                        <span class="meta-pill">GADM / Natural Earth</span>
+                        <span class="meta-pill">IHO / Мировые моря</span>
+                        <span class="meta-pill soon-pill">🌐 Global GIS</span>
+                    </div>
+                </div>
+                <div class="region-arrow">+</div>
+            </div>
+
+            <!-- ПУСТОЙ РЕЗУЛЬТАТ ПОИСКА -->
+            <div class="empty-state" id="emptyState">
+                <div style="font-size: 32px; margin-bottom: 8px;">🔍</div>
+                <strong style="display: block; font-size: 16px; margin-bottom: 4px; color: var(--text-main);">Регион не найден</strong>
+                <span>Попробуйте изменить поисковый запрос (например: «Ростов» или «Кубань»)</span>
+            </div>
+
+        </div>
+        </section>
+
+
+        <!-- ДЕМОНСТРАЦИЯ: ГЕОГРАФИЧЕСКИЙ ПАСПОРТ ТЕРРИТОРИИ -->
+        <section class="snap-slide" id="passport-showcase-section">
+            <div class="section-header-block">
+                <span class="section-tag-pill">📋 Географический паспорт территории</span>
+                <h2 class="section-h2">Официальная статистика по каждому муниципалитету</h2>
+                <p class="section-sub">
+                    Реальные временные ряды Росстата, сопоставленные с границами по 8-значному коду ОКТМО (пример на базе набора Ростовской области)
+                </p>
+            </div>
+            <div class="passport-showcase-card" id="passport-showcase-card">
+                <div>
+                    <div class="passport-showcase-header">
+                        <div>
+                            <h3 id="ps-title" style="margin: 0; font-size: 20px; font-weight: 800; color: var(--text-main);">Загрузка примера паспорта...</h3>
+                            <div id="ps-subtitle" style="font-size: 12.5px; color: var(--text-muted); margin-top: 3px;">ОКТМО: —</div>
+                        </div>
+                        <a href="rostov_quiz_map.html" class="btn btn-primary btn-sm">Открыть на карте →</a>
+                    </div>
+                    <div class="passport-showcase-kpis" id="ps-kpis">
+                        <div class="passport-demo-kpi"><div class="passport-demo-kpi-lbl">Площадь</div><div class="passport-demo-kpi-val">—</div></div>
+                        <div class="passport-demo-kpi"><div class="passport-demo-kpi-lbl">Население</div><div class="passport-demo-kpi-val">—</div></div>
+                        <div class="passport-demo-kpi"><div class="passport-demo-kpi-lbl">Плотность</div><div class="passport-demo-kpi-val">—</div></div>
+                        <div class="passport-demo-kpi"><div class="passport-demo-kpi-lbl">Инвестиции на душу</div><div class="passport-demo-kpi-val">—</div></div>
+                    </div>
+                    <div class="passport-showcase-source" id="ps-source">Источник: загрузка метаданных...</div>
+                </div>
+                <div class="passport-showcase-chart-box">
+                    <div>
+                        <div style="font-size: 13.5px; font-weight: 700; color: var(--text-main);">Динамика среднегодовой численности населения</div>
+                        <div id="ps-chart-sub" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">Код 41.8112013 • человек</div>
+                    </div>
+                    <div class="passport-showcase-canvas-wrap">
+                        <canvas id="ps-demo-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
 
         <!-- 1. ИНТЕРАКТИВНЫЙ ПЕСОЧНЫЙ ТИЗЕР (MINI-PUZZLE SANDBOX) -->
         <section class="snap-slide" id="sandbox-section">
@@ -4716,111 +4945,6 @@
                     <span>Git & GitHub CI/CD</span>
                 </div>
             </div>
-        </div>
-        </section>
-
-        <!-- 4. КАРТОГРАФИЧЕСКИЙ КАТАЛОГ РЕГИОНОВ -->
-        <section class="regions-catalog-section snap-slide" id="regions-section">
-            <div class="section-header-block">
-                <span class="section-tag-pill">📍 Картографический каталог</span>
-                <h2 class="section-h2">Интерактивные карты комплексов</h2>
-                <p class="section-sub">
-                    Пилотный макрорегион Юга России с модульным масштабированием на любые субъекты РФ, страны мира и морские акватории
-                </p>
-            </div>
-
-        <!-- RUSSIA_MAP_FEATURE_START -->
-        <!-- МАКРОКАРТА: ВСЯ РОССИЯ -->
-        <a href="russia_quiz_map.html" class="hero-card" title="Открыть карту Российской Федерации">
-            <div class="hero-info">
-                <div class="hero-pill">✨ Базовый общероссийский курс</div>
-                <h2>Российская Федерация</h2>
-                <p>
-                    Интерактивное картографирование 85+ субъектов РФ, административные центры, гидрография равнинных и горных бассейнов, а также аналитический Choropleth-слой численности населения.
-                </p>
-                <div class="hero-features">
-                    <span class="feature-chip">🧩 Пазл «Собери регион»</span>
-                    <span class="feature-chip">📊 Choropleth-аналитика</span>
-                    <span class="feature-chip">📈 Chart.js графики</span>
-                    <span class="feature-chip">🛰️ Спутник Esri / Тёмная тема</span>
-                    <span class="feature-chip">🎯 4 режима тестирования</span>
-                </div>
-            </div>
-            <div class="hero-btn btn btn-primary">
-                <span>Перейти к карте</span>
-                <span>→</span>
-            </div>
-        </a>
-        <!-- RUSSIA_MAP_FEATURE_END -->
-
-        <!-- РЕГИОНАЛЬНЫЙ УРОВЕНЬ И ПОИСК -->
-        <div class="regions-header">
-            <h3 class="regions-header-title">
-                <span class="title-dot"></span>
-                <span>Региональная детализация:</span>
-            </h3>
-            <div class="search-box">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="searchInput" placeholder="Поиск региона или района..." autocomplete="off">
-            </div>
-        </div>
-
-        <div class="regions-grid" id="regionsGrid">
-            
-            <!-- РОСТОВСКАЯ ОБЛАСТЬ -->
-            <a href="rostov_quiz_map.html" class="region-card" data-name="ростовская область ростов дон" data-tags="ростовская юфо районы пилотный">
-                <div class="region-icon">🌻</div>
-                <div class="region-info">
-                    <h3>Ростовская область</h3>
-                    <p>Пилотный полигон: 55 районов и городских округов, гидрографическая сеть Дона и ВРП.</p>
-                    <div class="region-meta">
-                        <span class="meta-pill">55 районов</span>
-                        <span class="meta-pill">ЮФО</span>
-                        <span class="meta-pill">Choropleth</span>
-                        <span class="meta-pill meta-pill-puzzle">🧩 Пазл</span>
-                    </div>
-                </div>
-                <div class="region-arrow">→</div>
-            </a>
-
-            <!-- КРАСНОДАРСКИЙ КРАЙ -->
-            <a href="krasnodar_quiz_map.html" class="region-card" data-name="краснодарский край кубань краснодар" data-tags="краснодарский кубань сочи новороссийск">
-                <div class="region-icon">🍇</div>
-                <div class="region-info">
-                    <h3>Краснодарский край</h3>
-                    <p>44 муниципальных района и курортных округа, речная сеть Кубани.</p>
-                    <div class="region-meta">
-                        <span class="meta-pill">44 округа</span>
-                        <span class="meta-pill">Кубань</span>
-                        <span class="meta-pill">Черноморье</span>
-                        <span class="meta-pill meta-pill-puzzle">🧩 Пазл</span>
-                    </div>
-                </div>
-                <div class="region-arrow">→</div>
-            </a>
-
-            <!-- КАРТОЧКА ПЕРСПЕКТИВНОГО РАСШИРЕНИЯ (СКОРО) -->
-            <div class="region-card region-card-soon" onclick="showFeatureNotice('region')" data-name="мировые регионы страны мира моря океаны масштабирование акватории московская область подмосковье москва ставропольский крым" data-tags="глобальное расширение мировые моря акватории">
-                <div class="region-icon">🌐</div>
-                <div class="region-info">
-                    <h3>Глобальное расширение: поддержка мировых регионов и морских акваторий по кастомным SHP/GeoJSON слоям</h3>
-                    <p>Архитектура комплекса не ограничена пилотной базой Юга: поддерживается импорт границ любых стран, субъектов РФ и акваторий морей Мирового океана.</p>
-                    <div class="region-meta">
-                        <span class="meta-pill">GADM / Natural Earth</span>
-                        <span class="meta-pill">IHO / Мировые моря</span>
-                        <span class="meta-pill soon-pill">🌐 Global GIS</span>
-                    </div>
-                </div>
-                <div class="region-arrow">+</div>
-            </div>
-
-            <!-- ПУСТОЙ РЕЗУЛЬТАТ ПОИСКА -->
-            <div class="empty-state" id="emptyState">
-                <div style="font-size: 32px; margin-bottom: 8px;">🔍</div>
-                <strong style="display: block; font-size: 16px; margin-bottom: 4px; color: var(--text-main);">Регион не найден</strong>
-                <span>Попробуйте изменить поисковый запрос (например: «Ростов» или «Кубань»)</span>
-            </div>
-
         </div>
         </section>
 
@@ -7470,6 +7594,86 @@
             }
         }
 
+        async function loadPassportShowcaseDemo() {
+            const titleEl = document.getElementById('ps-title');
+            const subEl = document.getElementById('ps-subtitle');
+            const kpisEl = document.getElementById('ps-kpis');
+            const srcEl = document.getElementById('ps-source');
+            if (!titleEl || !kpisEl) return;
+
+            const fmt = (val, unit, signed = false) => {
+                if (val === null || val === undefined || Number.isNaN(Number(val))) return 'Нет данных';
+                const num = Number(val);
+                const prefix = signed && num > 0 ? '+' : '';
+                return `${prefix}${num.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}${unit ? ' ' + unit : ''}`;
+            };
+
+            try {
+                const res = await fetch('/api/passports/demo');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const t = data.territory;
+                const meta = data.metadata || {};
+                const inds = (t && t.indicators) || {};
+                if (!t) throw new Error('Данные территории отсутствуют');
+
+                titleEl.textContent = t.name;
+                subEl.textContent = `${t.type} • ОКТМО: ${t.oktmo}`;
+
+                const cards = [
+                    { lbl: 'Площадь территории', val: fmt(t.area_km2, 'км²'), yr: 'OSM / Альберс' },
+                    { lbl: 'Население (среднегодовое)', val: fmt(inds.population_avg?.latest_value, 'чел.'), yr: inds.population_avg?.latest_year ? `${inds.population_avg.latest_year} г.` : 'Нет данных' },
+                    { lbl: 'Плотность населения', val: fmt(inds.population_density?.latest_value, 'чел./км²'), yr: inds.population_density?.latest_year ? `${inds.population_density.latest_year} г.` : 'Нет данных' },
+                    { lbl: 'Естественный прирост (убыль)', val: fmt(inds.natural_growth?.latest_value, 'чел.', true), yr: inds.natural_growth?.latest_year ? `${inds.natural_growth.latest_year} г.` : 'Нет данных' },
+                    { lbl: 'Инвестиции на душу (номинал.)', val: fmt(inds.investments_per_capita?.latest_value, '₽'), yr: inds.investments_per_capita?.latest_year ? `${inds.investments_per_capita.latest_year} г.` : 'Нет данных' },
+                    { lbl: 'Ввод жилых домов', val: fmt(inds.housing_commissioned?.latest_value, 'м²'), yr: inds.housing_commissioned?.latest_year ? `${inds.housing_commissioned.latest_year} г.` : 'Нет данных' },
+                ];
+                kpisEl.innerHTML = cards.map(c => `
+                    <div class="passport-demo-kpi">
+                        <div class="passport-demo-kpi-lbl">${escapeHtml(c.lbl)}</div>
+                        <div class="passport-demo-kpi-val">${escapeHtml(c.val)}</div>
+                        <div class="passport-demo-kpi-yr">Актуальность: ${escapeHtml(c.yr)}</div>
+                    </div>
+                `).join('');
+
+                srcEl.textContent = `Источник: ${meta.attribution || 'Росстат; обработка: «Если быть точным»'} (${meta.license || 'CC BY 4.0'}, ${meta.dataset_version || 'v20260928'}). Пропуски отображаются как «Нет данных».`;
+
+                const popSeries = inds.population_avg?.series || {};
+                const years = Object.keys(popSeries).sort();
+                const canvas = document.getElementById('ps-demo-chart');
+                if (canvas && typeof Chart !== 'undefined' && years.length) {
+                    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                    new Chart(canvas, {
+                        type: 'line',
+                        data: {
+                            labels: years,
+                            datasets: [{
+                                label: 'Население, чел.',
+                                data: years.map(y => popSeries[y] ?? null),
+                                borderColor: '#2563EB',
+                                backgroundColor: 'rgba(37, 99, 235, 0.14)',
+                                tension: 0.25,
+                                spanGaps: false,
+                                fill: true,
+                            }],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { ticks: { color: isDark ? '#CBD5E1' : '#475569', font: { size: 10 } }, grid: { display: false } },
+                                y: { ticks: { color: isDark ? '#CBD5E1' : '#475569', font: { size: 10 }, callback: v => Number(v).toLocaleString('ru-RU') }, grid: { color: isDark ? 'rgba(148,163,184,0.16)' : '#E2E8F0' } },
+                            },
+                        },
+                    });
+                }
+            } catch (e) {
+                titleEl.textContent = 'Демонстрация паспорта временно недоступна';
+                srcEl.textContent = 'Данные не удалось загрузить.';
+            }
+        }
+
         // Инициализация компонентов при загрузке страницы
         window.addEventListener('DOMContentLoaded', () => {
             initBranding();
@@ -7480,6 +7684,7 @@
             setupSandboxInspector();
             updateStudentHeader();
             syncAuthSession();
+            loadPassportShowcaseDemo();
             setupCardSpotlight();
             setupCardTilt();
             setupRevealObserver();

@@ -1238,6 +1238,36 @@ def get_admin_data_quality(
 def get_public_data_sources() -> Dict[str, Any]:
     return geodata_monitor.get_public_sources_summary()
 
+
+@app.get("/api/passports/demo")
+def get_passport_demo_district() -> Dict[str, Any]:
+    """Public demo slice (Azovsky district 60601000) from real rostov_passports.json for the homepage showcase."""
+    passports_file = os.path.join(BASE_DIR, "public", "maps", "rostov_passports.json")
+    if not os.path.exists(passports_file):
+        raise HTTPException(status_code=404, detail="Демонстрационный набор паспортов не найден")
+    try:
+        with open(passports_file, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Ошибка чтения набора паспортов: {exc}")
+
+    territories = payload.get("territories") or {}
+    territory = territories.get("60601000") or next(iter(territories.values()), None)
+    if not territory:
+        raise HTTPException(status_code=404, detail="Территория для демонстрации не найдена")
+
+    meta = payload.get("metadata") or {}
+    return {
+        "territory": territory,
+        "metadata": {
+            "dataset_version": meta.get("dataset_version"),
+            "updated_at": meta.get("updated_at"),
+            "license": meta.get("license"),
+            "attribution": meta.get("attribution"),
+            "indicators": meta.get("indicators"),
+        },
+    }
+
 @app.get("/api/server-time")
 def get_server_time() -> Dict[str, int]:
     return {"server_time": int(time.time() * 1000)}

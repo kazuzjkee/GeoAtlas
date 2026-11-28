@@ -178,3 +178,13 @@ def test_rostov_passports_endpoint_auth_and_payload(anon_client, client):
     body = ok.json()
     assert body["metadata"]["total_territories"] == 55
     assert len(body["territories"]) == 55
+
+
+def test_passports_demo_endpoint_public(anon_client):
+    resp = anon_client.get("/api/passports/demo")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["territory"]["oktmo"] == "60601000"
+    assert "Азовский" in body["territory"]["name"]
+    assert body["metadata"]["attribution"]
+    assert "population_avg" in body["territory"]["indicators"]
