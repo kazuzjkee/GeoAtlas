@@ -657,7 +657,7 @@ def load_teachers_db() -> List[Dict[str, Any]]:
                     if boot_user and boot_pass:
                         import auth_service
                         conn.execute("""
-                            INSERT OR REPLACE INTO teachers (
+                            INSERT OR IGNORE INTO teachers (
                                 teacher_id, username, password_hash, full_name, organization, department, role
                             ) VALUES (?, ?, ?, ?, ?, ?, ?)
                         """, (
@@ -667,7 +667,7 @@ def load_teachers_db() -> List[Dict[str, Any]]:
                             "Администратор платформы",
                             "GeoAtlas",
                             "",
-                            "dean",
+                            "admin",
                         ))
                         conn.commit()
                 else:

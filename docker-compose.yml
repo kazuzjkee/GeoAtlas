@@ -23,6 +23,8 @@ services:
       - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://geoatlas.sfedu.ru}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-https://geoatlas.sfedu.ru}
+      - ADMIN_BOOTSTRAP_USERNAME=${ADMIN_BOOTSTRAP_USERNAME:-}
+      - ADMIN_BOOTSTRAP_PASSWORD=${ADMIN_BOOTSTRAP_PASSWORD:-}
     volumes:
       - geoatlas_data:/app/data
     restart: unless-stopped

@@ -36,6 +36,7 @@ import auth_service
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db.init_db()
 db.migrate_legacy_json(BASE_DIR)
+db.load_teachers_db()
 
 # Centralized feature flag: set RUSSIA_MAP_ENABLED = True (or env RUSSIA_MAP_ENABLED=true)
 # to re-enable the Russian Federation map and its UI/API surface.

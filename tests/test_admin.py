@@ -12,7 +12,12 @@ def test_admin_results_ok(client, auth_headers):
     assert res.status_code == 200
 
 
-def test_user_analytics_empty_db_and_access_control(anon_client, client, auth_headers):
+def test_user_analytics_empty_db_and_access_control(tmp_path, monkeypatch, anon_client, client, auth_headers):
+    import db
+
+    monkeypatch.setattr(db, "DB_FILE", str(tmp_path / "empty_analytics.db"))
+    db.init_db()
+
     # Guest blocked
     assert anon_client.get("/api/admin/user-analytics").status_code == 401
     admin_guest = anon_client.get("/admin", follow_redirects=False)
@@ -30,10 +35,13 @@ def test_user_analytics_empty_db_and_access_control(anon_client, client, auth_he
     assert body["platform"]["completed_tests"] == 0
 
 
-def test_user_analytics_periods_verified_activity_and_student_forbidden(anon_client, client, auth_headers):
+def test_user_analytics_periods_verified_activity_and_student_forbidden(tmp_path, monkeypatch, anon_client, client, auth_headers):
     import time
     import db
     import auth_service
+
+    monkeypatch.setattr(db, "DB_FILE", str(tmp_path / "analytics_data.db"))
+    db.init_db()
 
     now = time.time()
     conn = db._conn()
@@ -121,7 +129,9 @@ def test_user_analytics_periods_verified_activity_and_student_forbidden(anon_cli
     assert anon_client.get("/admin").status_code == 403
 
 
-def test_admin_bootstrap_production_creates_once_no_duplicates(tmp_path, monkeypatch):
+def test_admin_bootstrap_production_creates_once_no_duplicates(tmp_path, monkeypatch, anon_client):
+    import base64
+    import auth_service
     import db
 
     monkeypatch.setattr(db, "DB_FILE", str(tmp_path / "boot_admin.db"))
@@ -133,8 +143,19 @@ def test_admin_bootstrap_production_creates_once_no_duplicates(tmp_path, monkeyp
     teachers_first = db.load_teachers_db()
     assert len(teachers_first) == 1
     assert teachers_first[0]["username"] == "bootadmin"
-    assert teachers_first[0]["role"] == "dean"
+    assert teachers_first[0]["role"] == "admin"
+    assert auth_service.verify_password("StrongBootPass123!", teachers_first[0]["password_hash"])
 
-    # Second call must not duplicate
+    # Second call with changed env must not overwrite existing admin/password or duplicate
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_USERNAME", "otheradmin")
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "NewAttemptPass999!")
     teachers_second = db.load_teachers_db()
     assert len(teachers_second) == 1
+    assert teachers_second[0]["username"] == "bootadmin"
+    assert auth_service.verify_password("StrongBootPass123!", teachers_second[0]["password_hash"])
+
+    # Verify HTTP access with bootstrapped admin credentials
+    cred = base64.b64encode(b"bootadmin:StrongBootPass123!").decode()
+    headers = {"Authorization": f"Basic {cred}"}
+    assert anon_client.get("/admin", headers=headers).status_code == 200
+    assert anon_client.get("/api/admin/user-analytics", headers=headers).status_code == 200

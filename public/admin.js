@@ -177,6 +177,7 @@ let allResults = [];
 
         const isDean = currentTeacher && (
             currentTeacher.role === 'dean' ||
+            currentTeacher.role === 'admin' ||
             currentTeacher.username === 'dean_geo' ||
             currentTeacher.username === 'admin'
         );
@@ -1281,7 +1282,7 @@ let allResults = [];
             const seen = new Set();
             filterSelect.innerHTML = '<option value="all">🌐 Сводка по всем преподавателям (ЮФУ)</option>';
             allTeachers.forEach(t => {
-                if (t.role !== 'dean' && !seen.has(t.teacher_id)) {
+                if (t.role !== 'dean' && t.role !== 'admin' && !seen.has(t.teacher_id)) {
                     seen.add(t.teacher_id);
                     const opt = document.createElement('option');
                     opt.value = t.teacher_id;
@@ -1303,7 +1304,7 @@ let allResults = [];
         const uniqueTeachers = new Set();
         allTeachers.forEach(t => {
             if (t.department) uniqueDepts.add(t.department);
-            if (t.role !== 'dean') uniqueTeachers.add(t.teacher_id);
+            if (t.role !== 'dean' && t.role !== 'admin') uniqueTeachers.add(t.teacher_id);
         });
 
         if (deptsEl) deptsEl.textContent = `${uniqueDepts.size || 2} кафедры`;
@@ -1578,7 +1579,7 @@ let allResults = [];
         const teacherName = currentTeacher ? currentTeacher.full_name : 'Преподаватель ЮФУ';
         const orgName = currentTeacher ? currentTeacher.organization : 'Институт наук о Земле ЮФУ';
         const deptName = currentTeacher ? (currentTeacher.department || 'Институт наук о Земле (ИНоЗ) ЮФУ') : 'Кафедра социально-экономической географии и природопользования';
-        const isDean = currentTeacher && (currentTeacher.role === 'dean' || currentTeacher.username === 'dean_geo' || currentTeacher.username === 'admin');
+        const isDean = currentTeacher && (currentTeacher.role === 'dean' || currentTeacher.role === 'admin' || currentTeacher.username === 'dean_geo' || currentTeacher.username === 'admin');
 
         // Подсчет ключевых метрик для отчета
         const totalTests = allResults.length;
