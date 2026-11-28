@@ -1,0 +1,26 @@
+name: Geodata Freshness Check
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install minimal dependencies
+        run: pip install geopandas shapely
+      - name: Run geodata freshness and quality monitor
+        run: python scripts/check_geodata_quality.py --check-remote --json-out quality_report.json
+      - name: Upload quality report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: geodata-quality-report
+          path: quality_report.json

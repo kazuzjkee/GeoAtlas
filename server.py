@@ -32,6 +32,7 @@ import urllib.error
 import urllib.parse
 import db
 import auth_service
+import geodata_monitor
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db.init_db()
@@ -1223,6 +1224,19 @@ def get_all_students(teacher: Dict[str, Any] = Depends(check_admin)) -> List[Dic
         if email and email != "-" and email not in students_map:
             students_map[email] = {"name": name, "email": email, "group": r.get("group", ""), "teacher_id": r.get("teacher_id", "teacher-ivanov")}
     return list(students_map.values())
+
+
+@app.get("/api/admin/data-quality")
+def get_admin_data_quality(
+    check_remote: bool = False,
+    teacher: Dict[str, Any] = Depends(check_admin),
+) -> Dict[str, Any]:
+    return geodata_monitor.build_quality_report(check_remote=check_remote)
+
+
+@app.get("/api/data-sources")
+def get_public_data_sources() -> Dict[str, Any]:
+    return geodata_monitor.get_public_sources_summary()
 
 @app.get("/api/server-time")
 def get_server_time() -> Dict[str, int]:

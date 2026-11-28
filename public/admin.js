@@ -1731,7 +1731,7 @@ let allResults = [];
     window.generateExecutivePDFReport = generateExecutivePDFReport;
 
     // Admin tabs navigation
-    const ADMIN_VALID_TABS = ['tab-testing', 'tab-journal', 'tab-overview', 'tab-maps', 'tab-branding'];
+    const ADMIN_VALID_TABS = ['tab-testing', 'tab-journal', 'tab-overview', 'tab-maps', 'tab-branding', 'tab-data-quality'];
 
     function switchAdminTab(tabId) {
         if (!ADMIN_VALID_TABS.includes(tabId)) tabId = 'tab-testing';
@@ -1756,9 +1756,105 @@ let allResults = [];
             initBrandSettingsForm();
         } else if (tabId === 'tab-overview') {
             setTimeout(() => renderExecutiveCharts(allResults), 60);
+        } else if (tabId === 'tab-data-quality') {
+            loadDataQualityReport(false);
         }
     }
     window.switchAdminTab = switchAdminTab;
+
+    let lastDataQualityReport = null;
+
+    async function loadDataQualityReport(checkRemote = false) {
+        const tbody = document.getElementById('dq-table-body');
+        const summaryBox = document.getElementById('dq-summary-cards');
+        const remoteBtn = document.getElementById('btn-check-remote-quality');
+        if (!tbody) return;
+        if (remoteBtn) remoteBtn.disabled = true;
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:18px;">⏳ Проверка наборов данных...</td></tr>';
+
+        try {
+            const res = await fetch(`/api/admin/data-quality?check_remote=${checkRemote ? 'true' : 'false'}`, { credentials: 'same-origin' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const report = await res.json();
+            lastDataQualityReport = report;
+            const s = report.summary || {};
+
+            if (summaryBox) {
+                summaryBox.innerHTML = `
+                    <div class="exec-metric-card" style="background: var(--bg-sunken); border: 1px solid var(--border); padding: 14px; border-radius: 10px;">
+                        <div style="font-size: 11px; color: var(--text-light); font-weight: 700;">ВСЕГО НАБОРОВ</div>
+                        <div style="font-size: 22px; font-weight: 800; margin-top: 4px;">${s.total_datasets || 0}</div>
+                    </div>
+                    <div class="exec-metric-card" style="background: var(--bg-sunken); border: 1px solid var(--border); padding: 14px; border-radius: 10px;">
+                        <div style="font-size: 11px; color: var(--text-light); font-weight: 700;">ПРОШЛИ ПРОВЕРКУ</div>
+                        <div style="font-size: 22px; font-weight: 800; color: #059669; margin-top: 4px;">${s.passed || 0}</div>
+                    </div>
+                    <div class="exec-metric-card" style="background: var(--bg-sunken); border: 1px solid var(--border); padding: 14px; border-radius: 10px;">
+                        <div style="font-size: 11px; color: var(--text-light); font-weight: 700;">ПРЕДУПРЕЖДЕНИЯ / ОШИБКИ</div>
+                        <div style="font-size: 22px; font-weight: 800; color: ${(s.failed || 0) > 0 ? '#DC2626' : '#D97706'}; margin-top: 4px;">${s.warned || 0} / ${s.failed || 0}</div>
+                    </div>
+                    <div class="exec-metric-card" style="background: var(--bg-sunken); border: 1px solid var(--border); padding: 14px; border-radius: 10px;">
+                        <div style="font-size: 11px; color: var(--text-light); font-weight: 700;">УСТАРЕВШИЕ / НЕИЗВЕСТНО</div>
+                        <div style="font-size: 22px; font-weight: 800; color: ${(s.stale || 0) > 0 ? '#DC2626' : '#2563EB'}; margin-top: 4px;">${s.stale || 0} / ${s.unknown || 0}</div>
+                    </div>
+                `;
+            }
+
+            tbody.innerHTML = (report.datasets || []).map(ds => {
+                const checkColor = ds.check_result === 'pass' ? '#059669' : (ds.check_result === 'warn' ? '#D97706' : '#DC2626');
+                const freshColors = { fresh: '#059669', attention: '#D97706', stale: '#DC2626', unknown: '#64748B' };
+                const freshColor = freshColors[ds.freshness_status] || '#64748B';
+                const newerBadge = ds.newer_available ? `<div style="font-size:11px;color:#DC2626;font-weight:700;">Доступна ${escapeHtml(ds.remote_version || '')}</div>` : '';
+                const warnCount = (ds.warnings || []).length + (ds.errors || []).length;
+                return `
+                    <tr>
+                        <td><strong>${escapeHtml(ds.name)}</strong>${warnCount ? `<div style="font-size:11px;color:#D97706;">Замечаний: ${warnCount}</div>` : ''}</td>
+                        <td>${escapeHtml(ds.region)}</td>
+                        <td><div>${escapeHtml(ds.source)}</div><div style="font-size:11px;color:var(--text-light);">${escapeHtml(ds.license)}</div></td>
+                        <td><div>${escapeHtml(ds.actual_version || ds.declared_version || '—')}</div><div style="font-size:11px;color:var(--text-light);">${escapeHtml(ds.generated_at || ds.last_downloaded_at || '—')}</div></td>
+                        <td>${ds.latest_stat_year || '—'}</td>
+                        <td>${ds.coverage_pct}%</td>
+                        <td>${ds.missing_total}</td>
+                        <td><span style="font-weight:700;color:${checkColor};text-transform:uppercase;">${escapeHtml(ds.check_result)}</span></td>
+                        <td><span style="font-weight:700;color:${freshColor};text-transform:uppercase;">${escapeHtml(ds.freshness_status)}</span>${newerBadge}</td>
+                        <td><button type="button" class="btn btn-secondary btn-sm" onclick="showDataQualityDetails('${escapeHtml(ds.id)}')">Подробнее</button></td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:#DC2626;padding:18px;">Ошибка загрузки отчёта: ${escapeHtml(err.message)}</td></tr>`;
+        } finally {
+            if (remoteBtn) remoteBtn.disabled = false;
+        }
+    }
+    window.loadDataQualityReport = loadDataQualityReport;
+
+    function showDataQualityDetails(dsId) {
+        const panel = document.getElementById('dq-detail-panel');
+        if (!panel || !lastDataQualityReport) return;
+        const ds = (lastDataQualityReport.datasets || []).find(d => d.id === dsId);
+        if (!ds) return;
+        const indsHtml = (ds.indicators || []).length
+            ? `<table class="journal-table" style="margin-top:10px;"><thead><tr><th>Код</th><th>Показатель</th><th>Единица</th><th>Годы</th><th>Покрытие</th><th>Пропуски</th></tr></thead><tbody>` +
+              ds.indicators.map(i => `<tr><td>${escapeHtml(i.code)}</td><td>${escapeHtml(i.name)}</td><td>${escapeHtml(i.unit)}</td><td>${i.first_year || '—'}–${i.latest_year || '—'}</td><td>${i.territories_with_data}/${i.expected_territories} (${i.coverage_pct}%)</td><td>${i.missing_count}</td></tr>`).join('') +
+              `</tbody></table>`
+            : '<div style="margin-top:8px;font-size:12.5px;color:var(--text-light);">Пространственный слой без временных рядов показателей.</div>';
+
+        const notes = [...(ds.errors || []).map(e => `❌ ${e}`), ...(ds.warnings || []).map(w => `⚠️ ${w}`)];
+        panel.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                <strong>${escapeHtml(ds.name)} (${escapeHtml(ds.id)})</strong>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('dq-detail-panel').style.display='none'">Закрыть</button>
+            </div>
+            <div style="font-size:12px;color:var(--text-light);margin-top:6px;">
+                Владелец: ${escapeHtml(ds.owner_org)} · Путь: <code>${escapeHtml(ds.local_path)}</code> · Размер: ${(ds.size_bytes / 1024).toFixed(1)} КБ · ${escapeHtml(ds.freshness_note || '')}
+            </div>
+            ${notes.length ? `<div style="margin-top:8px;font-size:12px;color:#D97706;">${notes.map(escapeHtml).join('<br>')}</div>` : ''}
+            ${indsHtml}
+        `;
+        panel.style.display = 'block';
+    }
+    window.showDataQualityDetails = showDataQualityDetails;
 
     function initAdminTabs() {
         const hash = (window.location.hash || '').replace('#', '').trim();

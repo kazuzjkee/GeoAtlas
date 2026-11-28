@@ -79,6 +79,10 @@
             <span class="tab-icon">⚙️</span>
             <span class="tab-text">Брендирование</span>
         </button>
+        <button type="button" class="admin-tab-btn" data-tab="tab-data-quality" onclick="switchAdminTab('tab-data-quality')">
+            <span class="tab-icon">🔍</span>
+            <span class="tab-text">Качество геоданных</span>
+        </button>
     </nav>
 
     <!-- ВКЛАДКА 1: ТЕСТИРОВАНИЕ И ГРУППЫ -->
@@ -748,6 +752,42 @@
         </div>
     </div>
 </div>
+
+    <!-- ВКЛАДКА 6: КАЧЕСТВО ГЕОДАННЫХ -->
+    <div class="admin-tab-pane" id="tab-data-quality" style="display: none;">
+        <section class="section-card">
+            <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div class="section-title">
+                    <span>🔍</span> <span>Мониторинг актуальности и качества геоданных</span>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="loadDataQualityReport(false)">🔄 Обновить локально</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-check-remote-quality" onclick="loadDataQualityReport(true)">🌐 Проверить источники онлайн</button>
+                </div>
+            </div>
+            <div id="dq-summary-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 14px 0;"></div>
+            <div class="table-responsive">
+                <table class="journal-table">
+                    <thead>
+                        <tr>
+                            <th>Набор данных</th>
+                            <th>Территория</th>
+                            <th>Источник и лицензия</th>
+                            <th>Версия / Обновлено</th>
+                            <th>Стат. год</th>
+                            <th>Покрытие</th>
+                            <th>Пропуски</th>
+                            <th>Проверка</th>
+                            <th>Актуальность</th>
+                            <th>Детали</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dq-table-body"></tbody>
+                </table>
+            </div>
+            <div id="dq-detail-panel" style="display: none; margin-top: 16px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-sunken);"></div>
+        </section>
+    </div>
 
 <!-- Floating Toast Notification -->
 <div id="toast">
