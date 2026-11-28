@@ -1744,12 +1744,6 @@ function buildAdaptivePools(heatmapData, quizType) {
         pools.weak = pools.strong.slice(0, quarter);
     }
 
-    console.log('[Adaptive] Pools:', {
-        weak: pools.weak.length,
-        medium: pools.medium.length,
-        strong: pools.strong.length
-    });
-
     return pools;
 }
 
