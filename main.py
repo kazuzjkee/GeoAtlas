@@ -5,7 +5,7 @@ import os
 import json
 import re
 import webbrowser
-from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point
+from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString
 
 BASE_SHP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Py_Geo', 'shape', 'russia_unified')
 
@@ -92,7 +92,6 @@ DISTRICT_TRANSLATIONS = {
 }
 
 def slugify_name(text):
-    import re
     text = str(text).strip()
     translit_map = {
         'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',

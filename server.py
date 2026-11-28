@@ -8,11 +8,10 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import zipfile
 import tempfile
-import shutil
 import asyncio
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 import logging
 import random
@@ -31,7 +30,6 @@ import threading
 import urllib.request
 import urllib.error
 import urllib.parse
-import ssl
 import db
 import auth_service
 
@@ -1977,7 +1975,7 @@ async def upload_map(
         )
 
     import geopandas as gpd
-    from main import InteractiveAtlas, slugify_name
+    from main import InteractiveAtlas
 
     with tempfile.TemporaryDirectory() as temp_dir:
         zip_path = os.path.join(temp_dir, "uploaded_archive.zip")
