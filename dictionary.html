@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Географический словарь — GeoAtlas ЮФУ</title>
+    <link rel="icon" type="image/png" href="/public/sfedu_logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #F8FAFC;
+            --bg-card: #FFFFFF;
+            --bg-sunken: #F1F5F9;
+            --text-main: #0F172A;
+            --text-muted: #475569;
+            --text-light: #64748B;
+            --primary: #2563EB;
+            --primary-hover: #1D4ED8;
+            --primary-soft: rgba(37, 99, 235, 0.10);
+            --border: #E2E8F0;
+            --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.05);
+            --shadow-md: 0 10px 28px rgba(15, 23, 42, 0.08);
+            --radius-md: 14px;
+            --radius-lg: 20px;
+        }
+        [data-theme="dark"] {
+            --bg-main: #0B1120;
+            --bg-card: #111C33;
+            --bg-sunken: #0F172A;
+            --text-main: #F8FAFC;
+            --text-muted: #CBD5E1;
+            --text-light: #94A3B8;
+            --primary: #3B82F6;
+            --primary-hover: #2563EB;
+            --primary-soft: rgba(59, 130, 246, 0.16);
+            --border: #1E293B;
+            --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.25);
+            --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.4);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg-main);
+            color: var(--text-main);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        a { color: var(--primary); text-decoration: none; }
+        a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
+        [data-theme="dark"] .topbar {
+            background: rgba(11, 17, 32, 0.9);
+        }
+        .topbar-inner {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-main);
+            font-weight: 800;
+            font-size: 17px;
+        }
+        .brand img { width: 34px; height: 34px; border-radius: 8px; }
+        .brand-sub { font-size: 11px; color: var(--text-light); font-weight: 600; display: block; }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .nav-pill {
+            padding: 7px 13px;
+            border-radius: 10px;
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            border: 1px solid transparent;
+            transition: background 0.15s, color 0.15s;
+        }
+        .nav-pill:hover, .nav-pill.active {
+            background: var(--primary-soft);
+            color: var(--primary);
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 13.5px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-main);
+            transition: transform 0.1s, border-color 0.15s;
+        }
+        .btn:hover { border-color: var(--primary); }
+        .btn-primary {
+            background: var(--primary);
+            color: #FFFFFF;
+            border-color: var(--primary);
+        }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .container {
+            max-width: 1240px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 28px 20px 56px;
+            flex: 1;
+        }
+        .hero-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 24px;
+        }
+        .eyebrow {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--primary);
+            background: var(--primary-soft);
+            padding: 4px 10px;
+            border-radius: 999px;
+            margin-bottom: 10px;
+        }
+        h1.page-title {
+            margin: 0 0 8px;
+            font-size: clamp(24px, 3vw, 34px);
+            font-weight: 800;
+            line-height: 1.2;
+        }
+        .page-desc {
+            margin: 0 0 18px;
+            color: var(--text-muted);
+            max-width: 780px;
+            font-size: 15px;
+        }
+        .search-wrap {
+            position: relative;
+            max-width: 780px;
+        }
+        .search-input-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .search-input {
+            width: 100%;
+            padding: 13px 16px;
+            border-radius: 12px;
+            border: 1.5px solid var(--border);
+            background: var(--bg-sunken);
+            color: var(--text-main);
+            font-size: 15px;
+            font-family: inherit;
+        }
+        .search-input:focus {
+            border-color: var(--primary);
+            background: var(--bg-card);
+            outline: none;
+        }
+        .autocomplete-list {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            z-index: 40;
+            max-height: 320px;
+            overflow-y: auto;
+            display: none;
+        }
+        .autocomplete-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .autocomplete-item:last-child { border-bottom: none; }
+        .autocomplete-item:hover { background: var(--primary-soft); }
+        .cat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+        .cat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            cursor: pointer;
+            transition: border-color 0.15s, transform 0.15s;
+            box-shadow: var(--shadow-sm);
+            text-align: left;
+            color: inherit;
+            font-family: inherit;
+        }
+        .cat-card:hover, .cat-card.active {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+        .cat-card.active { background: var(--primary-soft); }
+        .cat-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .cat-count {
+            font-size: 12px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--bg-sunken);
+            color: var(--primary);
+        }
+        .alpha-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 18px;
+            align-items: center;
+        }
+        .alpha-btn {
+            padding: 5px 9px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-muted);
+            font-size: 12.5px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .alpha-btn.active, .alpha-btn:hover {
+            background: var(--primary);
+            color: #FFFFFF;
+            border-color: var(--primary);
+        }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .terms-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+            gap: 14px;
+        }
+        .term-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 10px;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+        .term-card:hover { border-color: var(--primary); }
+        .term-card-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-main); }
+        .term-card-cat { font-size: 11.5px; font-weight: 600; color: var(--primary); }
+        .term-card-def { margin: 0; font-size: 13.5px; color: var(--text-muted); }
+        .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12.5px;
+            font-weight: 600;
+            background: var(--bg-sunken);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            cursor: pointer;
+        }
+        .chip:hover { border-color: var(--primary); color: var(--primary); }
+        .article-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            box-shadow: var(--shadow-md);
+        }
+        .breadcrumbs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+            font-size: 13px;
+            color: var(--text-light);
+            margin-bottom: 16px;
+        }
+        .article-section {
+            margin-top: 20px;
+            padding: 16px 18px;
+            border-radius: var(--radius-md);
+            background: var(--bg-sunken);
+            border: 1px solid var(--border);
+        }
+        .article-section h3 {
+            margin: 0 0 8px;
+            font-size: 14px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--primary);
+        }
+        .formula-box {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 14px;
+            margin: 8px 0;
+            display: inline-block;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            background: var(--bg-card);
+            border: 1px dashed var(--border);
+            border-radius: var(--radius-md);
+            color: var(--text-muted);
+        }
+        .footer {
+            border-top: 1px solid var(--border);
+            padding: 18px 20px;
+            text-align: center;
+            font-size: 12.5px;
+            color: var(--text-light);
+            background: var(--bg-card);
+        }
+        @media (max-width: 640px) {
+            .hero-box, .article-card { padding: 18px; }
+            .terms-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a href="/" class="brand">
+                <img src="/public/sfedu_logo.png" alt="Логотип ЮФУ">
+                <span>
+                    GeoAtlas
+                    <span class="brand-sub">ЮФУ • Институт наук о Земле (ИНоЗ)</span>
+                </span>
+            </a>
+            <nav class="nav-links" aria-label="Основная навигация">
+                <a href="/" class="nav-pill">Главная</a>
+                <a href="/#regions-section" class="nav-pill">Каталог карт</a>
+                <a href="/dictionary" class="nav-pill active">📖 Словарь</a>
+                <button type="button" class="btn" id="dict-theme-btn" onclick="toggleDictTheme()" title="Переключить тему">🌙</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container" id="dict-main">
+        <!-- Каталог словаря -->
+        <section id="dict-catalog-view">
+            <div class="hero-box">
+                <span class="eyebrow">Образовательная база знаний ЮФУ</span>
+                <h1 class="page-title">Географический словарь GeoAtlas</h1>
+                <p class="page-desc">
+                    Академические определения, простые объяснения, формулы, примеры применения и перекрёстные связи по физической, социально-экономической, экономической географии, картографии, ГИС, методам исследований и экологии.
+                </p>
+                <div class="search-wrap">
+                    <div class="search-input-row">
+                        <input type="search" id="dict-search" class="search-input" placeholder="Поиск термина, синонима, формулы или ключевого слова (например: плотность, ОКТМО, Альберс)..." autocomplete="off">
+                        <button type="button" class="btn" id="dict-clear-btn" onclick="resetDictFilters()" style="display:none;">Сбросить</button>
+                    </div>
+                    <div id="dict-autocomplete" class="autocomplete-list" role="listbox"></div>
+                </div>
+            </div>
+
+            <div class="cat-grid" id="dict-categories"></div>
+
+            <div id="dict-personal-bars" style="display:none; margin-bottom: 18px;" class="hero-box">
+                <div id="dict-favorites-wrap" style="margin-bottom: 10px; display:none;">
+                    <strong style="font-size:13px;">⭐ Избранные термины:</strong>
+                    <div class="chip-row" id="dict-favorites-list" style="margin-top:6px;"></div>
+                </div>
+                <div id="dict-recent-wrap" style="display:none;">
+                    <strong style="font-size:13px;">🕒 Недавно просмотренные:</strong>
+                    <div class="chip-row" id="dict-recent-list" style="margin-top:6px;"></div>
+                </div>
+            </div>
+
+            <div class="alpha-bar" id="dict-alpha-bar"></div>
+
+            <div class="toolbar">
+                <div id="dict-count-label" style="font-size: 14px; font-weight: 700; color: var(--text-muted);">Загрузка словаря...</div>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <button type="button" class="btn" id="dict-fav-filter-btn" onclick="toggleFavFilter()">⭐ Избранное</button>
+                    <select id="dict-sort-select" class="btn" onchange="renderDictTerms()">
+                        <option value="relevance">По релевантности</option>
+                        <option value="alpha">По алфавиту (А–Я)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="dict-terms-grid" class="terms-grid"></div>
+            <div id="dict-empty-state" class="empty-state" style="display:none;">
+                <p style="margin:0 0 12px; font-weight:600;">По вашему запросу термины не найдены.</p>
+                <button type="button" class="btn btn-primary" onclick="resetDictFilters()">Очистить фильтры и показать все</button>
+            </div>
+        </section>
+
+        <!-- Страница отдельного термина -->
+        <section id="dict-article-view" style="display:none;"></section>
+    </main>
+
+    <footer class="footer">
+        Южный федеральный университет (ЮФУ) • Институт наук о Земле (ИНоЗ) • Кафедра социально-экономической географии и природопользования
+    </footer>
+
+    <script src="/public/dictionary.js"></script>
+</body>
+</html>

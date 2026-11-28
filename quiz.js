@@ -9386,6 +9386,18 @@ function formatPassportVal(val, unit, signed = false) {
     return unit ? `${prefix}${formatted} ${unit}` : `${prefix}${formatted}`;
 }
 
+const PASSPORT_DICT_LINKS = {
+    'Среднегодовая численность населения': 'chislennost-naseleniya',
+    'Численность населения (среднегодовая)': 'chislennost-naseleniya',
+    'Плотность населения': 'plotnost-naseleniya',
+    'Естественный прирост (убыль)': 'estestvennyy-prirost',
+    'Число родившихся': 'rozhdaemost',
+    'Число умерших': 'smertnost',
+    'Инвестиции в основной капитал на душу населения': 'investicii-na-dushu',
+    'Продукция сельского хозяйства': 'valovyy-produkt-sh',
+    'Ввод жилых домов': 'vvod-zhilya',
+};
+
 function buildPassportKpiCard(title, indObj, indMeta, extraNote = '', signed = false) {
     const val = indObj ? indObj.latest_value : null;
     const yr = indObj && indObj.latest_year ? `${indObj.latest_year} г.` : 'год не указан';
@@ -9396,9 +9408,13 @@ function buildPassportKpiCard(title, indObj, indMeta, extraNote = '', signed = f
     const formulaHtml = indMeta && indMeta.derived_formula
         ? ` · Расчёт: ${escapeHtml(indMeta.derived_formula)}`
         : '';
+    const dictSlug = PASSPORT_DICT_LINKS[title];
+    const dictLinkHtml = dictSlug
+        ? ` <a href="/dictionary/${dictSlug}" target="_blank" rel="noopener noreferrer" title="Открыть определение термина в Географическом словаре" style="margin-left:5px;text-decoration:none;font-size:12px;">📖</a>`
+        : '';
     return `
         <div class="passport-kpi">
-            <div class="passport-kpi-label">${escapeHtml(title)}</div>
+            <div class="passport-kpi-label">${escapeHtml(title)}${dictLinkHtml}</div>
             <div class="passport-kpi-val">${escapeHtml(valText)}</div>
             <div class="passport-kpi-meta">Актуальность: ${escapeHtml(yr)} · Код: ${escapeHtml(code)}${formulaHtml}${extraHtml} · Источник: Росстат / «Если быть точным»</div>
         </div>
@@ -9485,7 +9501,7 @@ function renderActivePassportView() {
     if (subEl) {
         subEl.innerHTML = `
             <span class="passport-badge">${escapeHtml(territory.type)}</span>
-            <span>ОКТМО: <strong>${escapeHtml(territory.oktmo)}</strong>${legacyText}${centerText}</span>
+            <span><a href="/dictionary/oktmo" target="_blank" rel="noopener noreferrer" title="Что такое ОКТМО?" style="color:inherit;text-decoration:underline dotted;">ОКТМО</a>: <strong>${escapeHtml(territory.oktmo)}</strong>${legacyText}${centerText}</span>
         `;
     }
 

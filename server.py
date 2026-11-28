@@ -782,6 +782,24 @@ def auth_pages():
     return _render_auth_page()
 
 
+@app.get("/dictionary", response_class=HTMLResponse, response_model=None)
+@app.get("/dictionary/{slug}", response_class=HTMLResponse, response_model=None)
+def dictionary_pages(slug: Optional[str] = None):
+    dict_html = os.path.join(BASE_DIR, "dictionary.html")
+    if os.path.exists(dict_html):
+        with open(dict_html, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read(), headers={"Cache-Control": "no-cache, must-revalidate"})
+    return HTMLResponse("<h1>Географический словарь</h1>", status_code=200)
+
+
+@app.get("/api/dictionary")
+def get_dictionary_api() -> Response:
+    dict_path = os.path.join(BASE_DIR, "public", "dictionary.json")
+    if not os.path.exists(dict_path):
+        raise HTTPException(status_code=404, detail="База географического словаря не найдена")
+    return FileResponse(dict_path, media_type="application/json; charset=utf-8")
+
+
 @app.get("/api/auth/config")
 def get_auth_public_config() -> Dict[str, Any]:
     oidc = auth_service.get_oidc_config()
