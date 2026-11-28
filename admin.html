@@ -85,7 +85,31 @@
         </button>
         <button type="button" class="admin-tab-btn" data-tab="tab-user-analytics" onclick="switchAdminTab('tab-user-analytics')">
             <span class="tab-icon">👥</span>
-            <span class="tab-text">Статистика пользователей</span>
+            <span class="tab-text">Пользователи</span>
+        </button>
+        <button type="button" class="admin-tab-btn" data-tab="tab-login-analytics" onclick="switchAdminTab('tab-login-analytics')">
+            <span class="tab-icon">🔐</span>
+            <span class="tab-text">Авторизации</span>
+        </button>
+        <button type="button" class="admin-tab-btn" data-tab="tab-usage-maps" onclick="switchAdminTab('tab-usage-maps')">
+            <span class="tab-icon">🧭</span>
+            <span class="tab-text">Аналитика карт</span>
+        </button>
+        <button type="button" class="admin-tab-btn" data-tab="tab-usage-learning" onclick="switchAdminTab('tab-usage-learning')">
+            <span class="tab-icon">🎓</span>
+            <span class="tab-text">Обучение</span>
+        </button>
+        <button type="button" class="admin-tab-btn" data-tab="tab-usage-duels" onclick="switchAdminTab('tab-usage-duels')">
+            <span class="tab-icon">⚔️</span>
+            <span class="tab-text">Дуэли</span>
+        </button>
+        <button type="button" class="admin-tab-btn" data-tab="tab-monitoring" onclick="switchAdminTab('tab-monitoring')">
+            <span class="tab-icon">🩺</span>
+            <span class="tab-text">Мониторинг</span>
+        </button>
+        <button type="button" class="admin-tab-btn" data-tab="tab-audit-log" onclick="switchAdminTab('tab-audit-log')">
+            <span class="tab-icon">📜</span>
+            <span class="tab-text">Журнал событий</span>
         </button>
     </nav>
 
@@ -810,6 +834,12 @@
                         <option value="30" selected>За 30 дней</option>
                         <option value="90">За 90 дней</option>
                     </select>
+                    <label style="font-size: 12px; display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                        <input type="checkbox" id="analytics-autorefresh-toggle" onchange="toggleAnalyticsAutoRefresh(this.checked)">
+                        Автообновление (30с)
+                    </label>
+                    <a class="btn btn-secondary" href="/api/admin/analytics-export?format=csv&days=30" download>⬇️ CSV</a>
+                    <a class="btn btn-secondary" href="/api/admin/analytics-export?format=xlsx&days=30" download>📊 XLSX</a>
                     <button type="button" class="btn btn-secondary" onclick="loadUserAnalytics()">🔄 Обновить</button>
                 </div>
             </div>
@@ -834,8 +864,11 @@
                 </div>
             </div>
         </section>
+    </div>
 
-        <section class="panel-card" style="padding: 20px; margin-top: 18px;">
+    <!-- ВКЛАДКА 8: АВТОРИЗАЦИИ -->
+    <div class="admin-tab-pane" id="tab-login-analytics" style="display: none;">
+        <section class="panel-card" style="padding: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
                 <div>
                     <h2 style="margin: 0; font-size: 18px;">🔐 Статистика авторизаций (Europe/Moscow)</h2>
@@ -859,23 +892,126 @@
             </div>
 
             <div id="la-empty-banner" style="display: none; padding: 14px 16px; border-radius: 10px; border: 1px dashed var(--border); background: var(--bg-sunken); color: var(--text-light); margin-bottom: 16px; font-size: 13px;"></div>
-
             <div id="la-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 20px;"></div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
                 <div style="padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-sunken);">
                     <h3 id="la-hourly-title" style="margin: 0 0 12px; font-size: 14px; font-weight: 700;">Почасовая активность за выбранный день (24 ч, МСК)</h3>
-                    <div style="position: relative; height: 260px;">
-                        <canvas id="la-hourly-chart"></canvas>
-                    </div>
+                    <div style="position: relative; height: 260px;"><canvas id="la-hourly-chart"></canvas></div>
                 </div>
                 <div style="padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-sunken);">
                     <h3 id="la-daily-title" style="margin: 0 0 12px; font-size: 14px; font-weight: 700;">Активность авторизаций по дням</h3>
                     <div id="la-daily-empty" style="display: none; padding: 24px 12px; text-align: center; color: var(--text-light); font-size: 13px;">За выбранный период успешных входов нет.</div>
-                    <div id="la-daily-chart-wrap" style="position: relative; height: 260px;">
-                        <canvas id="la-daily-chart"></canvas>
-                    </div>
+                    <div id="la-daily-chart-wrap" style="position: relative; height: 260px;"><canvas id="la-daily-chart"></canvas></div>
                 </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ВКЛАДКА 9: АНАЛИТИКА КАРТ -->
+    <div class="admin-tab-pane" id="tab-usage-maps" style="display: none;">
+        <section class="panel-card" style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
+                <div>
+                    <h2 style="margin: 0; font-size: 18px;">🧭 Использование карт и географических паспортов</h2>
+                    <p style="margin: 4px 0 0; font-size: 13px; color: var(--text-light);">События реального открытия карт, паспортов территорий и слоёв (телеметрия).</p>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <select id="um-period-select" class="form-control" style="width: auto;" onchange="loadUsageAnalytics()">
+                        <option value="7">За 7 дней</option>
+                        <option value="30" selected>За 30 дней</option>
+                        <option value="90">За 90 дней</option>
+                        <option value="all">За всё время</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" onclick="loadUsageAnalytics()">🔄 Обновить</button>
+                </div>
+            </div>
+            <div id="um-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 12px; margin-bottom: 18px;"></div>
+            <div id="um-tables-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;"></div>
+        </section>
+    </div>
+
+    <!-- ВКЛАДКА 10: ОБУЧЕНИЕ -->
+    <div class="admin-tab-pane" id="tab-usage-learning" style="display: none;">
+        <section class="panel-card" style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
+                <div>
+                    <h2 style="margin: 0; font-size: 18px;">🎓 Аналитика обучения и сложности вопросов</h2>
+                    <p style="margin: 4px 0 0; font-size: 13px; color: var(--text-light);">Статистика по завершённым тестам (<code>results</code>) и разбору ошибок.</p>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="loadUsageAnalytics()">🔄 Обновить</button>
+            </div>
+            <div id="ul-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 12px; margin-bottom: 18px;"></div>
+            <div id="ul-tables-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;"></div>
+        </section>
+    </div>
+
+    <!-- ВКЛАДКА 11: ДУЭЛИ -->
+    <div class="admin-tab-pane" id="tab-usage-duels" style="display: none;">
+        <section class="panel-card" style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
+                <div>
+                    <h2 style="margin: 0; font-size: 18px;">⚔️ Аналитика дуэлей (Center и Puzzle)</h2>
+                    <p id="ud-note" style="margin: 4px 0 0; font-size: 13px; color: var(--text-light);">Активные и сохранённые комнаты дуэлей.</p>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="loadUsageAnalytics()">🔄 Обновить</button>
+            </div>
+            <div id="ud-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 12px; margin-bottom: 18px;"></div>
+            <div style="padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-sunken);">
+                <h3 style="margin: 0 0 12px; font-size: 14px; font-weight: 700;">Динамика дуэлей по дням</h3>
+                <div id="ud-empty" style="display: none; padding: 24px 12px; text-align: center; color: var(--text-light); font-size: 13px;">Данных по дуэлям за период пока нет.</div>
+                <div id="ud-chart-wrap" style="position: relative; height: 240px;"><canvas id="ud-daily-chart"></canvas></div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ВКЛАДКА 12: МОНИТОРИНГ -->
+    <div class="admin-tab-pane" id="tab-monitoring" style="display: none;">
+        <section class="panel-card" style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
+                <div>
+                    <h2 style="margin: 0; font-size: 18px;">🩺 Технический мониторинг GeoAtlas</h2>
+                    <p id="mon-host-note" style="margin: 4px 0 0; font-size: 13px; color: var(--text-light);">Состояние приложения, SQLite и HTTP-метрики процесса.</p>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="loadSystemHealth()">🔄 Обновить</button>
+            </div>
+            <div id="mon-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(195px, 1fr)); gap: 12px;"></div>
+        </section>
+    </div>
+
+    <!-- ВКЛАДКА 13: ЖУРНАЛ СОБЫТИЙ -->
+    <div class="admin-tab-pane" id="tab-audit-log" style="display: none;">
+        <section class="panel-card" style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                <div>
+                    <h2 style="margin: 0; font-size: 18px;">📜 Журнал событий безопасности и активности</h2>
+                    <p style="margin: 4px 0 0; font-size: 13px; color: var(--text-light);">Регистрации, подтверждения почты, входы, тесты, дуэли и смена ролей (Europe/Moscow, без ПДн).</p>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <select id="al-type-select" class="form-control" style="width: auto;" onchange="loadAuditLog()">
+                        <option value="all">Все события</option>
+                        <option value="user_register">Регистрация</option>
+                        <option value="email_verified">Подтверждение почты</option>
+                        <option value="login_success">Успешный вход</option>
+                        <option value="test_completed">Прохождение теста</option>
+                        <option value="duel_finished">Завершение дуэли</option>
+                        <option value="role_changed">Изменение роли</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" onclick="loadAuditLog()">🔄 Обновить</button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Время (МСК)</th>
+                            <th>Событие</th>
+                            <th>Роль</th>
+                            <th>Описание</th>
+                        </tr>
+                    </thead>
+                    <tbody id="al-table-body"></tbody>
+                </table>
             </div>
         </section>
     </div>

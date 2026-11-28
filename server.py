@@ -333,6 +333,35 @@ def get_csrf_trusted_origins() -> set[str]:
     return origins
 
 
+_http_metrics = {
+    "started_at": time.time(),
+    "api_requests": 0,
+    "api_latency_sum_ms": 0.0,
+    "http_4xx": 0,
+    "http_5xx": 0,
+}
+
+
+@app.middleware("http")
+async def track_http_metrics(request: Request, call_next):
+    t0 = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        _http_metrics["http_5xx"] += 1
+        raise
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    status_code = getattr(response, "status_code", 200)
+    if 400 <= status_code < 500:
+        _http_metrics["http_4xx"] += 1
+    elif status_code >= 500:
+        _http_metrics["http_5xx"] += 1
+    if request.url.path.startswith("/api/"):
+        _http_metrics["api_requests"] += 1
+        _http_metrics["api_latency_sum_ms"] += elapsed_ms
+    return response
+
+
 @app.middleware("http")
 async def csrf_guard(request: Request, call_next):
     if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
@@ -626,6 +655,7 @@ def _issue_user_session(response: Response, user: Dict[str, Any], auth_method: s
     token_hash = auth_service.hash_token(raw_token, "session")
     db.create_user_session(token_hash, int(user["id"]), ttl_seconds=SESSION_TTL_SECONDS, auth_method=auth_method)
     db.record_auth_login_event(int(user["id"]), auth_method=auth_method)
+    db.record_audit_event("login_success", actor_role=user.get("role", "student"), summary="Успешная авторизация пользователя", meta={"auth_method": auth_method})
     _set_session_cookie(response, raw_token)
 
 
@@ -813,6 +843,7 @@ def register_account(req: RegisterRequest, request: Request) -> Dict[str, Any]:
     except auth_service.EmailDeliveryError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
+    db.record_audit_event("user_register", actor_role="student", summary="Регистрация нового пользователя")
     return {"status": "ok", "message": generic_msg}
 
 
@@ -869,6 +900,7 @@ def verify_code(req: VerifyRequest, request: Request, response: Response) -> Dic
         user = db.mark_user_email_verified(email, university_email_verified=is_uni_email)
 
     _issue_user_session(response, user, auth_method="email_code")
+    db.record_audit_event("email_verified", actor_role=user.get("role", "student"), summary="Подтверждение электронной почты")
     return {"status": "ok", "user": _build_public_user_dict(user)}
 
 
@@ -968,6 +1000,7 @@ def forgot_password(req: ForgotPasswordRequest, request: Request) -> Dict[str, s
     except auth_service.EmailDeliveryError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
+    db.record_audit_event("user_register", actor_role="student", summary="Регистрация нового пользователя")
     return {"status": "ok", "message": generic_msg}
 
 
@@ -1151,6 +1184,13 @@ def save_quiz_result(res: ResultSubmit, user: Dict[str, Any] = Depends(require_a
         res.email = user["email"]
         res.name = user.get("full_name") or res.name
     outcome = process_quiz_result(res)
+    if not outcome.get("deduplicated", False):
+        db.record_audit_event(
+            "test_completed",
+            actor_role=user.get("role", "student"),
+            summary=f"Завершён тест ({res.quiz_type or 'map'})",
+            meta={"quiz_type": res.quiz_type, "accuracy": res.accuracy},
+        )
     return {"status": "ok", "deduplicated": outcome.get("deduplicated", False)}
 
 @app.post("/api/results/sync-batch")
@@ -1274,6 +1314,280 @@ def get_admin_user_analytics(
     data["platform"]["duels_finished"] = finished_duels
     data["platform"]["duels_note"] = "Активные и сохранённые комнаты дуэлей (duel_rooms.json)"
     return data
+
+
+class TelemetryEventRequest(BaseModel):
+    event_type: str
+    target: str = ""
+
+
+_ALLOWED_TELEMETRY_TYPES = {"map_open", "passport_open", "layer_toggle", "quiz_start"}
+
+
+@app.post("/api/telemetry/event")
+def post_telemetry_event(req: TelemetryEventRequest, request: Request) -> Dict[str, str]:
+    client_ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(f"telemetry:{client_ip}"):
+        return {"status": "rate_limited"}
+    et = (req.event_type or "").strip()
+    if et not in _ALLOWED_TELEMETRY_TYPES:
+        raise HTTPException(status_code=400, detail="Недопустимый тип события телеметрии")
+    db.record_telemetry_event(et, target=(req.target or "").strip())
+    return {"status": "ok"}
+
+
+def _build_duel_analytics(days: str = "30") -> Dict[str, Any]:
+    from datetime import datetime, timedelta
+    msk = db._moscow_tz()
+    today_msk = datetime.now(msk).date()
+    raw_days = str(days or "30").strip().lower()
+    if raw_days == "all":
+        start_ts = None
+    else:
+        num = int(raw_days) if raw_days in ("7", "30", "90") else 30
+        start_d = today_msk - timedelta(days=num - 1)
+        start_ts = datetime(start_d.year, start_d.month, start_d.day, 0, 0, 0, tzinfo=msk).timestamp()
+
+    rooms = list(active_duel_rooms.values())
+    if start_ts is not None:
+        rooms = [r for r in rooms if getattr(r, "created_at", 0) >= start_ts]
+
+    created_count = len(rooms)
+    finished_rooms = [r for r in rooms if getattr(r, "status", "") == "finished"]
+    finished_count = len(finished_rooms)
+    center_count = sum(1 for r in rooms if getattr(r, "mode", "") == "center")
+    puzzle_count = sum(1 for r in rooms if getattr(r, "mode", "") == "puzzle")
+    participants = set()
+    durations = []
+    daily_map: Dict[str, Dict[str, int]] = {}
+
+    for r in rooms:
+        for pid in (getattr(r, "players", None) or {}).keys():
+            participants.add(pid)
+        c_ts = getattr(r, "created_at", None)
+        if c_ts:
+            d_str = datetime.fromtimestamp(float(c_ts), tz=msk).strftime("%Y-%m-%d")
+            bucket = daily_map.setdefault(d_str, {"created": 0, "finished": 0})
+            bucket["created"] += 1
+            if getattr(r, "status", "") == "finished":
+                bucket["finished"] += 1
+        st = getattr(r, "start_time", None)
+        et = getattr(r, "end_time", None)
+        if st and et and et >= st:
+            durations.append(float(et - st))
+
+    avg_duration_sec = round(sum(durations) / len(durations), 1) if durations else None
+    daily_series = [
+        {"date": d, "created": v["created"], "finished": v["finished"]}
+        for d, v in sorted(daily_map.items())
+    ]
+    return {
+        "duels_created": created_count,
+        "duels_finished": finished_count,
+        "center_count": center_count,
+        "puzzle_count": puzzle_count,
+        "unique_participants": len(participants),
+        "avg_duration_sec": avg_duration_sec,
+        "daily": daily_series,
+        "note": "Данные сформированы по активным и сохранённым комнатам дуэлей (duel_rooms.json).",
+    }
+
+
+@app.get("/api/admin/usage-analytics")
+def get_admin_usage_analytics(
+    days: str = "30",
+    teacher: Dict[str, Any] = Depends(check_admin),
+) -> Dict[str, Any]:
+    data = db.get_geoatlas_usage_analytics(days=days)
+    data["duels"] = _build_duel_analytics(days=days)
+    return data
+
+
+@app.get("/api/admin/system-health")
+def get_admin_system_health(
+    teacher: Dict[str, Any] = Depends(check_admin),
+) -> Dict[str, Any]:
+    db_ok = False
+    db_integrity = "unknown"
+    db_size_bytes = 0
+    try:
+        if os.path.exists(db.DB_FILE):
+            db_size_bytes = os.path.getsize(db.DB_FILE)
+        conn = db._conn()
+        try:
+            conn.execute("SELECT 1").fetchone()
+            qc = conn.execute("PRAGMA quick_check").fetchone()
+            db_integrity = str(qc[0]) if qc else "ok"
+            db_ok = True
+        finally:
+            conn.close()
+    except Exception as exc:
+        db_integrity = f"error: {type(exc).__name__}"
+
+    geodata_ok = os.path.isfile(os.path.join(BASE_DIR, "public", "maps", "rostov_passports.json"))
+    backup_dir = os.path.join(os.path.dirname(db.DB_FILE), "backups")
+    backups: List[str] = []
+    if os.path.isdir(backup_dir):
+        backups = sorted([f for f in os.listdir(backup_dir) if not f.startswith(".")])[-5:]
+
+    api_reqs = _http_metrics["api_requests"]
+    avg_latency = round(_http_metrics["api_latency_sum_ms"] / api_reqs, 2) if api_reqs > 0 else 0.0
+    return {
+        "app_status": "ok" if db_ok else "degraded",
+        "uptime_seconds": int(time.time() - _http_metrics["started_at"]),
+        "avg_api_response_ms": avg_latency,
+        "api_requests_count": api_reqs,
+        "http_4xx": _http_metrics["http_4xx"],
+        "http_5xx": _http_metrics["http_5xx"],
+        "sqlite_size_bytes": db_size_bytes,
+        "sqlite_ok": db_ok,
+        "sqlite_integrity": db_integrity,
+        "geodata_available": geodata_ok,
+        "backups_detected": len(backups),
+        "backup_files": backups,
+        "backup_note": "Резервные копии в каталоге backups не обнаружены (управляются на уровне хоста/volume)." if not backups else "Обнаружены локальные резервные копии.",
+        "host_metrics_note": "Системные метрики диска и RAM хоста недоступны из изолированного контейнера и не имитируются.",
+    }
+
+
+@app.get("/api/admin/audit-log")
+def get_admin_audit_log(
+    event_type: str = "all",
+    days: str = "30",
+    limit: int = 100,
+    teacher: Dict[str, Any] = Depends(check_admin),
+) -> Dict[str, Any]:
+    return db.get_audit_log(event_type=event_type, days=days, limit=limit)
+
+
+def _build_minimal_xlsx(rows: List[List[Any]]) -> bytes:
+    """Builds a valid minimal .xlsx workbook in memory using stdlib zipfile + XML."""
+    import xml.sax.saxutils as saxutils
+
+    def _col_letter(idx: int) -> str:
+        res = ""
+        n = idx + 1
+        while n > 0:
+            n, rem = divmod(n - 1, 26)
+            res = chr(65 + rem) + res
+        return res
+
+    sheet_rows_xml = []
+    for r_idx, row in enumerate(rows, start=1):
+        cells_xml = []
+        for c_idx, val in enumerate(row):
+            ref = f"{_col_letter(c_idx)}{r_idx}"
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                cells_xml.append(f'<c r="{ref}"><v>{val}</v></c>')
+            else:
+                esc = saxutils.escape("" if val is None else str(val))
+                cells_xml.append(f'<c r="{ref}" t="inlineStr"><is><t>{esc}</t></is></c>')
+        sheet_rows_xml.append(f'<row r="{r_idx}">{"".join(cells_xml)}</row>')
+
+    sheet_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        f'<sheetData>{"".join(sheet_rows_xml)}</sheetData>'
+        '</worksheet>'
+    )
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-officedocument.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '</Types>'
+    )
+    rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+        '</Relationships>'
+    )
+    wb_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets><sheet name="GeoAtlas Analytics" sheetId="1" r:id="rId1"/></sheets>'
+        '</workbook>'
+    )
+    wb_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        '</Relationships>'
+    )
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", content_types)
+        zf.writestr("_rels/.rels", rels)
+        zf.writestr("xl/workbook.xml", wb_xml)
+        zf.writestr("xl/_rels/workbook.xml.rels", wb_rels)
+        zf.writestr("xl/worksheets/sheet1.xml", sheet_xml)
+    return buf.getvalue()
+
+
+@app.get("/api/admin/analytics-export")
+def export_admin_analytics(
+    format: str = "csv",
+    days: str = "30",
+    teacher: Dict[str, Any] = Depends(check_admin),
+) -> Response:
+    u_stats = db.get_user_analytics_stats(days=30 if days == "all" else int(days) if days in ("7", "30", "90") else 30)
+    l_stats = db.get_auth_login_analytics(days=days)
+    usage = db.get_geoatlas_usage_analytics(days=days)
+    duels = _build_duel_analytics(days=days)
+
+    u = u_stats["users"]
+    ls = l_stats["summary"]
+    lr = usage["learning"]
+    mp = usage["maps"]
+
+    rows: List[List[Any]] = [
+        ["Категория", "Показатель", "Значение"],
+        ["Пользователи", "Всего зарегистрировано", u["total"]],
+        ["Пользователи", "Подтверждённые email", u["verified"]],
+        ["Пользователи", "Неподтверждённые email", u["unverified"]],
+        ["Пользователи", "Регистрации сегодня", u["registrations_today"]],
+        ["Пользователи", "Регистрации за 7 дней", u["registrations_7d"]],
+        ["Пользователи", "Регистрации за 30 дней", u["registrations_30d"]],
+        ["Авторизации", "Всего успешных входов", ls["total_logins"]],
+        ["Авторизации", "Уникальных пользователей", ls["unique_users"]],
+        ["Авторизации", "Повторных входов", ls["repeat_logins"]],
+        ["Авторизации", "DAU / WAU / MAU", f"{ls['dau']} / {ls['wau']} / {ls['mau']}"],
+        ["Авторизации", "Возвращаемость (%)", ls["returning_rate_pct"]],
+        ["Карты", "Открытий карт (телеметрия)", mp["total_map_opens"]],
+        ["Карты", "Открытий паспортов (телеметрия)", mp["total_passport_opens"]],
+        ["Карты", "Переключений слоёв", mp["total_layer_toggles"]],
+        ["Обучение", "Завершённых тестов", lr["completed_tests"]],
+        ["Обучение", "Средний балл", lr["avg_score"]],
+        ["Обучение", "Процент правильных ответов (%)", lr["correct_answers_pct"]],
+        ["Дуэли", "Создано дуэлей", duels["duels_created"]],
+        ["Дуэли", "Завершено дуэлей", duels["duels_finished"]],
+        ["Дуэли", "Режим Center / Puzzle", f"{duels['center_count']} / {duels['puzzle_count']}"],
+    ]
+
+    fmt = (format or "csv").strip().lower()
+    if fmt == "xlsx":
+        xlsx_bytes = _build_minimal_xlsx(rows)
+        return Response(
+            content=xlsx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="geoatlas_analytics.xlsx"'},
+        )
+
+    out = io.StringIO()
+    writer = csv.writer(out, delimiter=";")
+    for r in rows:
+        writer.writerow(r)
+    csv_bytes = ("\ufeff" + out.getvalue()).encode("utf-8")
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="geoatlas_analytics.csv"'},
+    )
 
 
 @app.get("/api/admin/login-analytics")
@@ -2689,6 +3003,8 @@ class DuelRoom:
                 self.status = "finished"
                 self.finish_reason = self.finish_reason or "completed"
                 self.end_time = time.time()
+                db.record_audit_event("duel_finished", actor_role="system", summary="Дуэль завершена (режим Puzzle)", meta={"mode": "puzzle"})
+                db.record_audit_event("duel_finished", actor_role="system", summary="Дуэль завершена (режим Center)", meta={"mode": "center"})
                 self.cancel_timers()
                 if p1.score > p2.score:
                     self.winner = p1.player_id
@@ -2724,6 +3040,8 @@ class DuelRoom:
                 self.status = "finished"
                 self.finish_reason = self.finish_reason or "completed"
                 self.end_time = time.time()
+                db.record_audit_event("duel_finished", actor_role="system", summary="Дуэль завершена (режим Puzzle)", meta={"mode": "puzzle"})
+                db.record_audit_event("duel_finished", actor_role="system", summary="Дуэль завершена (режим Center)", meta={"mode": "center"})
                 self.cancel_timers()
                 if p1.progress > p2.progress:
                     self.winner = p1.player_id
@@ -2920,6 +3238,7 @@ def _apply_surrender(room: DuelRoom, player: DuelPlayer) -> None:
     room.status = "finished"
     room.finish_reason = "surrender"
     room.end_time = time.time()
+    db.record_audit_event("duel_finished", actor_role="system", summary="Дуэль завершена (сдача)", meta={"mode": getattr(room, "mode", "center")})
     if opp:
         room.winner = opp.player_id
         room.winner_name = opp.name

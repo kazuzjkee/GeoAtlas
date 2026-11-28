@@ -324,3 +324,82 @@ def test_login_analytics_events_counting_boundaries_and_auth(tmp_path, monkeypat
     assert d11["hourly"][0]["logins"] == 1
     assert d11["hourly"][0]["unique_users"] == 1
     assert d11["summary"]["peak_hour"] == 0
+
+
+def test_usage_monitoring_audit_retention_and_export(tmp_path, monkeypatch, anon_client, client, auth_headers):
+    import io
+    import zipfile
+    import auth_service
+    import db
+
+    monkeypatch.setattr(db, "DB_FILE", str(tmp_path / "admin10.db"))
+    db.init_db()
+
+    # 1. Retention cohort test: user created 2 days ago, logged in 1 day later -> d1 retained = 100%
+    now = __import__("time").time()
+    conn = db._conn()
+    try:
+        conn.execute(
+            "INSERT INTO users (email, full_name, grp, password_hash, role, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, 'student', 1, ?, ?)",
+            ("ret@gmail.com", "Ret User", "G1", "h", now - 2 * 86400, now - 2 * 86400),
+        )
+        uid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            "INSERT INTO results (submission_id, date, email, name, grp, quiz_type, score, max_score, accuracy, mistakes_log, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("sub_m1", "2026-11-28", "ret@gmail.com", "Ret User", "G1", "rostov", 8, 10, 80, '[{"name": "Азовский район"}]', now - 60),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    db.record_auth_login_event(uid, "password", created_at=now - 1 * 86400 + 3600)
+    la = client.get("/api/admin/login-analytics?days=30", headers=auth_headers).json()
+    assert la["summary"]["retention"]["d1"]["rate_pct"] == 100.0
+    assert la["summary"]["retention"]["d30"]["rate_pct"] is None
+
+    # 2. Telemetry & usage analytics
+    assert anon_client.post("/api/telemetry/event", json={"event_type": "invalid_evt", "target": "x"}).status_code == 400
+    assert anon_client.post("/api/telemetry/event", json={"event_type": "map_open", "target": "rostov"}).status_code == 200
+    assert anon_client.post("/api/telemetry/event", json={"event_type": "passport_open", "target": "rostov:60601000"}).status_code == 200
+
+    usage = client.get("/api/admin/usage-analytics?days=30", headers=auth_headers)
+    assert usage.status_code == 200
+    ub = usage.json()
+    assert ub["maps"]["total_map_opens"] == 1
+    assert ub["maps"]["total_passport_opens"] == 1
+    assert ub["learning"]["completed_tests"] == 1
+    assert ub["learning"]["hardest_questions"][0]["question"] == "Азовский район"
+
+    # 3. System health & audit log
+    health = client.get("/api/admin/system-health", headers=auth_headers)
+    assert health.status_code == 200
+    hb = health.json()
+    assert hb["app_status"] == "ok"
+    assert hb["sqlite_ok"] is True
+    assert hb["sqlite_size_bytes"] > 0
+
+    db.record_audit_event("role_changed", actor_role="system", summary="Test role change")
+    audit = client.get("/api/admin/audit-log?event_type=role_changed&days=30", headers=auth_headers)
+    assert audit.status_code == 200
+    assert len(audit.json()["events"]) == 1
+
+    # 4. CSV & XLSX exports
+    csv_res = client.get("/api/admin/analytics-export?format=csv&days=30", headers=auth_headers)
+    assert csv_res.status_code == 200
+    assert csv_res.content.startswith(b"\xef\xbb\xbf")
+
+    xlsx_res = client.get("/api/admin/analytics-export?format=xlsx&days=30", headers=auth_headers)
+    assert xlsx_res.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(xlsx_res.content)) as zf:
+        assert "xl/workbook.xml" in zf.namelist()
+        assert "xl/worksheets/sheet1.xml" in zf.namelist()
+
+    # 5. Student forbidden on all new admin endpoints
+    s_hash = auth_service.hash_password("StudPass123!")
+    db.upsert_pending_registration_user("stud_block@gmail.com", "Stud", s_hash, "G1")
+    db.mark_user_email_verified("stud_block@gmail.com", university_email_verified=False)
+    assert anon_client.post("/api/auth/login", json={"email": "stud_block@gmail.com", "password": "StudPass123!"}).status_code == 200
+    assert anon_client.get("/api/admin/usage-analytics").status_code == 403
+    assert anon_client.get("/api/admin/system-health").status_code == 403
+    assert anon_client.get("/api/admin/audit-log").status_code == 403
+    assert anon_client.get("/api/admin/analytics-export").status_code == 403

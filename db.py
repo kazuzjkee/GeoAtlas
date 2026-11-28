@@ -165,6 +165,25 @@ def init_db():
                 );
                 CREATE INDEX IF NOT EXISTS idx_auth_login_events_time ON auth_login_events(created_at);
                 CREATE INDEX IF NOT EXISTS idx_auth_login_events_user ON auth_login_events(user_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS telemetry_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    target TEXT NOT NULL DEFAULT '',
+                    meta_json TEXT NOT NULL DEFAULT '{}',
+                    created_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_telemetry_events_type_time ON telemetry_events(event_type, created_at);
+
+                CREATE TABLE IF NOT EXISTS audit_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    actor_role TEXT NOT NULL DEFAULT 'system',
+                    summary TEXT NOT NULL,
+                    meta_json TEXT NOT NULL DEFAULT '{}',
+                    created_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_audit_events_type_time ON audit_events(event_type, created_at);
             """)
             conn.commit()
             for alter_sql in (
@@ -696,6 +715,10 @@ def ensure_bootstrap_admin() -> None:
                         conn.execute(
                             "UPDATE users SET role = 'admin', email_verified = 1, email_verified_at = COALESCE(email_verified_at, ?), updated_at = ? WHERE id = ?",
                             (now, now, user_dict["id"]),
+                        )
+                        conn.execute(
+                            "INSERT INTO audit_events (event_type, actor_role, summary, meta_json, created_at) VALUES (?, ?, ?, ?, ?)",
+                            ("role_changed", "system", "Назначена роль admin через bootstrap", json.dumps({"user_id": user_dict["id"], "new_role": "admin"}), now),
                         )
                         conn.commit()
                         allow_teacher_sync = True
@@ -1717,6 +1740,63 @@ def get_auth_login_analytics(days: str = "30", target_date: Optional[str] = None
                 (today_start_dt.timestamp(), today_end_dt.timestamp()),
             ).fetchone()
 
+            wau_ts = (today_start_dt - timedelta(days=6)).timestamp()
+            mau_ts = (today_start_dt - timedelta(days=29)).timestamp()
+            wm_row = conn.execute(
+                """
+                SELECT
+                    COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) AS wau,
+                    COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) AS mau
+                FROM auth_login_events
+                """,
+                (wau_ts, mau_ts),
+            ).fetchone()
+
+            # Returning users (2+ logins in selected period)
+            if period_start_ts is not None:
+                ret_users_row = conn.execute(
+                    """
+                    SELECT COUNT(*) AS returning_users FROM (
+                        SELECT user_id FROM auth_login_events
+                        WHERE created_at >= ?
+                        GROUP BY user_id HAVING COUNT(*) >= 2
+                    )
+                    """,
+                    (period_start_ts,),
+                ).fetchone()
+            else:
+                ret_users_row = conn.execute(
+                    """
+                    SELECT COUNT(*) AS returning_users FROM (
+                        SELECT user_id FROM auth_login_events
+                        GROUP BY user_id HAVING COUNT(*) >= 2
+                    )
+                    """
+                ).fetchone()
+
+            # Cohort retention D1, D7, D30 based on users.created_at and auth_login_events.created_at
+            retention_data: Dict[str, Any] = {}
+            for d_n in (1, 7, 30):
+                cohort_max_created = (today_start_dt - timedelta(days=d_n)).timestamp()
+                c_row = conn.execute(
+                    """
+                    SELECT
+                        COUNT(DISTINCT u.id) AS cohort_size,
+                        COUNT(DISTINCT CASE WHEN e.created_at >= u.created_at + ? AND e.created_at < u.created_at + ? THEN u.id END) AS retained
+                    FROM users u
+                    LEFT JOIN auth_login_events e ON e.user_id = u.id
+                    WHERE u.created_at <= ?
+                    """,
+                    (d_n * 86400, (d_n + 1) * 86400, cohort_max_created),
+                ).fetchone()
+                c_size = int(c_row["cohort_size"] or 0) if c_row else 0
+                c_ret = int(c_row["retained"] or 0) if c_row else 0
+                retention_data[f"d{d_n}"] = {
+                    "cohort_size": c_size,
+                    "retained": c_ret,
+                    "rate_pct": round((c_ret / c_size) * 100.0, 1) if c_size > 0 else None,
+                }
+
             hourly_rows = conn.execute(
                 f"""
                 SELECT
@@ -1737,6 +1817,10 @@ def get_auth_login_analytics(days: str = "30", target_date: Optional[str] = None
     unique_users = int(p_row["unique_users"] or 0)
     repeat_logins = max(0, total_logins - unique_users)
     today_unique_users = int(today_row["today_unique_users"] or 0)
+    wau = int(wm_row["wau"] or 0) if wm_row else 0
+    mau = int(wm_row["mau"] or 0) if wm_row else 0
+    returning_users = int(ret_users_row["returning_users"] or 0) if ret_users_row else 0
+    returning_rate_pct = round((returning_users / unique_users) * 100.0, 1) if unique_users > 0 else 0.0
 
     hourly_map = {
         int(r["hr"]): {"logins": int(r["logins"]), "unique_users": int(r["unique_users"])}
@@ -1788,6 +1872,12 @@ def get_auth_login_analytics(days: str = "30", target_date: Optional[str] = None
             "unique_users": unique_users,
             "repeat_logins": repeat_logins,
             "today_unique_users": today_unique_users,
+            "dau": today_unique_users,
+            "wau": wau,
+            "mau": mau,
+            "returning_users": returning_users,
+            "returning_rate_pct": returning_rate_pct,
+            "retention": retention_data,
             "peak_hour": peak_hour,
             "peak_hour_label": f"{peak_hour:02d}:00–{(peak_hour + 1) % 24:02d}:00" if peak_hour is not None else "—",
             "peak_hour_logins": peak_hour_logins,
@@ -1795,3 +1885,218 @@ def get_auth_login_analytics(days: str = "30", target_date: Optional[str] = None
         "hourly": hourly_series,
         "daily": daily_series,
     }
+
+
+def record_telemetry_event(event_type: str, target: str = "", meta: Optional[Dict[str, Any]] = None) -> None:
+    """Stores lightweight non-PII product usage telemetry (maps, passports, layers, quiz_start)."""
+    now = time.time()
+    meta_str = json.dumps(meta or {}, ensure_ascii=False)[:1000]
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                "INSERT INTO telemetry_events (event_type, target, meta_json, created_at) VALUES (?, ?, ?, ?)",
+                (event_type[:48], (target or "")[:120], meta_str, now),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def record_audit_event(
+    event_type: str,
+    actor_role: str = "system",
+    summary: str = "",
+    meta: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Records a sanitized security/admin audit event without secrets or PII."""
+    now = time.time()
+    meta_str = json.dumps(meta or {}, ensure_ascii=False)[:1000]
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                "INSERT INTO audit_events (event_type, actor_role, summary, meta_json, created_at) VALUES (?, ?, ?, ?, ?)",
+                (event_type[:48], (actor_role or "system")[:32], (summary or "")[:240], meta_str, now),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def get_geoatlas_usage_analytics(days: str = "30") -> Dict[str, Any]:
+    """Aggregated analytics for maps, passports, layers, and learning outcomes (no PII)."""
+    from collections import Counter
+    from datetime import datetime, timedelta
+
+    msk = _moscow_tz()
+    today_msk = datetime.now(msk).date()
+    raw_days = str(days or "30").strip().lower()
+    if raw_days == "all":
+        period_start_ts = None
+        period_key = "all"
+    else:
+        num = int(raw_days) if raw_days in ("7", "30", "90") else 30
+        period_key = str(num)
+        start_d = today_msk - timedelta(days=num - 1)
+        period_start_ts = datetime(start_d.year, start_d.month, start_d.day, 0, 0, 0, tzinfo=msk).timestamp()
+
+    with _lock:
+        conn = _conn()
+        try:
+            if period_start_ts is not None:
+                te_rows = conn.execute(
+                    "SELECT event_type, target, COUNT(*) AS cnt FROM telemetry_events WHERE created_at >= ? GROUP BY event_type, target ORDER BY cnt DESC",
+                    (period_start_ts,),
+                ).fetchall()
+                res_rows = conn.execute(
+                    "SELECT quiz_type, score, max_score, accuracy, mistakes_log FROM results WHERE created_at >= ?",
+                    (period_start_ts,),
+                ).fetchall()
+            else:
+                te_rows = conn.execute(
+                    "SELECT event_type, target, COUNT(*) AS cnt FROM telemetry_events GROUP BY event_type, target ORDER BY cnt DESC"
+                ).fetchall()
+                res_rows = conn.execute(
+                    "SELECT quiz_type, score, max_score, accuracy, mistakes_log FROM results"
+                ).fetchall()
+        finally:
+            conn.close()
+
+    maps_opened: Dict[str, int] = {}
+    passports_opened: Dict[str, int] = {}
+    layers_used: Dict[str, int] = {}
+    quiz_starts = 0
+    for r in te_rows:
+        et = r["event_type"]
+        tgt = r["target"] or "unknown"
+        cnt = int(r["cnt"] or 0)
+        if et == "map_open":
+            maps_opened[tgt] = maps_opened.get(tgt, 0) + cnt
+        elif et == "passport_open":
+            passports_opened[tgt] = passports_opened.get(tgt, 0) + cnt
+        elif et == "layer_toggle":
+            layers_used[tgt] = layers_used.get(tgt, 0) + cnt
+        elif et == "quiz_start":
+            quiz_starts += cnt
+
+    completed_tests = len(res_rows)
+    total_score = 0
+    total_max = 0
+    acc_sum = 0
+    topic_stats: Dict[str, Dict[str, Any]] = {}
+    mistake_counter: Counter = Counter()
+
+    for row in res_rows:
+        sc = int(row["score"] or 0)
+        mx = int(row["max_score"] or 0)
+        ac = int(row["accuracy"] or 0)
+        qt = row["quiz_type"] or "unknown"
+        total_score += sc
+        total_max += mx
+        acc_sum += ac
+
+        ts = topic_stats.setdefault(qt, {"topic": qt, "count": 0, "acc_sum": 0})
+        ts["count"] += 1
+        ts["acc_sum"] += ac
+
+        raw_m = row["mistakes_log"]
+        if raw_m:
+            try:
+                parsed = json.loads(raw_m) if isinstance(raw_m, str) else raw_m
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        q_name = item.get("name") or item.get("target") or (item if isinstance(item, str) else None)
+                        if q_name:
+                            mistake_counter[str(q_name)[:80]] += 1
+            except Exception:
+                pass
+
+    hardest_topics = sorted(
+        [
+            {"topic": k, "attempts": v["count"], "avg_accuracy": round(v["acc_sum"] / v["count"], 1)}
+            for k, v in topic_stats.items() if v["count"] > 0
+        ],
+        key=lambda x: x["avg_accuracy"],
+    )[:10]
+
+    hardest_questions = [
+        {"question": q, "mistakes": cnt} for q, cnt in mistake_counter.most_common(10)
+    ]
+
+    unfinished_attempts = max(0, quiz_starts - completed_tests) if quiz_starts > 0 else None
+
+    return {
+        "period": period_key,
+        "maps": {
+            "total_map_opens": sum(maps_opened.values()),
+            "total_passport_opens": sum(passports_opened.values()),
+            "total_layer_toggles": sum(layers_used.values()),
+            "by_map": [{"map": k, "count": v} for k, v in sorted(maps_opened.items(), key=lambda x: -x[1])],
+            "by_passport": [{"territory": k, "count": v} for k, v in sorted(passports_opened.items(), key=lambda x: -x[1])[:12]],
+            "by_layer": [{"layer": k, "count": v} for k, v in sorted(layers_used.items(), key=lambda x: -x[1])],
+            "note": "События открытия карт, паспортов и слоёв накапливаются с момента внедрения телеметрии.",
+        },
+        "learning": {
+            "completed_tests": completed_tests,
+            "avg_score": round(total_score / completed_tests, 2) if completed_tests > 0 else 0.0,
+            "avg_accuracy_pct": round(acc_sum / completed_tests, 1) if completed_tests > 0 else 0.0,
+            "correct_answers_pct": round((total_score / total_max) * 100.0, 1) if total_max > 0 else 0.0,
+            "started_attempts": quiz_starts if quiz_starts > 0 else None,
+            "unfinished_attempts": unfinished_attempts,
+            "hardest_topics": hardest_topics,
+            "hardest_questions": hardest_questions,
+        },
+    }
+
+
+def get_audit_log(event_type: Optional[str] = None, days: str = "30", limit: int = 100) -> Dict[str, Any]:
+    """Returns recent non-PII audit events filtered by event_type and period."""
+    from datetime import datetime, timedelta
+
+    msk = _moscow_tz()
+    today_msk = datetime.now(msk).date()
+    raw_days = str(days or "30").strip().lower()
+    clauses = []
+    params: List[Any] = []
+
+    if raw_days != "all":
+        num = int(raw_days) if raw_days in ("7", "30", "90") else 30
+        start_d = today_msk - timedelta(days=num - 1)
+        start_ts = datetime(start_d.year, start_d.month, start_d.day, 0, 0, 0, tzinfo=msk).timestamp()
+        clauses.append("created_at >= ?")
+        params.append(start_ts)
+
+    if event_type and event_type.strip() and event_type.strip().lower() != "all":
+        clauses.append("event_type = ?")
+        params.append(event_type.strip())
+
+    where_sql = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    safe_limit = max(1, min(int(limit or 100), 300))
+
+    with _lock:
+        conn = _conn()
+        try:
+            rows = conn.execute(
+                f"SELECT id, event_type, actor_role, summary, meta_json, created_at FROM audit_events {where_sql} ORDER BY created_at DESC LIMIT ?",
+                (*params, safe_limit),
+            ).fetchall()
+        finally:
+            conn.close()
+
+    events = []
+    for r in rows:
+        dt_msk = datetime.fromtimestamp(float(r["created_at"]), tz=msk).strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            meta_obj = json.loads(r["meta_json"] or "{}")
+        except Exception:
+            meta_obj = {}
+        events.append({
+            "id": int(r["id"]),
+            "event_type": r["event_type"],
+            "actor_role": r["actor_role"],
+            "summary": r["summary"],
+            "meta": meta_obj,
+            "created_at_msk": dt_msk,
+        })
+    return {"timezone": "Europe/Moscow", "events": events}

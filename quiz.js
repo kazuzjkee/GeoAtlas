@@ -553,6 +553,18 @@ function getResultsStorageKey() {
     return `${reg}_quiz_results`;
 }
 
+function sendGeoTelemetry(eventType, target) {
+    try {
+        fetch('/api/telemetry/event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ event_type: eventType, target: String(target || '') }),
+            keepalive: true
+        }).catch(() => {});
+    } catch (e) {}
+}
+
 async function loadRegionData(regionKey) {
     if (!regionKey) return false;
     const resolved = resolveRegionKey(regionKey);
@@ -578,6 +590,7 @@ async function loadRegionData(regionKey) {
             const data = await res.json();
             if (data && data.status === 'ok') {
                 applyRegionDataset(data);
+                sendGeoTelemetry('map_open', resolved);
                 return true;
             }
         }
@@ -9658,6 +9671,9 @@ async function openTerritoryPassport(oktmo8, centerName) {
     const canonicalOktmo = canonicalizePassportOktmo(cleanOktmo, regionCfg);
     const rk = regionCfg ? regionCfg.key : '';
     window._passportState = { regionKey: rk, oktmo: canonicalOktmo, center: centerName || '', tab: 'overview' };
+    if (canonicalOktmo && rk) {
+        sendGeoTelemetry('passport_open', `${rk}:${canonicalOktmo}`);
+    }
     const overlay = ensurePassportModalDom();
     overlay.classList.add('open');
 

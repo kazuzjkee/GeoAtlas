@@ -1732,7 +1732,11 @@ let allResults = [];
     window.generateExecutivePDFReport = generateExecutivePDFReport;
 
     // Admin tabs navigation
-    const ADMIN_VALID_TABS = ['tab-testing', 'tab-journal', 'tab-overview', 'tab-maps', 'tab-branding', 'tab-data-quality', 'tab-user-analytics'];
+    const ADMIN_VALID_TABS = [
+        'tab-testing', 'tab-journal', 'tab-overview', 'tab-maps', 'tab-branding', 'tab-data-quality',
+        'tab-user-analytics', 'tab-login-analytics', 'tab-usage-maps', 'tab-usage-learning',
+        'tab-usage-duels', 'tab-monitoring', 'tab-audit-log'
+    ];
 
     function switchAdminTab(tabId) {
         if (!ADMIN_VALID_TABS.includes(tabId)) tabId = 'tab-testing';
@@ -1761,6 +1765,14 @@ let allResults = [];
             loadDataQualityReport(false);
         } else if (tabId === 'tab-user-analytics') {
             loadUserAnalytics();
+        } else if (tabId === 'tab-login-analytics') {
+            loadLoginAnalytics();
+        } else if (tabId === 'tab-usage-maps' || tabId === 'tab-usage-learning' || tabId === 'tab-usage-duels') {
+            loadUsageAnalytics();
+        } else if (tabId === 'tab-monitoring') {
+            loadSystemHealth();
+        } else if (tabId === 'tab-audit-log') {
+            loadAuditLog();
         }
     }
     window.switchAdminTab = switchAdminTab;
@@ -1878,9 +1890,15 @@ let allResults = [];
         kpiGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:18px;color:var(--text-light);">⏳ Загрузка статистики...</div>';
 
         try {
-            const res = await fetch(`/api/admin/user-analytics?days=${encodeURIComponent(days)}`, { credentials: 'same-origin' });
+            const [res, lRes] = await Promise.all([
+                fetch(`/api/admin/user-analytics?days=${encodeURIComponent(days)}`, { credentials: 'same-origin' }),
+                fetch(`/api/admin/login-analytics?days=${encodeURIComponent(days)}`, { credentials: 'same-origin' }),
+            ]);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
+            const lData = lRes.ok ? await lRes.json() : {};
+            const ls = lData.summary || {};
+            const ret = ls.retention || {};
             const u = data.users || {};
             const p = data.platform || {};
             const charts = data.charts || {};
@@ -1894,12 +1912,13 @@ let allResults = [];
                 }
             }
 
+            const fmtRet = (obj) => (obj && obj.rate_pct !== null && obj.rate_pct !== undefined) ? `${obj.rate_pct}%` : '—';
             const cards = [
                 { label: 'ВСЕГО ПОЛЬЗОВАТЕЛЕЙ', value: u.total ?? 0, sub: `Подтверждено: ${u.verified ?? 0} · Не подтверждено: ${u.unverified ?? 0}`, color: 'var(--text-main)' },
-                { label: 'ПОДТВЕРЖДЁННЫЕ EMAIL', value: u.verified ?? 0, sub: u.total ? `${Math.round(((u.verified || 0) / u.total) * 100)}% от всех аккаунтов` : 'Нет аккаунтов', color: '#059669' },
-                { label: 'НЕПОДТВЕРЖДЁННЫЕ', value: u.unverified ?? 0, sub: 'Ожидают подтверждения почты', color: (u.unverified || 0) > 0 ? '#D97706' : 'var(--text-light)' },
-                { label: 'РЕГИСТРАЦИИ (СЕГОДНЯ / 7Д / 30Д)', value: `${u.registrations_today ?? 0} / ${u.registrations_7d ?? 0} / ${u.registrations_30d ?? 0}`, sub: 'Новые регистрации по периодам', color: '#2563EB' },
-                { label: 'АКТИВНЫЕ (7Д / 30Д)', value: `${u.active_7d ?? 0} / ${u.active_30d ?? 0}`, sub: 'Уникальные пользователи по сессиям входа', color: '#7C3AED' },
+                { label: 'ПОДТВЕРЖДЁННЫЕ / ОЖИДАЮТ', value: `${u.verified ?? 0} / ${u.unverified ?? 0}`, sub: u.total ? `${Math.round(((u.verified || 0) / u.total) * 100)}% подтвердили email` : 'Нет аккаунтов', color: '#059669' },
+                { label: 'РЕГИСТРАЦИИ (СЕГ. / 7Д / 30Д)', value: `${u.registrations_today ?? 0} / ${u.registrations_7d ?? 0} / ${u.registrations_30d ?? 0}`, sub: 'Новые регистрации по периодам', color: '#2563EB' },
+                { label: 'DAU / WAU / MAU (ВХОДЫ)', value: `${ls.dau ?? 0} / ${ls.wau ?? 0} / ${ls.mau ?? 0}`, sub: `Возвращаемость: ${ls.returning_rate_pct ?? 0}%`, color: '#7C3AED' },
+                { label: 'RETENTION (D1 / D7 / D30)', value: `${fmtRet(ret.d1)} / ${fmtRet(ret.d7)} / ${fmtRet(ret.d30)}`, sub: 'Когортное удержание (если есть когорты)', color: '#059669' },
                 { label: 'ЗАВЕРШЁННЫЕ ТЕСТЫ', value: p.completed_tests ?? 0, sub: `Посещений главной: ${p.site_visits ?? 0}`, color: '#059669' },
                 { label: 'ДУЭЛИ (ВСЕГО / ЗАВЕРШЕНО)', value: `${p.duels_total ?? 0} / ${p.duels_finished ?? 0}`, sub: p.duels_note || 'Активные и сохранённые комнаты', color: '#D97706' },
             ];
@@ -2004,7 +2023,6 @@ let allResults = [];
         } catch (err) {
             kpiGrid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#DC2626;padding:18px;">Ошибка загрузки статистики: ${escapeHtml(err.message)}</div>`;
         }
-        loadLoginAnalytics();
     }
     window.loadUserAnalytics = loadUserAnalytics;
 
@@ -2156,6 +2174,192 @@ let allResults = [];
         }
     }
     window.loadLoginAnalytics = loadLoginAnalytics;
+
+    let analyticsRefreshTimer = null;
+    function toggleAnalyticsAutoRefresh(enabled) {
+        if (analyticsRefreshTimer) {
+            clearInterval(analyticsRefreshTimer);
+            analyticsRefreshTimer = null;
+        }
+        if (enabled) {
+            analyticsRefreshTimer = setInterval(() => {
+                const active = document.querySelector('.admin-tab-btn.active')?.dataset?.tab;
+                if (active === 'tab-user-analytics') loadUserAnalytics();
+                else if (active === 'tab-login-analytics') loadLoginAnalytics();
+                else if (active === 'tab-usage-maps' || active === 'tab-usage-learning' || active === 'tab-usage-duels') loadUsageAnalytics();
+                else if (active === 'tab-monitoring') loadSystemHealth();
+                else if (active === 'tab-audit-log') loadAuditLog();
+            }, 30000);
+        }
+    }
+    window.toggleAnalyticsAutoRefresh = toggleAnalyticsAutoRefresh;
+
+    let udDailyChartInstance = null;
+
+    function _renderMiniCardGrid(containerId, cards) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        el.innerHTML = cards.map(c => `
+            <div class="exec-metric-card" style="background: var(--bg-sunken); border: 1px solid var(--border); padding: 14px; border-radius: 10px;">
+                <div style="font-size: 11px; color: var(--text-light); font-weight: 700;">${escapeHtml(c.label)}</div>
+                <div style="font-size: 21px; font-weight: 800; color: ${c.color || 'var(--text-main)'}; margin-top: 4px;">${escapeHtml(String(c.value))}</div>
+                <div style="font-size: 11px; color: var(--text-light); margin-top: 4px;">${escapeHtml(c.sub || '')}</div>
+            </div>
+        `).join('');
+    }
+
+    function _renderMiniListBox(title, rows, cols, emptyText) {
+        if (!rows || rows.length === 0) {
+            return `<div style="padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg-sunken);">
+                <h3 style="margin:0 0 10px;font-size:14px;font-weight:700;">${escapeHtml(title)}</h3>
+                <div style="font-size:13px;color:var(--text-light);padding:12px 0;">${escapeHtml(emptyText)}</div>
+            </div>`;
+        }
+        const body = rows.map(r => `<tr>${cols.map(c => `<td>${escapeHtml(String(r[c.key] ?? '—'))}</td>`).join('')}</tr>`).join('');
+        return `<div style="padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg-sunken);">
+            <h3 style="margin:0 0 10px;font-size:14px;font-weight:700;">${escapeHtml(title)}</h3>
+            <div class="table-responsive"><table class="data-table"><thead><tr>${cols.map(c => `<th>${escapeHtml(c.label)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>
+        </div>`;
+    }
+
+    async function loadUsageAnalytics() {
+        const periodSel = document.getElementById('um-period-select');
+        const days = periodSel ? periodSel.value : '30';
+        try {
+            const res = await fetch(`/api/admin/usage-analytics?days=${encodeURIComponent(days)}`, { credentials: 'same-origin' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const maps = data.maps || {};
+            const lr = data.learning || {};
+            const duels = data.duels || {};
+
+            // Maps tab
+            _renderMiniCardGrid('um-kpi-grid', [
+                { label: 'ОТКРЫТИЙ КАРТ', value: maps.total_map_opens ?? 0, sub: 'По событиям загрузки карт', color: '#2563EB' },
+                { label: 'ОТКРЫТИЙ ПАСПОРТОВ', value: maps.total_passport_opens ?? 0, sub: 'Географические паспорта', color: '#059669' },
+                { label: 'ПЕРЕКЛЮЧЕНИЙ СЛОЁВ', value: maps.total_layer_toggles ?? 0, sub: 'Тематические слои и фильтры', color: '#7C3AED' },
+            ]);
+            const umTables = document.getElementById('um-tables-grid');
+            if (umTables) {
+                umTables.innerHTML =
+                    _renderMiniListBox('Популярность карт', maps.by_map, [{ key: 'map', label: 'Карта' }, { key: 'count', label: 'Открытий' }], 'Событий открытия карт пока нет.') +
+                    _renderMiniListBox('Популярность паспортов', maps.by_passport, [{ key: 'territory', label: 'Территория' }, { key: 'count', label: 'Открытий' }], 'Событий открытия паспортов пока нет.');
+            }
+
+            // Learning tab
+            _renderMiniCardGrid('ul-kpi-grid', [
+                { label: 'ЗАВЕРШЕНО ТЕСТОВ', value: lr.completed_tests ?? 0, sub: 'По таблице results', color: '#059669' },
+                { label: 'СРЕДНИЙ БАЛЛ', value: lr.avg_score ?? 0, sub: `Средняя точность: ${lr.avg_accuracy_pct ?? 0}%`, color: '#2563EB' },
+                { label: 'ПРАВИЛЬНЫХ ОТВЕТОВ', value: `${lr.correct_answers_pct ?? 0}%`, sub: 'Сумма score / max_score', color: '#7C3AED' },
+                { label: 'НЕЗАВЕРШЁННЫЕ ПОПЫТКИ', value: lr.unfinished_attempts !== null && lr.unfinished_attempts !== undefined ? lr.unfinished_attempts : 'Н/Д', sub: lr.started_attempts ? `Начато: ${lr.started_attempts}` : 'Копится с момента запуска телеметрии', color: '#D97706' },
+            ]);
+            const ulTables = document.getElementById('ul-tables-grid');
+            if (ulTables) {
+                ulTables.innerHTML =
+                    _renderMiniListBox('Сложные темы (по точности)', lr.hardest_topics, [{ key: 'topic', label: 'Тема / карта' }, { key: 'attempts', label: 'Попыток' }, { key: 'avg_accuracy', label: 'Точность %' }], 'Нет завершённых тестов.') +
+                    _renderMiniListBox('Сложные вопросы (частые ошибки)', lr.hardest_questions, [{ key: 'question', label: 'Объект / вопрос' }, { key: 'mistakes', label: 'Ошибок' }], 'Ошибок в журнале не зафиксировано.');
+            }
+
+            // Duels tab
+            const udNote = document.getElementById('ud-note');
+            if (udNote && duels.note) udNote.textContent = duels.note;
+            _renderMiniCardGrid('ud-kpi-grid', [
+                { label: 'СОЗДАНО ИГР', value: duels.duels_created ?? 0, sub: 'За выбранный период', color: '#2563EB' },
+                { label: 'ЗАВЕРШЕНО ИГР', value: duels.duels_finished ?? 0, sub: 'Успешное завершение или сдача', color: '#059669' },
+                { label: 'CENTER / PUZZLE', value: `${duels.center_count ?? 0} / ${duels.puzzle_count ?? 0}`, sub: 'Популярность режимов', color: '#7C3AED' },
+                { label: 'УНИКАЛЬНЫХ УЧАСТНИКОВ', value: duels.unique_participants ?? 0, sub: duels.avg_duration_sec !== null ? `Средняя длит.: ${duels.avg_duration_sec} с` : 'Длительность: нет данных', color: '#D97706' },
+            ]);
+
+            const udDaily = duels.daily || [];
+            const udEmpty = document.getElementById('ud-empty');
+            const udWrap = document.getElementById('ud-chart-wrap');
+            const udCanvas = document.getElementById('ud-daily-chart');
+            if (udDaily.length === 0) {
+                if (udEmpty) udEmpty.style.display = 'block';
+                if (udWrap) udWrap.style.display = 'none';
+            } else if (typeof Chart !== 'undefined' && udCanvas) {
+                if (udEmpty) udEmpty.style.display = 'none';
+                if (udWrap) udWrap.style.display = 'block';
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.body.classList.contains('dark-theme');
+                const tickColor = isDark ? '#94A3B8' : '#64748B';
+                const gridColor = isDark ? 'rgba(148,163,184,0.18)' : 'rgba(15,23,42,0.08)';
+                if (udDailyChartInstance) udDailyChartInstance.destroy();
+                udDailyChartInstance = new Chart(udCanvas.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: udDaily.map(d => d.date.slice(5)),
+                        datasets: [
+                            { label: 'Создано', data: udDaily.map(d => d.created), backgroundColor: 'rgba(37,99,235,0.65)', borderRadius: 4 },
+                            { label: 'Завершено', data: udDaily.map(d => d.finished), backgroundColor: 'rgba(5,150,105,0.75)', borderRadius: 4 },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { labels: { color: tickColor } } },
+                        scales: {
+                            x: { ticks: { color: tickColor }, grid: { color: gridColor } },
+                            y: { beginAtZero: true, ticks: { precision: 0, color: tickColor }, grid: { color: gridColor } },
+                        },
+                    },
+                });
+            }
+        } catch (err) {
+            showToast(`Ошибка загрузки аналитики: ${err.message}`);
+        }
+    }
+    window.loadUsageAnalytics = loadUsageAnalytics;
+
+    async function loadSystemHealth() {
+        try {
+            const res = await fetch('/api/admin/system-health', { credentials: 'same-origin' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const h = await res.json();
+            const hostNote = document.getElementById('mon-host-note');
+            if (hostNote && h.host_metrics_note) hostNote.textContent = h.host_metrics_note;
+            const sizeMb = ((h.sqlite_size_bytes || 0) / (1024 * 1024)).toFixed(2);
+            _renderMiniCardGrid('mon-kpi-grid', [
+                { label: 'ПРИЛОЖЕНИЕ', value: h.app_status === 'ok' ? 'Доступно (OK)' : 'Деградация', sub: `Uptime процесса: ${h.uptime_seconds ?? 0} с`, color: h.app_status === 'ok' ? '#059669' : '#DC2626' },
+                { label: 'СРЕДНЕЕ ВРЕМЯ API', value: `${h.avg_api_response_ms ?? 0} мс`, sub: `API-запросов: ${h.api_requests_count ?? 0}`, color: '#2563EB' },
+                { label: 'HTTP 4XX / 5XX', value: `${h.http_4xx ?? 0} / ${h.http_5xx ?? 0}`, sub: 'За текущую сессию процесса', color: (h.http_5xx || 0) > 0 ? '#DC2626' : '#D97706' },
+                { label: 'БАЗА SQLITE', value: h.sqlite_ok ? `${sizeMb} МБ` : 'Ошибка', sub: `Проверка: ${h.sqlite_integrity || '—'}`, color: h.sqlite_ok ? '#059669' : '#DC2626' },
+                { label: 'ГЕОДАННЫЕ', value: h.geodata_available ? 'Доступны' : 'Не найдены', sub: 'Наборы паспортов и карт', color: h.geodata_available ? '#059669' : '#DC2626' },
+                { label: 'РЕЗЕРВНЫЕ КОПИИ', value: h.backups_detected ?? 0, sub: h.backup_note || '', color: 'var(--text-main)' },
+            ]);
+        } catch (err) {
+            _renderMiniCardGrid('mon-kpi-grid', [{ label: 'ОШИБКА', value: err.message, sub: 'Не удалось получить статус', color: '#DC2626' }]);
+        }
+    }
+    window.loadSystemHealth = loadSystemHealth;
+
+    async function loadAuditLog() {
+        const tbody = document.getElementById('al-table-body');
+        const sel = document.getElementById('al-type-select');
+        if (!tbody) return;
+        const et = sel ? sel.value : 'all';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:16px;">⏳ Загрузка журнала...</td></tr>';
+        try {
+            const res = await fetch(`/api/admin/audit-log?event_type=${encodeURIComponent(et)}&days=30&limit=100`, { credentials: 'same-origin' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const events = data.events || [];
+            if (events.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--text-light);">Событий за выбранный период пока нет.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = events.map(ev => `
+                <tr>
+                    <td><code>${escapeHtml(ev.created_at_msk)}</code></td>
+                    <td><span style="font-weight:700;">${escapeHtml(ev.event_type)}</span></td>
+                    <td>${escapeHtml(ev.actor_role)}</td>
+                    <td>${escapeHtml(ev.summary)}</td>
+                </tr>
+            `).join('');
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#DC2626;padding:16px;">Ошибка: ${escapeHtml(err.message)}</td></tr>`;
+        }
+    }
+    window.loadAuditLog = loadAuditLog;
 
     function initAdminTabs() {
         const hash = (window.location.hash || '').replace('#', '').trim();
