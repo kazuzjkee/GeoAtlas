@@ -834,6 +834,50 @@
                 </div>
             </div>
         </section>
+
+        <section class="panel-card" style="padding: 20px; margin-top: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
+                <div>
+                    <h2 style="margin: 0; font-size: 18px;">🔐 Статистика авторизаций (Europe/Moscow)</h2>
+                    <p style="margin: 4px 0 0; font-size: 13px; color: var(--text-light);">
+                        Учитываются только успешные входы пользователей; проверки сессии и обновления страниц не засчитываются.
+                    </p>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <label style="font-size: 12px; color: var(--text-light); display: flex; align-items: center; gap: 6px;">
+                        Дата (МСК):
+                        <input type="date" id="la-date-input" class="form-control" style="width: auto;" onchange="loadLoginAnalytics()">
+                    </label>
+                    <select id="la-period-select" class="form-control" style="width: auto; min-width: 135px;" onchange="loadLoginAnalytics()">
+                        <option value="7">За 7 дней</option>
+                        <option value="30" selected>За 30 дней</option>
+                        <option value="90">За 90 дней</option>
+                        <option value="all">За всё время</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" onclick="loadLoginAnalytics()">🔄 Обновить</button>
+                </div>
+            </div>
+
+            <div id="la-empty-banner" style="display: none; padding: 14px 16px; border-radius: 10px; border: 1px dashed var(--border); background: var(--bg-sunken); color: var(--text-light); margin-bottom: 16px; font-size: 13px;"></div>
+
+            <div id="la-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 20px;"></div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+                <div style="padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-sunken);">
+                    <h3 id="la-hourly-title" style="margin: 0 0 12px; font-size: 14px; font-weight: 700;">Почасовая активность за выбранный день (24 ч, МСК)</h3>
+                    <div style="position: relative; height: 260px;">
+                        <canvas id="la-hourly-chart"></canvas>
+                    </div>
+                </div>
+                <div style="padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-sunken);">
+                    <h3 id="la-daily-title" style="margin: 0 0 12px; font-size: 14px; font-weight: 700;">Активность авторизаций по дням</h3>
+                    <div id="la-daily-empty" style="display: none; padding: 24px 12px; text-align: center; color: var(--text-light); font-size: 13px;">За выбранный период успешных входов нет.</div>
+                    <div id="la-daily-chart-wrap" style="position: relative; height: 260px;">
+                        <canvas id="la-daily-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
     </div>
 
 <!-- Floating Toast Notification -->

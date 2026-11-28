@@ -2004,8 +2004,158 @@ let allResults = [];
         } catch (err) {
             kpiGrid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#DC2626;padding:18px;">Ошибка загрузки статистики: ${escapeHtml(err.message)}</div>`;
         }
+        loadLoginAnalytics();
     }
     window.loadUserAnalytics = loadUserAnalytics;
+
+    let laHourlyChartInstance = null;
+    let laDailyChartInstance = null;
+
+    async function loadLoginAnalytics() {
+        const kpiGrid = document.getElementById('la-kpi-grid');
+        const emptyBanner = document.getElementById('la-empty-banner');
+        const dateInput = document.getElementById('la-date-input');
+        const periodSel = document.getElementById('la-period-select');
+        if (!kpiGrid) return;
+
+        const days = periodSel ? periodSel.value : '30';
+        const dateParam = dateInput && dateInput.value ? `&date=${encodeURIComponent(dateInput.value)}` : '';
+        kpiGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:18px;color:var(--text-light);">⏳ Загрузка статистики входов...</div>';
+
+        try {
+            const res = await fetch(`/api/admin/login-analytics?days=${encodeURIComponent(days)}${dateParam}`, { credentials: 'same-origin' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const s = data.summary || {};
+
+            if (dateInput && !dateInput.value && data.selected_date) {
+                dateInput.value = data.selected_date;
+            }
+
+            if (emptyBanner) {
+                if ((s.total_logins || 0) === 0) {
+                    emptyBanner.textContent = 'За выбранный период успешных авторизаций пока не зафиксировано.';
+                    emptyBanner.style.display = 'block';
+                } else {
+                    emptyBanner.style.display = 'none';
+                }
+            }
+
+            const cards = [
+                { label: 'ВСЕГО УСПЕШНЫХ ВХОДОВ', value: s.total_logins ?? 0, sub: 'За выбранный период', color: '#2563EB' },
+                { label: 'УНИКАЛЬНЫХ ПОЛЬЗОВАТЕЛЕЙ', value: s.unique_users ?? 0, sub: 'Различные user_id за период', color: '#059669' },
+                { label: 'ПОВТОРНЫХ ВХОДОВ', value: s.repeat_logins ?? 0, sub: 'Сверх первого входа за период', color: '#7C3AED' },
+                { label: 'ВОШЛИ СЕГОДНЯ (МСК)', value: s.today_unique_users ?? 0, sub: 'Уникальных пользователей за сегодня', color: '#059669' },
+                { label: 'САМЫЙ АКТИВНЫЙ ЧАС', value: s.peak_hour_label || '—', sub: s.peak_hour_logins ? `Входов за час: ${s.peak_hour_logins}` : `Нет входов за ${data.selected_date || ''}`, color: '#D97706' },
+            ];
+
+            kpiGrid.innerHTML = cards.map(c => `
+                <div class="exec-metric-card" style="background: var(--bg-sunken); border: 1px solid var(--border); padding: 14px; border-radius: 10px;">
+                    <div style="font-size: 11px; color: var(--text-light); font-weight: 700;">${escapeHtml(c.label)}</div>
+                    <div style="font-size: 21px; font-weight: 800; color: ${c.color}; margin-top: 4px;">${escapeHtml(String(c.value))}</div>
+                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px;">${escapeHtml(c.sub)}</div>
+                </div>
+            `).join('');
+
+            const hourlyTitle = document.getElementById('la-hourly-title');
+            if (hourlyTitle) {
+                hourlyTitle.textContent = `Почасовая активность за ${data.selected_date || ''} (24 ч, Europe/Moscow)`;
+            }
+
+            if (typeof Chart !== 'undefined') {
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.body.classList.contains('dark-theme');
+                const gridColor = isDark ? 'rgba(148,163,184,0.18)' : 'rgba(15,23,42,0.08)';
+                const tickColor = isDark ? '#94A3B8' : '#64748B';
+
+                const hourly = data.hourly || [];
+                const hourlyCanvas = document.getElementById('la-hourly-chart');
+                if (hourlyCanvas) {
+                    if (laHourlyChartInstance) laHourlyChartInstance.destroy();
+                    laHourlyChartInstance = new Chart(hourlyCanvas.getContext('2d'), {
+                        data: {
+                            labels: hourly.map(h => h.label),
+                            datasets: [
+                                {
+                                    type: 'bar',
+                                    label: 'Успешные входы',
+                                    data: hourly.map(h => h.logins),
+                                    backgroundColor: 'rgba(37, 99, 235, 0.7)',
+                                    borderRadius: 4,
+                                },
+                                {
+                                    type: 'line',
+                                    label: 'Уникальные пользователи',
+                                    data: hourly.map(h => h.unique_users),
+                                    borderColor: '#059669',
+                                    backgroundColor: 'rgba(5, 150, 105, 0.15)',
+                                    tension: 0.25,
+                                    borderWidth: 2,
+                                },
+                            ],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { labels: { color: tickColor } } },
+                            scales: {
+                                x: { ticks: { color: tickColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+                                y: { beginAtZero: true, ticks: { precision: 0, color: tickColor }, grid: { color: gridColor } },
+                            },
+                        },
+                    });
+                }
+
+                const daily = data.daily || [];
+                const dailyEmpty = document.getElementById('la-daily-empty');
+                const dailyWrap = document.getElementById('la-daily-chart-wrap');
+                const dailyCanvas = document.getElementById('la-daily-chart');
+                if (daily.length === 0) {
+                    if (dailyEmpty) dailyEmpty.style.display = 'block';
+                    if (dailyWrap) dailyWrap.style.display = 'none';
+                } else {
+                    if (dailyEmpty) dailyEmpty.style.display = 'none';
+                    if (dailyWrap) dailyWrap.style.display = 'block';
+                    if (dailyCanvas) {
+                        if (laDailyChartInstance) laDailyChartInstance.destroy();
+                        laDailyChartInstance = new Chart(dailyCanvas.getContext('2d'), {
+                            data: {
+                                labels: daily.map(d => d.date.slice(5)),
+                                datasets: [
+                                    {
+                                        type: 'bar',
+                                        label: 'Входы',
+                                        data: daily.map(d => d.logins),
+                                        backgroundColor: 'rgba(124, 58, 237, 0.65)',
+                                        borderRadius: 4,
+                                    },
+                                    {
+                                        type: 'line',
+                                        label: 'Уникальные пользователи',
+                                        data: daily.map(d => d.unique_users),
+                                        borderColor: '#059669',
+                                        tension: 0.25,
+                                        borderWidth: 2,
+                                    },
+                                ],
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { labels: { color: tickColor } } },
+                                scales: {
+                                    x: { ticks: { color: tickColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+                                    y: { beginAtZero: true, ticks: { precision: 0, color: tickColor }, grid: { color: gridColor } },
+                                },
+                            },
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            kpiGrid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#DC2626;padding:18px;">Ошибка загрузки статистики входов: ${escapeHtml(err.message)}</div>`;
+        }
+    }
+    window.loadLoginAnalytics = loadLoginAnalytics;
 
     function initAdminTabs() {
         const hash = (window.location.hash || '').replace('#', '').trim();

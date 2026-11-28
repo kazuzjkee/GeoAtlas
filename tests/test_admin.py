@@ -257,3 +257,70 @@ def test_admin_bootstrap_with_populated_teachers_and_existing_email(tmp_path, mo
     assert sl_res.json()["user"]["role"] == "student"
     assert prod_client.get("/admin").status_code == 403
     assert prod_client.get("/api/admin/user-analytics").status_code == 403
+
+
+def test_login_analytics_events_counting_boundaries_and_auth(tmp_path, monkeypatch, anon_client, client, auth_headers):
+    from datetime import datetime, timezone
+    import auth_service
+    import db
+
+    monkeypatch.setattr(db, "DB_FILE", str(tmp_path / "login_analytics.db"))
+    db.init_db()
+
+    # Guest blocked
+    assert anon_client.get("/api/admin/login-analytics").status_code == 401
+
+    # Register & verify a student (verify-code issues 1 login event)
+    pw_hash = auth_service.hash_password("LoginTest123!")
+    u, _ = db.upsert_pending_registration_user("login_u1@gmail.com", "User One", pw_hash, "G1")
+    db.mark_user_email_verified("login_u1@gmail.com", university_email_verified=False)
+
+    # Failed login must NOT record a login event
+    bad = anon_client.post("/api/auth/login", json={"email": "login_u1@gmail.com", "password": "WrongPassword!"})
+    assert bad.status_code == 401
+    assert db.get_auth_login_analytics(days="30")["summary"]["total_logins"] == 0
+
+    # Successful login records 1 event
+    ok = anon_client.post("/api/auth/login", json={"email": "login_u1@gmail.com", "password": "LoginTest123!"})
+    assert ok.status_code == 200
+    assert db.get_auth_login_analytics(days="30")["summary"]["total_logins"] == 1
+
+    # Session check (/api/auth/me) must NOT increase login count
+    for _ in range(3):
+        assert anon_client.get("/api/auth/me").status_code == 200
+    assert db.get_auth_login_analytics(days="30")["summary"]["total_logins"] == 1
+
+    # Student cannot access login-analytics
+    assert anon_client.get("/api/admin/login-analytics").status_code == 403
+
+    # 4 more logins by the same user -> 5 total logins, 1 unique user, 4 repeat logins
+    import server as srv
+    for _ in range(4):
+        srv._rate_limit_store.clear()
+        assert anon_client.post("/api/auth/login", json={"email": "login_u1@gmail.com", "password": "LoginTest123!"}).status_code == 200
+
+    res = client.get("/api/admin/login-analytics?days=30", headers=auth_headers)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["timezone"] == "Europe/Moscow"
+    assert body["summary"]["total_logins"] == 5
+    assert body["summary"]["unique_users"] == 1
+    assert body["summary"]["repeat_logins"] == 4
+    assert "login_u1@gmail.com" not in res.text
+
+    # Midnight boundary test in Europe/Moscow (UTC+3):
+    # 2026-11-10 20:59:59 UTC == 2026-11-10 23:59:59 MSK (hour 23 of 2026-11-10)
+    # 2026-11-10 21:00:05 UTC == 2026-11-11 00:00:05 MSK (hour 0 of 2026-11-11)
+    ts_before_midnight = datetime(2026, 11, 10, 20, 59, 59, tzinfo=timezone.utc).timestamp()
+    ts_after_midnight = datetime(2026, 11, 10, 21, 0, 5, tzinfo=timezone.utc).timestamp()
+    db.record_auth_login_event(user_id=901, auth_method="password", created_at=ts_before_midnight)
+    db.record_auth_login_event(user_id=902, auth_method="oidc", created_at=ts_after_midnight)
+
+    d10 = client.get("/api/admin/login-analytics?days=all&date=2026-11-10", headers=auth_headers).json()
+    d11 = client.get("/api/admin/login-analytics?days=all&date=2026-11-11", headers=auth_headers).json()
+    assert d10["hourly"][23]["logins"] == 1
+    assert d10["hourly"][23]["unique_users"] == 1
+    assert d10["hourly"][0]["logins"] == 0
+    assert d11["hourly"][0]["logins"] == 1
+    assert d11["hourly"][0]["unique_users"] == 1
+    assert d11["summary"]["peak_hour"] == 0

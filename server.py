@@ -625,6 +625,7 @@ def _issue_user_session(response: Response, user: Dict[str, Any], auth_method: s
     raw_token = secrets.token_urlsafe(32)
     token_hash = auth_service.hash_token(raw_token, "session")
     db.create_user_session(token_hash, int(user["id"]), ttl_seconds=SESSION_TTL_SECONDS, auth_method=auth_method)
+    db.record_auth_login_event(int(user["id"]), auth_method=auth_method)
     _set_session_cookie(response, raw_token)
 
 
@@ -1273,6 +1274,15 @@ def get_admin_user_analytics(
     data["platform"]["duels_finished"] = finished_duels
     data["platform"]["duels_note"] = "Активные и сохранённые комнаты дуэлей (duel_rooms.json)"
     return data
+
+
+@app.get("/api/admin/login-analytics")
+def get_admin_login_analytics(
+    days: str = "30",
+    date: Optional[str] = None,
+    teacher: Dict[str, Any] = Depends(check_admin),
+) -> Dict[str, Any]:
+    return db.get_auth_login_analytics(days=days, target_date=date)
 
 
 @app.get("/api/admin/data-quality")

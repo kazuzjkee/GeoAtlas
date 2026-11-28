@@ -156,6 +156,15 @@ def init_db():
                     expires_at REAL NOT NULL,
                     used_at REAL
                 );
+
+                CREATE TABLE IF NOT EXISTS auth_login_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    auth_method TEXT NOT NULL DEFAULT 'password',
+                    created_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_auth_login_events_time ON auth_login_events(created_at);
+                CREATE INDEX IF NOT EXISTS idx_auth_login_events_user ON auth_login_events(user_id, created_at);
             """)
             conn.commit()
             for alter_sql in (
@@ -1590,4 +1599,199 @@ def get_user_analytics_stats(days: int = 30) -> Dict[str, Any]:
             "site_visits": site_visits,
             "map_usage": map_usage,
         },
+    }
+
+
+def _moscow_tz():
+    from datetime import timedelta, timezone
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo("Europe/Moscow")
+    except Exception:
+        return timezone(timedelta(hours=3))
+
+
+def record_auth_login_event(user_id: int, auth_method: str = "password", created_at: Optional[float] = None) -> None:
+    """Records a successful authentication event (no secrets, tokens, or IPs)."""
+    ts = float(created_at) if created_at is not None else time.time()
+    method = (auth_method or "password")[:32]
+    with _lock:
+        conn = _conn()
+        try:
+            conn.execute(
+                "INSERT INTO auth_login_events (user_id, auth_method, created_at) VALUES (?, ?, ?)",
+                (int(user_id), method, ts),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def get_auth_login_analytics(days: str = "30", target_date: Optional[str] = None) -> Dict[str, Any]:
+    """Aggregated hourly & daily authentication analytics in Europe/Moscow without PII."""
+    from datetime import datetime, timedelta
+
+    msk = _moscow_tz()
+    now_msk = datetime.now(msk)
+    today_msk = now_msk.date()
+
+    # Validate target_date (YYYY-MM-DD in Europe/Moscow)
+    selected_date = today_msk
+    if target_date:
+        try:
+            selected_date = datetime.strptime(target_date.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = today_msk
+
+    day_start_dt = datetime(selected_date.year, selected_date.month, selected_date.day, 0, 0, 0, tzinfo=msk)
+    day_end_dt = day_start_dt + timedelta(days=1)
+    day_start_ts = day_start_dt.timestamp()
+    day_end_ts = day_end_dt.timestamp()
+
+    today_start_dt = datetime(today_msk.year, today_msk.month, today_msk.day, 0, 0, 0, tzinfo=msk)
+    today_end_dt = today_start_dt + timedelta(days=1)
+
+    raw_days = str(days or "30").strip().lower()
+    if raw_days == "all":
+        period_key = "all"
+        period_start_ts = None
+        series_start_date = None
+    else:
+        period_num = int(raw_days) if raw_days in ("7", "30", "90") else 30
+        period_key = str(period_num)
+        series_start_date = today_msk - timedelta(days=period_num - 1)
+        period_start_ts = datetime(
+            series_start_date.year, series_start_date.month, series_start_date.day, 0, 0, 0, tzinfo=msk
+        ).timestamp()
+
+    # Europe/Moscow is fixed UTC+3 (+10800s) for SQLite strftime bucketing
+    msk_offset_sec = 10800
+
+    with _lock:
+        conn = _conn()
+        try:
+            if period_start_ts is not None:
+                p_row = conn.execute(
+                    """
+                    SELECT COUNT(*) AS total_logins, COUNT(DISTINCT user_id) AS unique_users
+                    FROM auth_login_events
+                    WHERE created_at >= ?
+                    """,
+                    (period_start_ts,),
+                ).fetchone()
+                daily_rows = conn.execute(
+                    f"""
+                    SELECT
+                        strftime('%Y-%m-%d', created_at + {msk_offset_sec}, 'unixepoch') AS day,
+                        COUNT(*) AS logins,
+                        COUNT(DISTINCT user_id) AS unique_users
+                    FROM auth_login_events
+                    WHERE created_at >= ?
+                    GROUP BY day
+                    ORDER BY day ASC
+                    """,
+                    (period_start_ts,),
+                ).fetchall()
+            else:
+                p_row = conn.execute(
+                    "SELECT COUNT(*) AS total_logins, COUNT(DISTINCT user_id) AS unique_users FROM auth_login_events"
+                ).fetchone()
+                daily_rows = conn.execute(
+                    f"""
+                    SELECT
+                        strftime('%Y-%m-%d', created_at + {msk_offset_sec}, 'unixepoch') AS day,
+                        COUNT(*) AS logins,
+                        COUNT(DISTINCT user_id) AS unique_users
+                    FROM auth_login_events
+                    GROUP BY day
+                    ORDER BY day ASC
+                    """
+                ).fetchall()
+
+            today_row = conn.execute(
+                """
+                SELECT COUNT(DISTINCT user_id) AS today_unique_users
+                FROM auth_login_events
+                WHERE created_at >= ? AND created_at < ?
+                """,
+                (today_start_dt.timestamp(), today_end_dt.timestamp()),
+            ).fetchone()
+
+            hourly_rows = conn.execute(
+                f"""
+                SELECT
+                    CAST(strftime('%H', created_at + {msk_offset_sec}, 'unixepoch') AS INTEGER) AS hr,
+                    COUNT(*) AS logins,
+                    COUNT(DISTINCT user_id) AS unique_users
+                FROM auth_login_events
+                WHERE created_at >= ? AND created_at < ?
+                GROUP BY hr
+                ORDER BY hr ASC
+                """,
+                (day_start_ts, day_end_ts),
+            ).fetchall()
+        finally:
+            conn.close()
+
+    total_logins = int(p_row["total_logins"] or 0)
+    unique_users = int(p_row["unique_users"] or 0)
+    repeat_logins = max(0, total_logins - unique_users)
+    today_unique_users = int(today_row["today_unique_users"] or 0)
+
+    hourly_map = {
+        int(r["hr"]): {"logins": int(r["logins"]), "unique_users": int(r["unique_users"])}
+        for r in hourly_rows
+        if r["hr"] is not None
+    }
+    hourly_series = []
+    peak_hour = None
+    peak_hour_logins = 0
+    for hr in range(24):
+        item = hourly_map.get(hr, {"logins": 0, "unique_users": 0})
+        hourly_series.append({
+            "hour": hr,
+            "label": f"{hr:02d}:00",
+            "logins": item["logins"],
+            "unique_users": item["unique_users"],
+        })
+        if item["logins"] > peak_hour_logins:
+            peak_hour_logins = item["logins"]
+            peak_hour = hr
+
+    daily_map = {
+        r["day"]: {"logins": int(r["logins"]), "unique_users": int(r["unique_users"])}
+        for r in daily_rows
+        if r["day"]
+    }
+    daily_series = []
+    if series_start_date is not None:
+        num_days = int(period_key)
+        for offset in range(num_days):
+            d_str = (series_start_date + timedelta(days=offset)).strftime("%Y-%m-%d")
+            item = daily_map.get(d_str, {"logins": 0, "unique_users": 0})
+            daily_series.append({"date": d_str, "logins": item["logins"], "unique_users": item["unique_users"]})
+    else:
+        if daily_map:
+            first_day = datetime.strptime(min(daily_map.keys()), "%Y-%m-%d").date()
+            span = (today_msk - first_day).days + 1
+            for offset in range(max(1, span)):
+                d_str = (first_day + timedelta(days=offset)).strftime("%Y-%m-%d")
+                item = daily_map.get(d_str, {"logins": 0, "unique_users": 0})
+                daily_series.append({"date": d_str, "logins": item["logins"], "unique_users": item["unique_users"]})
+
+    return {
+        "timezone": "Europe/Moscow",
+        "period": period_key,
+        "selected_date": selected_date.strftime("%Y-%m-%d"),
+        "summary": {
+            "total_logins": total_logins,
+            "unique_users": unique_users,
+            "repeat_logins": repeat_logins,
+            "today_unique_users": today_unique_users,
+            "peak_hour": peak_hour,
+            "peak_hour_label": f"{peak_hour:02d}:00–{(peak_hour + 1) % 24:02d}:00" if peak_hour is not None else "—",
+            "peak_hour_logins": peak_hour_logins,
+        },
+        "hourly": hourly_series,
+        "daily": daily_series,
     }
