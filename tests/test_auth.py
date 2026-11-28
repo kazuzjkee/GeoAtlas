@@ -458,7 +458,8 @@ def test_oidc_rs256_id_token_validation_and_callback(anon_client, monkeypatch):
             valid_jwt,
             expected_nonce="wrong-nonce", cfg=cfg, jwks_override=jwks,
         )
-    alg_none = f"{_b64u(b'{\"alg\":\"none\"}')}.{_b64u(json.dumps(valid_payload).encode())}."
+    alg_none_header = json.dumps({"alg": "none"}).encode("utf-8")
+    alg_none = f"{_b64u(alg_none_header)}.{_b64u(json.dumps(valid_payload).encode())}."
     with pytest.raises(auth_service.OIDCVerificationError):
         auth_service.verify_oidc_id_token(
             alg_none,
