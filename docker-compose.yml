@@ -13,6 +13,16 @@ services:
       - CARTO_KEY=${CARTO_KEY}
       - GEOATLAS_DATA_DIR=/app/data
       - DUEL_DATA_DIR=/app/data
+      - MAIL_PROVIDER=${MAIL_PROVIDER:-smtp}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-465}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-GeoAtlas ЮФУ}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://geoatlas.sfedu.ru}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-https://geoatlas.sfedu.ru}
     volumes:
       - geoatlas_data:/app/data
     restart: unless-stopped
