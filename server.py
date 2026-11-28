@@ -294,6 +294,46 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+def _normalize_origin(raw_url: Optional[str]) -> Optional[str]:
+    if not raw_url:
+        return None
+    val = raw_url.strip()
+    if not val or val == "*":
+        return None
+    try:
+        parsed = urllib.parse.urlsplit(val)
+    except ValueError:
+        return None
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in ("http", "https"):
+        return None
+    hostname = (parsed.hostname or "").lower()
+    if not hostname:
+        return None
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    if (scheme == "http" and port == 80) or (scheme == "https" and port == 443):
+        port = None
+    host_part = f"[{hostname}]" if ":" in hostname else hostname
+    if port is not None:
+        return f"{scheme}://{host_part}:{port}"
+    return f"{scheme}://{host_part}"
+
+
+def get_csrf_trusted_origins() -> set[str]:
+    raw = os.environ.get("CSRF_TRUSTED_ORIGINS", "").strip()
+    if not raw and os.environ.get("ENVIRONMENT", "development").strip().lower() == "production":
+        raw = "https://geoatlas.sfedu.ru"
+    origins: set[str] = set()
+    for item in raw.split(","):
+        norm = _normalize_origin(item)
+        if norm:
+            origins.add(norm)
+    return origins
+
+
 @app.middleware("http")
 async def csrf_guard(request: Request, call_next):
     if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
@@ -301,11 +341,20 @@ async def csrf_guard(request: Request, call_next):
         if path.startswith("/api/"):
             origin = request.headers.get("origin", "")
             referer = request.headers.get("referer", "")
-            host = request.headers.get("host", "")
-            if origin and host not in origin:
-                return JSONResponse({"detail": "CSRF protection: origin mismatch"}, status_code=403)
-            if not origin and referer and host not in referer:
-                return JSONResponse({"detail": "CSRF protection: referer mismatch"}, status_code=403)
+            allowed_origins = get_csrf_trusted_origins()
+            if os.environ.get("ENVIRONMENT", "development").strip().lower() != "production":
+                req_origin = _normalize_origin(str(request.base_url))
+                if req_origin:
+                    allowed_origins.add(req_origin)
+
+            if origin:
+                norm_origin = _normalize_origin(origin)
+                if not norm_origin or norm_origin not in allowed_origins:
+                    return JSONResponse({"detail": "CSRF protection: origin mismatch"}, status_code=403)
+            elif referer:
+                norm_referer = _normalize_origin(referer)
+                if not norm_referer or norm_referer not in allowed_origins:
+                    return JSONResponse({"detail": "CSRF protection: referer mismatch"}, status_code=403)
     return await call_next(request)
 
 @app.middleware("http")

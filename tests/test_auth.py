@@ -521,3 +521,71 @@ def test_legacy_teacher_sha256_upgrades_to_scrypt_on_login(anon_client):
     assert res.json()["user"]["role"] in ("teacher", "dean", "admin")
     teacher = next(t for t in db.load_teachers_db() if t["username"] == "admin")
     assert teacher["password_hash"].startswith("scrypt$")
+
+
+def test_csrf_origin_and_referer_validation(anon_client, monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("CSRF_TRUSTED_ORIGINS", "https://geoatlas.sfedu.ru")
+
+    payload = {
+        "email": "csrf_ok@sfedu.ru",
+        "password": "Password123",
+        "password_confirm": "Password123",
+        "full_name": "CSRF User",
+        "group_num": "G1",
+        "accept_terms": True,
+    }
+
+    # 1. Production public Origin accepted even with internal container Host
+    ok = anon_client.post(
+        "/api/auth/register",
+        json=payload,
+        headers={"Origin": "https://geoatlas.sfedu.ru", "Host": "geoatlas_app:8000"},
+    )
+    assert ok.status_code == 200
+
+    # 2. Foreign Origin rejected
+    foreign = anon_client.post(
+        "/api/auth/register",
+        json={**payload, "email": "csrf_bad1@sfedu.ru"},
+        headers={"Origin": "https://evil.example", "Host": "geoatlas_app:8000"},
+    )
+    assert foreign.status_code == 403
+
+    # 3. Prefix/subdomain trick rejected
+    trick = anon_client.post(
+        "/api/auth/register",
+        json={**payload, "email": "csrf_bad2@sfedu.ru"},
+        headers={"Origin": "https://geoatlas.sfedu.ru.attacker.example", "Host": "geoatlas_app:8000"},
+    )
+    assert trick.status_code == 403
+
+    # 4. Standard HTTPS port :443 normalized and accepted; non-standard port :8443 rejected
+    port_443 = anon_client.post(
+        "/api/auth/register",
+        json={**payload, "email": "csrf_443@sfedu.ru"},
+        headers={"Origin": "https://geoatlas.sfedu.ru:443", "Host": "geoatlas_app:8000"},
+    )
+    assert port_443.status_code == 200
+
+    port_8443 = anon_client.post(
+        "/api/auth/register",
+        json={**payload, "email": "csrf_8443@sfedu.ru"},
+        headers={"Origin": "https://geoatlas.sfedu.ru:8443", "Host": "geoatlas_app:8000"},
+    )
+    assert port_8443.status_code == 403
+
+    # 5. Missing Origin falls back to Referer validation
+    ref_ok = anon_client.post(
+        "/api/auth/register",
+        json={**payload, "email": "csrf_ref_ok@sfedu.ru"},
+        headers={"Referer": "https://geoatlas.sfedu.ru/register?next=/", "Host": "geoatlas_app:8000"},
+    )
+    assert ref_ok.status_code == 200
+
+    ref_bad = anon_client.post(
+        "/api/auth/register",
+        json={**payload, "email": "csrf_ref_bad@sfedu.ru"},
+        headers={"Referer": "https://evil.example/register", "Host": "geoatlas_app:8000"},
+    )
+    assert ref_bad.status_code == 403
