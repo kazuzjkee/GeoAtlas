@@ -589,3 +589,63 @@ def test_csrf_origin_and_referer_validation(anon_client, monkeypatch):
         headers={"Referer": "https://evil.example/register", "Host": "geoatlas_app:8000"},
     )
     assert ref_bad.status_code == 403
+
+
+def test_full_auth_lifecycle_first_login_reload_logout_and_reset(anon_client):
+    # Regression test: register with mixed-case email -> verify -> logout -> first login -> reload (/api/auth/me) -> logout -> re-login -> reset
+    reg = anon_client.post("/api/auth/register", json={
+        "email": "User.FirstLogin@Example.COM",
+        "password": "StrongPass123!",
+        "password_confirm": "StrongPass123!",
+        "full_name": "First Login User",
+        "group_num": "G-1",
+        "accept_terms": True,
+    })
+    assert reg.status_code == 200
+    code = _extract_code("user.firstlogin@example.com")
+
+    ver = anon_client.post("/api/auth/verify-code", json={
+        "email": "User.FirstLogin@Example.COM",
+        "code": code,
+    })
+    assert ver.status_code == 200
+    assert anon_client.post("/api/auth/logout").status_code == 200
+
+    # First password login immediately after registration + verification
+    server._rate_limit_store.clear()
+    login1 = anon_client.post("/api/auth/login", json={
+        "email": "  user.firstlogin@example.com ",
+        "password": "StrongPass123!",
+    })
+    assert login1.status_code == 200
+    assert login1.json()["user"]["email"] == "user.firstlogin@example.com"
+
+    # Simulated page reload preserves session
+    me1 = anon_client.get("/api/auth/me")
+    assert me1.status_code == 200
+    assert me1.json()["user"]["email"] == "user.firstlogin@example.com"
+
+    # Logout and re-login
+    assert anon_client.post("/api/auth/logout").status_code == 200
+    assert anon_client.get("/api/auth/me").status_code == 401
+    login2 = anon_client.post("/api/auth/login", json={
+        "email": "user.firstlogin@example.com",
+        "password": "StrongPass123!",
+    })
+    assert login2.status_code == 200
+
+    # Password reset flow + login with new password
+    assert anon_client.post("/api/auth/forgot-password", json={"email": "user.firstlogin@example.com"}).status_code == 200
+    reset_code = _extract_code("user.firstlogin@example.com")
+    assert anon_client.post("/api/auth/reset-password", json={
+        "email": "user.firstlogin@example.com",
+        "code": reset_code,
+        "new_password": "NewStrongPass456!",
+        "new_password_confirm": "NewStrongPass456!",
+    }).status_code == 200
+    assert anon_client.get("/api/auth/me").status_code == 401
+    login3 = anon_client.post("/api/auth/login", json={
+        "email": "user.firstlogin@example.com",
+        "password": "NewStrongPass456!",
+    })
+    assert login3.status_code == 200

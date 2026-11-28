@@ -247,6 +247,10 @@
         @media (max-width: 480px) {
             .auth-shell { padding: 22px 16px; border-radius: 18px; }
         }
+        .btn:focus-visible, .tab:focus-visible, .input:focus-visible, .pw-toggle:focus-visible, a:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
     </style>
 </head>
 <body>
@@ -481,6 +485,7 @@
                     if (res.status === 403 && data.needs_verification) {
                         pendingEmail = document.getElementById('login-email').value.trim().toLowerCase();
                         switchMode('verify');
+                        document.getElementById('verify-hint').textContent = `Мы отправили 6-значный код подтверждения на ${pendingEmail}.`;
                     }
                     throw new Error(data.detail || 'Не удалось выполнить вход');
                 }

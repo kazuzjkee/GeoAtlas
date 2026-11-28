@@ -418,3 +418,34 @@ async def _pipe_proxy(client_reader, client_writer, target_port: int):
         forward(upstream_reader, client_writer),
         return_exceptions=True,
     )
+
+
+def test_duel_http_polling_full_lifecycle(client):
+    c = client.post("/api/duel/create", json={
+        "mode": "center", "region": "rostov",
+        "host_name": "PollHost", "host_group": "G-1", "host_email": "ph@sfedu.ru",
+    })
+    assert c.status_code == 200
+    cd = c.json()
+    rid, p1_id = cd["room_id"], cd["player_id"]
+
+    j = client.post("/api/duel/join", json={
+        "room_id": rid,
+        "player_name": "PollGuest", "player_group": "G-1", "player_email": "pg@sfedu.ru",
+    })
+    assert j.status_code == 200
+    p2_id = j.json()["player_id"]
+
+    r1 = client.post(f"/api/duel/action/{rid}", json={"player_id": p1_id, "action": "ready", "payload": {"ready": True}})
+    r2 = client.post(f"/api/duel/action/{rid}", json={"player_id": p2_id, "action": "ready", "payload": {"ready": True}})
+    assert r1.status_code == 200 and r2.status_code == 200
+
+    st = client.get(f"/api/duel/state/{rid}")
+    assert st.status_code == 200
+    assert st.json()["room"]["status"] == "playing"
+
+    sur = client.post(f"/api/duel/action/{rid}", json={"player_id": p2_id, "action": "surrender", "payload": {}})
+    assert sur.status_code == 200
+    st_end = client.get(f"/api/duel/state/{rid}")
+    assert st_end.status_code == 200
+    assert st_end.json()["room"]["status"] == "finished"

@@ -268,12 +268,39 @@ docker run -p 8000:8000 geoatlas
 
 ---
 
-## 🔑 Учетные данные для тестирования
+## 🔑 Аутентификация и разграничение доступа (Authentication 2.0)
 
-| Роль | Страница входа | Логин / Email | Пароль / Код |
-|---|---|---|---|
-| **Преподаватель / Администратор** | [http://localhost:8000/admin](http://localhost:8000/admin) | `sfedu_admin` | `geodean2026` |
-| **Студент ЮФУ** | Модальное окно входа в хедере | `*@sfedu.ru` | Одноразовый 6-значный OTP-код (выводится в консоль сервера) |
+* **Гости** имеют доступ только к главной странице `/`, страницам входа/регистрации (`/login`, `/register`, `/forgot-password`, `/reset-password`) и публичным метаданным (`/api/stats/visits`, `/api/branding`, `/api/server-time`).
+* **Пользователи** регистрируются с любым корректным email, подтверждают почту одноразовым 6-значным кодом (через SMTP) и получают серверную `HttpOnly` сессию.
+* **Сообщество ЮФУ:** при подтверждении адреса на доверенном домене (`TRUSTED_UNIVERSITY_DOMAINS`, по умолчанию `sfedu.ru`) присваивается статус «Почта ЮФУ подтверждена». Полный статус «Сообщество ЮФУ» выдаётся при входе через корпоративный OIDC (при настройке `AUTH_OIDC_*`) или подтверждении администратором.
+* **Преподаватели и администраторы** в production настраиваются в таблице `teachers` или при первичной инициализации пустой БД через переменные `ADMIN_BOOTSTRAP_USERNAME` и `ADMIN_BOOTSTRAP_PASSWORD`.
+
+---
+
+## 🛠️ Эксплуатация, Docker/Portainer и резервное копирование
+
+1. **Конфигурация окружения:** используйте [`.env.example`](.env.example) как шаблон. Для production в Portainer Stack Environment задаются `CARTO_KEY`, `AUTH_SESSION_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `SMTP_USE_TLS`, `MAIL_PROVIDER`, `ALLOWED_ORIGINS` и `CSRF_TRUSTED_ORIGINS` (по умолчанию `https://geoatlas.sfedu.ru`). Реальные секреты в Git не хранятся.
+2. **Миграции SQLite:** база данных (`GEOATLAS_DATA_DIR/geoatlas.db`, в Docker — volume `geoatlas_data` -> `/app/data`) работает в режиме WAL и автоматически применяет совместимые миграции при старте в `db.init_db()`.
+3. **Резервное копирование и восстановление SQLite:**
+   ```bash
+   # Резервная копия из работающего контейнера (безопасно для WAL)
+   docker exec geoatlas_app python -c "import sqlite3; s=sqlite3.connect('/app/data/geoatlas.db'); d=sqlite3.connect('/app/data/geoatlas_backup.db'); s.backup(d); d.close(); s.close()"
+   docker cp geoatlas_app:/app/data/geoatlas_backup.db ./geoatlas_backup_$(date +%F).db
+   ```
+   Для восстановления остановите контейнер, скопируйте резервную копию в `/app/data/geoatlas.db` (удалив старые `-wal`/`-shm` при замене файла) и запустите контейнер.
+4. **Обновление production через Portainer:**
+   - Дождитесь зелёного CI и публикации образа `ghcr.io/kazuzjkee/geoatlas:main`.
+   - В Portainer откройте Stack `geoatlas`, проверьте Environment variables, нажмите **Pull and redeploy** (не удаляя volume `geoatlas_data`).
+
+### Production Smoke-Test Checklist
+
+- [ ] `GET /` открывается (HTTP 200), счётчик посещений и превью-карта работают.
+- [ ] Гость при переходе на `/rostov_quiz_map.html` перенаправляется на `/login?next=...`, а `GET /api/maps` возвращает `401`.
+- [ ] Регистрация нового пользователя -> получение 6-значного письма по SMTP -> подтверждение кода -> выход -> повторный вход по email и паролю.
+- [ ] Восстановление пароля (`/forgot-password` -> код -> новый пароль -> вход с новым паролем).
+- [ ] Открытие карты региона после входа, загрузка тайлов, переключение слоёв, прохождение задания и сохранение результата.
+- [ ] Создание дуэли, подключение второго игрока и синхронизация раундов.
+- [ ] Вход в `/admin` под учётной записью преподавателя/администратора (и возврат `403` для обычного студента).
 
 ---
 
@@ -282,17 +309,18 @@ docker run -p 8000:8000 geoatlas
 | Метод | Эндпоинт | Доступ | Описание |
 |---|---|---|---|
 | `GET` | `/` | Публичный | Главная страница образовательного портала (`index.html`) |
-| `GET` | `/{map_name}.html` | Публичный | Доступ к сгенерированным интерактивным картам |
-| `GET` | `/api/stats/public` | Публичный | Публичная статистика для лендинга |
-| `POST` | `/api/auth/send-code` | Публичный | Отправка проверочного кода авторизации на почту `@sfedu.ru` |
-| `POST` | `/api/auth/verify-code`| Публичный | Верификация студента по одноразовому коду |
-| `POST` | `/api/results/save` | Студент | Сохранение результата теста / экзамена с токеном и нарушениями |
-| `GET` | `/api/results/leaderboard` | Публичный | Получение топа студентов для таблицы лидеров |
-| `GET` | `/api/student/heatmap` | Студент | Получение статистики ошибок для карты слабых мест |
-| `POST` | `/api/duel/create` | Публичный | Создание комнаты дуэли |
-| `WS` | `/ws/duel/{room_id}/{player_id}` | Публичный | WebSocket для дуэлей 1v1 в реальном времени |
-| `GET` | `/admin` | Basic Auth | Личный кабинет преподавателя и мониторинг успеваемости |
-| `GET` | `/admin/export-csv` | Basic Auth | Скачивание итоговой ведомости в формате CSV (Excel UTF-8) |
+| `GET` | `/login`, `/register`, `/forgot-password`, `/reset-password` | Публичный | Страницы единой аутентификации (`auth.html`) |
+| `POST` | `/api/auth/register`, `/api/auth/login`, `/api/auth/logout` | Публичный | Регистрация, вход по паролю и завершение сессии |
+| `POST` | `/api/auth/verify-code`, `/api/auth/forgot-password`, `/api/auth/reset-password` | Публичный | Подтверждение email и восстановление пароля |
+| `GET` | `/api/auth/me` | Пользователь | Проверка текущей серверной сессии и бейджа ЮФУ |
+| `GET` | `/{map_name}.html`, `/map/{region}` | Пользователь | Доступ к интерактивным картам после авторизации |
+| `POST` | `/api/results/save` | Пользователь | Сохранение результата теста / экзамена с токеном и нарушениями |
+| `GET` | `/api/results/leaderboard` | Пользователь | Получение таблицы лидеров |
+| `GET` | `/api/student/heatmap` | Пользователь | Получение статистики ошибок для карты слабых мест |
+| `POST` | `/api/duel/create`, `/api/duel/join`, `/api/duel/action/{room_id}` | Пользователь | Создание, вход и управление дуэлью (HTTP polling + опциональный WS) |
+| `GET` | `/api/duel/state/{room_id}` | Пользователь | Текущее состояние комнаты дуэли |
+| `GET` | `/admin` | Преподаватель / Админ | Личный кабинет преподавателя и мониторинг успеваемости |
+| `GET` | `/admin/export-csv` | Преподаватель / Админ | Скачивание итоговой ведомости в формате CSV (Excel UTF-8) |
 
 ---
 
