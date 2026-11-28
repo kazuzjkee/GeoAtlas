@@ -4,7 +4,7 @@ import sqlite3
 import threading
 import time
 import tempfile
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 DATA_DIR = os.environ.get("GEOATLAS_DATA_DIR", tempfile.gettempdir())
 os.makedirs(DATA_DIR, exist_ok=True)
