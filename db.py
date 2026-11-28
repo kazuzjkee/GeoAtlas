@@ -521,7 +521,7 @@ DEFAULT_BRANDING = {
     "primary_hover": "#1D4ED8",
     "secondary_color": "#0284C7",
     "accent_color": "#7C3AED",
-    "footer_text": "Институт наук о Земле ЮФУ • Кафедра физической географии, экологии и охраны природы",
+    "footer_text": "Институт наук о Земле (ИНоЗ) ЮФУ • Кафедра социально-экономической географии и природопользования",
     "university_short": "ЮФУ",
     "university_name": "Институт наук о Земле ЮФУ",
     "portal_title": "GeoAtlas"
@@ -584,7 +584,7 @@ DEFAULT_TEACHERS = [
         "password_hash": "6f0424d3ac26d28a4326294b3a8d580934f06f603067fb397234caf44952684c",
         "full_name": "Проф. Иванов И. И.",
         "organization": "Институт наук о Земле ЮФУ",
-        "department": "Кафедра физической географии",
+        "department": "Кафедра социально-экономической географии и природопользования",
         "role": "teacher"
     },
     {
@@ -602,7 +602,7 @@ DEFAULT_TEACHERS = [
         "password_hash": "26192eefa0331ca09ed90b188972f5c678b0140e3ed1ed0804dbaaa164b5cfaf",
         "full_name": "Декан наук о Земле ЮФУ",
         "organization": "Институт наук о Земле ЮФУ",
-        "department": "Деканат геолого-географического факультета",
+        "department": "Дирекция Института наук о Земле (ИНоЗ) ЮФУ",
         "role": "dean"
     },
     {
@@ -620,7 +620,7 @@ DEFAULT_TEACHERS = [
         "password_hash": "1205ca9652c34025de31248c15fbf1506be77c22fb7c8e129321fe4a534f3f08",
         "full_name": "Проф. Смирнов А. В.",
         "organization": "Институт наук о Земле ЮФУ",
-        "department": "Кафедра физической географии",
+        "department": "Кафедра социально-экономической географии и природопользования",
         "role": "teacher"
     },
     {

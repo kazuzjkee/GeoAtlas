@@ -426,7 +426,7 @@ def record_session_history(session_data: Dict[str, Any]) -> None:
 DEFAULT_GROUPS = [
     {
         "id": "grp-geofak-51",
-        "name": "Геофак-51 (ВКР)",
+        "name": "ИНоЗ-51 (ВКР)",
         "description": "5 курс, профиль: География и Экономика (ВКР)",
         "students": [
             {"name": "Литвинов Е. К.", "email": "elitvinov@sfedu.ru"},
@@ -446,7 +446,7 @@ DEFAULT_GROUPS = [
     },
     {
         "id": "grp-geofak-41",
-        "name": "Геофак-41 (Бакалавриат)",
+        "name": "ИНоЗ-41 (Бакалавриат)",
         "description": "4 курс, картография и ГИС",
         "students": [
             {"name": "Ковалев Д. В.", "email": "kovalev@sfedu.ru"},
@@ -1587,7 +1587,7 @@ def export_moodle(
                     "label": "Институт наук о Земле ЮФУ — Географический атлас",
                     "exported_by": teacher.get("full_name", "Преподаватель"),
                     "organization": teacher.get("organization", "ЮФУ"),
-                    "department": teacher.get("department", "Геофак"),
+                    "department": teacher.get("department", "ИНоЗ ЮФУ"),
                     "is_executive_summary": is_super
                 },
                 "lineItem": {

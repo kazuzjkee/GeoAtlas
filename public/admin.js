@@ -23,7 +23,7 @@ let allResults = [];
     const DEFAULT_PRESET_GROUPS = [
         {
             id: "grp-geofak-51",
-            name: "Геофак-51 (ВКР)",
+            name: "ИНоЗ-51 (ВКР)",
             description: "5 курс, профиль: География и Экономика (ВКР)",
             students: [
                 { name: "Литвинов Е. К.", email: "elitvinov@sfedu.ru" },
@@ -43,7 +43,7 @@ let allResults = [];
         },
         {
             id: "grp-geofak-41",
-            name: "Геофак-41 (Бакалавриат)",
+            name: "ИНоЗ-41 (Бакалавриат)",
             description: "4 курс, картография и ГИС",
             students: [
                 { name: "Ковалев Д. В.", email: "kovalev@sfedu.ru" },
@@ -1561,7 +1561,7 @@ let allResults = [];
         renderDispatcherGroups();
         renderTable();
         updateExecutiveMetrics();
-        showToast(teacherId === 'all' ? 'Показана сводка по всему факультету' : 'Применен фильтр преподавателя');
+        showToast(teacherId === 'all' ? 'Показана сводка по всему подразделению' : 'Применен фильтр преподавателя');
     }
     window.onExecutiveTeacherFilterChange = onExecutiveTeacherFilterChange;
 
@@ -1577,7 +1577,7 @@ let allResults = [];
         const dateStr = new Date().toLocaleDateString('ru-RU') + ' ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
         const teacherName = currentTeacher ? currentTeacher.full_name : 'Преподаватель ЮФУ';
         const orgName = currentTeacher ? currentTeacher.organization : 'Институт наук о Земле ЮФУ';
-        const deptName = currentTeacher ? (currentTeacher.department || 'Геолого-географический факультет') : 'Кафедра физической географии';
+        const deptName = currentTeacher ? (currentTeacher.department || 'Институт наук о Земле (ИНоЗ) ЮФУ') : 'Кафедра социально-экономической географии и природопользования';
         const isDean = currentTeacher && (currentTeacher.role === 'dean' || currentTeacher.username === 'dean_geo' || currentTeacher.username === 'admin');
 
         // Подсчет ключевых метрик для отчета
@@ -1795,7 +1795,7 @@ let allResults = [];
         primary_hover: "#1D4ED8",
         secondary_color: "#0284C7",
         accent_color: "#7C3AED",
-        footer_text: "Институт наук о Земле ЮФУ • Кафедра физической географии, экологии и охраны природы"
+        footer_text: "Институт наук о Земле (ИНоЗ) ЮФУ • Кафедра социально-экономической географии и природопользования"
     };
 
     const UNIVERSITY_PRESETS = {

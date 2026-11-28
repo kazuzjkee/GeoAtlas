@@ -4510,19 +4510,19 @@
                     <span class="bento-tag tag-slate">👨‍🏫 Преподавательский портал</span>
                     <h3 class="bento-title">Учебные группы, синхронный запуск тестов и ведомости ГЭК</h3>
                     <p class="bento-text">
-                        Централизованный веб-кабинет педагога с персистентным управлением учебными группами («Геофак-51», «Эконом-31»), абсолютным синхронным таймером запуска тестирования, защитой от списывания и мгновенным экспортом в CSV для ГЭК.
+                        Централизованный веб-кабинет педагога с персистентным управлением учебными группами («ИНоЗ-51», «Эконом-31»), абсолютным синхронным таймером запуска тестирования, защитой от списывания и мгновенным экспортом в CSV для ГЭК.
                     </p>
                 </div>
 
                 <div class="bento-mockup-wrap">
                     <div class="teacher-table-mock">
                         <div class="mock-table-row">
-                            <strong>Литвинов Е. К. (Геофак, 5 курс ВКР)</strong>
+                            <strong>Литвинов Е. К. (ИНоЗ ЮФУ, 5 курс ВКР)</strong>
                             <span style="color:#059669; font-weight:700;">15 / 15 (Отлично)</span>
                             <span class="mock-status-pill" style="font-size:10px;">0 нарушений</span>
                         </div>
                         <div class="mock-table-row">
-                            <strong>Иванов И. И. (Геофак, 4 курс)</strong>
+                            <strong>Иванов И. И. (ИНоЗ ЮФУ, 4 курс)</strong>
                             <span style="color:#059669; font-weight:700;">15 / 15 (Отлично)</span>
                             <span class="mock-status-pill" style="font-size:10px;">0 нарушений</span>
                         </div>
@@ -4862,8 +4862,8 @@
                 <!-- Текст рядом с логотипом -->
                 <div style="border-left: 2px solid var(--border); padding-left: 16px; margin-left: 8px;">
                     <div style="font-size: 14px; font-weight: 800; color: var(--text-main);">Южный федеральный университет</div>
-                    <div style="font-size: 12px; color: var(--text-muted);">Институт наук о Земле</div>
-                    <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">Кафедра физической географии, экологии и охраны природы</div>
+                    <div style="font-size: 12px; color: var(--text-muted);">Институт наук о Земле (ИНоЗ)</div>
+                    <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">Кафедра социально-экономической географии и природопользования</div>
                 </div>
             </div>
 
@@ -4876,7 +4876,7 @@
         </div>
 
         <div class="footer-bottom">
-            <div>© 2026 GeoAtlas. Все права защищены. Разработано в Институте наук о Земле ЮФУ.</div>
+            <div>© 2026 GeoAtlas. Все права защищены. Разработано на кафедре социально-экономической географии и природопользования Института наук о Земле Южного федерального университета.</div>
             <div style="display: flex; gap: 14px; flex-wrap: wrap;">
                 <span>Leaflet.js + Chart.js</span>
                 <span>•</span>
@@ -4911,7 +4911,7 @@
                 </div>
                 <div class="form-group">
                     <label>Академическая группа / Направление:</label>
-                    <input type="text" id="auth-group" placeholder="Геофак, 4 курс" class="auth-input">
+                    <input type="text" id="auth-group" placeholder="ИНоЗ ЮФУ, 4 курс" class="auth-input">
                 </div>
                 <div class="btn-group-vertical" style="margin-top: 14px;">
                     <button type="button" onclick="requestSfeduCode()" class="btn btn-primary btn-block">
@@ -5017,7 +5017,7 @@
                             <tr>
                                 <td>1</td>
                                 <td><strong>Литвинов Е. К.</strong></td>
-                                <td>Геофак, 5 курс (ВКР)</td>
+                                <td>ИНоЗ ЮФУ, 5 курс (ВКР)</td>
                                 <td>Пилотный полигон ЮФО + Мировые слои</td>
                                 <td><span class="gec-score-badge">15 / 15 (Отлично)</span></td>
                                 <td><span class="gec-token-code">EXAM-SFEDU-9142-8821</span></td>
@@ -5026,7 +5026,7 @@
                             <tr>
                                 <td>2</td>
                                 <td><strong>Иванов И. И.</strong></td>
-                                <td>Геофак, 4 курс</td>
+                                <td>ИНоЗ ЮФУ, 4 курс</td>
                                 <td>Агломерация Ростова-на-Дону</td>
                                 <td><span class="gec-score-badge">15 / 15 (Отлично)</span></td>
                                 <td><span class="gec-token-code">EXAM-SFEDU-8492-7104</span></td>
@@ -5044,7 +5044,7 @@
                             <tr>
                                 <td>4</td>
                                 <td><strong>Сидорова М. В.</strong></td>
-                                <td>Геофак, 4 курс</td>
+                                <td>ИНоЗ ЮФУ, 4 курс</td>
                                 <td>Краснодарский край и Черноморье</td>
                                 <td><span class="gec-score-badge">15 / 15 (Отлично)</span></td>
                                 <td><span class="gec-token-code">EXAM-SFEDU-7331-5029</span></td>
@@ -6486,10 +6486,10 @@
         function downloadGecReportCsv() {
             const rows = [
                 ['№', 'ФИО Студента', 'Группа / Профиль', 'Тематический модуль', 'Оценка ГЭК', 'Цифровой токен сдачи', 'Anti-Cheat статус'],
-                ['1', 'Литвинов Е. К.', 'Геофак, 5 курс (ВКР)', 'Пилотный полигон ЮФО + Мировые слои', '15 / 15 (Отлично)', 'EXAM-SFEDU-9142-8821', '0 нарушений (100%)'],
-                ['2', 'Иванов И. И.', 'Геофак, 4 курс', 'Агломерация Ростова-на-Дону', '15 / 15 (Отлично)', 'EXAM-SFEDU-8492-7104', '0 нарушений (100%)'],
+                ['1', 'Литвинов Е. К.', 'ИНоЗ ЮФУ, 5 курс (ВКР)', 'Пилотный полигон ЮФО + Мировые слои', '15 / 15 (Отлично)', 'EXAM-SFEDU-9142-8821', '0 нарушений (100%)'],
+                ['2', 'Иванов И. И.', 'ИНоЗ ЮФУ, 4 курс', 'Агломерация Ростова-на-Дону', '15 / 15 (Отлично)', 'EXAM-SFEDU-8492-7104', '0 нарушений (100%)'],
                 ['3', 'Петров А. С.', 'Экономфак, 3 курс', 'Choropleth ВРП и Демография', '14 / 15 (Хорошо)', 'EXAM-SFEDU-6218-4903', '0 нарушений (100%)'],
-                ['4', 'Сидорова М. В.', 'Геофак, 4 курс', 'Краснодарский край и Черноморье', '15 / 15 (Отлично)', 'EXAM-SFEDU-7331-5029', '0 нарушений (100%)']
+                ['4', 'Сидорова М. В.', 'ИНоЗ ЮФУ, 4 курс', 'Краснодарский край и Черноморье', '15 / 15 (Отлично)', 'EXAM-SFEDU-7331-5029', '0 нарушений (100%)']
             ];
 
             const csvContent = '\uFEFF' + rows.map(e => e.map(cell => `"${cell.replace(/"/g, '""')}"`).join(';')).join('\r\n');
