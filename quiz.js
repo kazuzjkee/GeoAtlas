@@ -4743,7 +4743,34 @@ function renderDistrictMetricChart(metric) {
     });
 }
 
-function showDistrictInfoCard(districtName) {
+function normalizeOktmo8(raw) {
+    const digits = String(raw || '').replace(/\D/g, '');
+    return digits.length >= 8 ? digits.slice(0, 8) : '';
+}
+
+function resolveDistrictOktmo(districtName, explicitOktmo) {
+    const direct = normalizeOktmo8(explicitOktmo);
+    if (direct) return direct;
+
+    if (!window._districtOktmoByName) {
+        window._districtOktmoByName = {};
+        const map = getMapObject();
+        if (map && typeof map.eachLayer === 'function') {
+            map.eachLayer(function(layer) {
+                const props = layer && layer.feature && layer.feature.properties;
+                if (!props || !props.oktmo) return;
+                const ok8 = normalizeOktmo8(props.oktmo);
+                const nm = props.display_name || props.NAME_RU || props.NAME_1 || props.NAME;
+                if (ok8 && nm) {
+                    window._districtOktmoByName[normalizeDistrictName(nm)] = ok8;
+                }
+            });
+        }
+    }
+    return window._districtOktmoByName[normalizeDistrictName(districtName)] || '';
+}
+
+function showDistrictInfoCard(districtName, explicitOktmo) {
     const targetNorm = normalizeDistrictName(districtName);
     const targetSimple = districtName.toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
 
@@ -4762,6 +4789,10 @@ function showDistrictInfoCard(districtName) {
 
     highlightDistrictOnMapByName(district.name);
     window._currentDistrictForChart = district;
+    const oktmo8 = resolveDistrictOktmo(district.name, explicitOktmo);
+    const passportBtnHtml = oktmo8.startsWith('60')
+        ? `<button type="button" id="btn-open-passport" class="passport-trigger-btn" onclick="openTerritoryPassport('${oktmo8}', '${escapeHtml(district.center || '')}')">📋 Географический паспорт</button>`
+        : '';
 
     const neighborsHtml = district.neighbors && district.neighbors.length > 0 
         ? district.neighbors.map(n => `<span class="neighbor-tag" onclick="showDistrictInfoCard('${escapeHtml(n)}')">${escapeHtml(n)}</span>`).join('')
@@ -4785,6 +4816,7 @@ function showDistrictInfoCard(districtName) {
             <div class="info-row"><span>Население:</span><strong>~${escapeHtml(popFormatted)}</strong></div>
             <div class="info-row"><span>ВРП:</span><strong>~${escapeHtml(grpFormatted)}</strong></div>
             <div class="info-row"><span>Площадь:</span><strong>~${escapeHtml(district.area)} км²</strong></div>
+            ${passportBtnHtml}
             <div style="margin-top: 8px;">
                 <span style="color: #64748B; font-size: 11px; font-weight: 600;">Граничит с:</span>
                 <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${neighborsHtml}</div>
@@ -4847,7 +4879,7 @@ function setupDistrictClickListeners() {
                         return;
                     }
                     if (currentQuiz === null) {
-                        showDistrictInfoCard(name);
+                        showDistrictInfoCard(name, props.oktmo || '');
                     }
                 });
             }
@@ -9196,3 +9228,426 @@ if (typeof window !== 'undefined') {
         DuelManager.clearAllTimers();
     });
 }
+
+// ================= ГЕОГРАФИЧЕСКИЙ ПАСПОРТ ТЕРРИТОРИИ (ЭТАП 2) =================
+window._rostovPassportsCache = null;
+window._rostovPassportsPromise = null;
+window._passportCharts = [];
+window._passportState = { oktmo: '', center: '', tab: 'overview' };
+window._passportEscBound = false;
+
+async function loadRostovPassportsData() {
+    if (window._rostovPassportsCache) return window._rostovPassportsCache;
+    if (!window._rostovPassportsPromise) {
+        window._rostovPassportsPromise = fetch('/public/maps/rostov_passports.json', { credentials: 'same-origin' })
+            .then(async (res) => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                window._rostovPassportsCache = data;
+                return data;
+            })
+            .catch((err) => {
+                window._rostovPassportsPromise = null;
+                throw err;
+            });
+    }
+    return window._rostovPassportsPromise;
+}
+
+function destroyPassportCharts() {
+    if (Array.isArray(window._passportCharts)) {
+        window._passportCharts.forEach((ch) => {
+            try { ch.destroy(); } catch (e) {}
+        });
+    }
+    window._passportCharts = [];
+}
+
+function ensurePassportModalDom() {
+    let overlay = document.getElementById('territory-passport-modal');
+    if (overlay) return overlay;
+
+    overlay = document.createElement('div');
+    overlay.id = 'territory-passport-modal';
+    overlay.className = 'passport-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'passport-modal-title');
+    overlay.innerHTML = `
+        <div class="passport-dialog">
+            <div class="passport-header">
+                <div>
+                    <h2 id="passport-modal-title" class="passport-title">Географический паспорт территории</h2>
+                    <div id="passport-modal-subtitle" class="passport-subtitle"></div>
+                </div>
+                <button type="button" id="passport-close-btn" class="passport-close-btn" aria-label="Закрыть паспорт">&times;</button>
+            </div>
+            <div id="passport-tabs-bar" class="passport-tabs" role="tablist">
+                <button type="button" class="passport-tab-btn active" data-tab="overview" role="tab" aria-selected="true">Обзор</button>
+                <button type="button" class="passport-tab-btn" data-tab="demography" role="tab" aria-selected="false">Демография</button>
+                <button type="button" class="passport-tab-btn" data-tab="economy" role="tab" aria-selected="false">Экономика</button>
+                <button type="button" class="passport-tab-btn" data-tab="infrastructure" role="tab" aria-selected="false">Инфраструктура</button>
+            </div>
+            <div id="passport-modal-body" class="passport-body"></div>
+            <div id="passport-modal-footer" class="passport-footer"></div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeTerritoryPassport();
+    });
+    const closeBtn = document.getElementById('passport-close-btn');
+    if (closeBtn) closeBtn.addEventListener('click', closeTerritoryPassport);
+
+    const tabsBar = document.getElementById('passport-tabs-bar');
+    if (tabsBar) {
+        tabsBar.addEventListener('click', (e) => {
+            const btn = e.target.closest('.passport-tab-btn');
+            if (!btn) return;
+            const nextTab = btn.getAttribute('data-tab');
+            if (nextTab && nextTab !== window._passportState.tab) {
+                window._passportState.tab = nextTab;
+                renderActivePassportView();
+            }
+        });
+    }
+
+    if (!window._passportEscBound) {
+        window._passportEscBound = true;
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('territory-passport-modal');
+                if (modal && modal.classList.contains('open')) {
+                    closeTerritoryPassport();
+                }
+            }
+        });
+    }
+    return overlay;
+}
+
+function closeTerritoryPassport() {
+    destroyPassportCharts();
+    const overlay = document.getElementById('territory-passport-modal');
+    if (overlay) overlay.classList.remove('open');
+}
+
+function formatPassportVal(val, unit, signed = false) {
+    if (val === null || val === undefined || Number.isNaN(Number(val))) {
+        return 'Нет данных';
+    }
+    const num = Number(val);
+    const prefix = signed && num > 0 ? '+' : '';
+    const formatted = num.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+    return unit ? `${prefix}${formatted} ${unit}` : `${prefix}${formatted}`;
+}
+
+function buildPassportKpiCard(title, indObj, indMeta, extraNote = '', signed = false) {
+    const val = indObj ? indObj.latest_value : null;
+    const yr = indObj && indObj.latest_year ? `${indObj.latest_year} г.` : 'год не указан';
+    const unit = (indMeta && indMeta.unit) || '';
+    const code = (indMeta && indMeta.code) || '—';
+    const valText = formatPassportVal(val, unit, signed);
+    const extraHtml = extraNote ? ` · ${escapeHtml(extraNote)}` : '';
+    const formulaHtml = indMeta && indMeta.derived_formula
+        ? ` · Расчёт: ${escapeHtml(indMeta.derived_formula)}`
+        : '';
+    return `
+        <div class="passport-kpi">
+            <div class="passport-kpi-label">${escapeHtml(title)}</div>
+            <div class="passport-kpi-val">${escapeHtml(valText)}</div>
+            <div class="passport-kpi-meta">Актуальность: ${escapeHtml(yr)} · Код: ${escapeHtml(code)}${formulaHtml}${extraHtml} · Источник: Росстат / «Если быть точным»</div>
+        </div>
+    `;
+}
+
+function renderPassportLineChart(canvasId, labels, datasets, unitLabel, beginAtZero = false) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || typeof Chart === 'undefined') return;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const gridColor = isDark ? 'rgba(148, 163, 184, 0.16)' : '#E2E8F0';
+    const tickColor = isDark ? '#CBD5E1' : '#475569';
+
+    const ch = new Chart(canvas, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: datasets.length > 1,
+                    labels: { color: tickColor, boxWidth: 12, font: { size: 11 } },
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const raw = ctx.raw;
+                            if (raw === null || raw === undefined) return ` ${ctx.dataset.label}: Нет данных`;
+                            return ` ${ctx.dataset.label}: ${Number(raw).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${unitLabel}`;
+                        },
+                    },
+                },
+            },
+            scales: {
+                x: { ticks: { color: tickColor, font: { size: 10 } }, grid: { display: false } },
+                y: {
+                    beginAtZero,
+                    ticks: {
+                        color: tickColor,
+                        font: { size: 10 },
+                        callback: (v) => Number(v).toLocaleString('ru-RU'),
+                    },
+                    grid: { color: gridColor },
+                },
+            },
+        },
+    });
+    window._passportCharts.push(ch);
+}
+
+function renderActivePassportView() {
+    destroyPassportCharts();
+    const data = window._rostovPassportsCache;
+    const body = document.getElementById('passport-modal-body');
+    const titleEl = document.getElementById('passport-modal-title');
+    const subEl = document.getElementById('passport-modal-subtitle');
+    const footerEl = document.getElementById('passport-modal-footer');
+    if (!data || !body) return;
+
+    const oktmo = window._passportState.oktmo;
+    const territory = data.territories && data.territories[oktmo];
+    const meta = data.metadata || {};
+    const indMeta = meta.indicators || {};
+
+    document.querySelectorAll('#passport-tabs-bar .passport-tab-btn').forEach((btn) => {
+        const active = btn.getAttribute('data-tab') === window._passportState.tab;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+
+    if (!territory) {
+        if (titleEl) titleEl.textContent = 'Данные территории не найдены';
+        if (subEl) subEl.innerHTML = `<span>ОКТМО: ${escapeHtml(oktmo || 'не определён')}</span>`;
+        body.innerHTML = `<div class="passport-state-box">Нет статистических данных для территории с ОКТМО ${escapeHtml(oktmo || '—')}. Базовая карточка района на карте остаётся доступной.</div>`;
+        return;
+    }
+
+    const centerText = window._passportState.center ? ` · Центр: ${escapeHtml(window._passportState.center)}` : '';
+    if (titleEl) titleEl.textContent = territory.name;
+    if (subEl) {
+        subEl.innerHTML = `
+            <span class="passport-badge">${escapeHtml(territory.type)}</span>
+            <span>ОКТМО: <strong>${escapeHtml(territory.oktmo)}</strong>${centerText}</span>
+        `;
+    }
+
+    const inds = territory.indicators || {};
+    const tab = window._passportState.tab;
+
+    if (tab === 'overview') {
+        const areaText = territory.area_km2 !== null && territory.area_km2 !== undefined
+            ? `${Number(territory.area_km2).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} км²`
+            : 'Нет данных';
+        body.innerHTML = `
+            <div class="passport-grid">
+                <div class="passport-kpi">
+                    <div class="passport-kpi-label">Площадь территории</div>
+                    <div class="passport-kpi-val">${escapeHtml(areaText)}</div>
+                    <div class="passport-kpi-meta">Рассчитано по геометрии OSM (равновеликая проекция Альберса)</div>
+                </div>
+                ${buildPassportKpiCard('Среднегодовая численность населения', inds.population_avg, indMeta.population_avg)}
+                ${buildPassportKpiCard('Плотность населения', inds.population_density, indMeta.population_density)}
+                ${buildPassportKpiCard('Естественный прирост (убыль)', inds.natural_growth, indMeta.natural_growth, '', true)}
+            </div>
+        `;
+    } else if (tab === 'demography') {
+        const popSeries = (inds.population_avg && inds.population_avg.series) || {};
+        const popYears = Object.keys(popSeries).sort();
+        const bSeries = (inds.births && inds.births.series) || {};
+        const dSeries = (inds.deaths && inds.deaths.series) || {};
+        const bdYears = Array.from(new Set([...Object.keys(bSeries), ...Object.keys(dSeries)])).sort();
+
+        body.innerHTML = `
+            <div class="passport-grid">
+                ${buildPassportKpiCard('Численность населения (среднегодовая)', inds.population_avg, indMeta.population_avg)}
+                ${buildPassportKpiCard('Число родившихся', inds.births, indMeta.births)}
+                ${buildPassportKpiCard('Число умерших', inds.deaths, indMeta.deaths)}
+                ${buildPassportKpiCard('Естественный прирост (убыль)', inds.natural_growth, indMeta.natural_growth, '', true)}
+            </div>
+            <div class="passport-chart-card">
+                <div class="passport-chart-title">Динамика среднегодовой численности населения</div>
+                <div class="passport-chart-sub">Код ${escapeHtml((indMeta.population_avg && indMeta.population_avg.code) || '41.8112013')} · Единица: человек · Источник: Росстат / «Если быть точным»</div>
+                <div class="passport-chart-wrap"><canvas id="passport-chart-pop"></canvas></div>
+            </div>
+            <div class="passport-chart-card">
+                <div class="passport-chart-title">Рождаемость и смертность (число человек в год)</div>
+                <div class="passport-chart-sub">Коды 31.8112003 и 31.8112001 · Единица: человек · Пропуски отображаются разрывом линии</div>
+                <div class="passport-chart-wrap"><canvas id="passport-chart-bd"></canvas></div>
+            </div>
+        `;
+        renderPassportLineChart(
+            'passport-chart-pop',
+            popYears,
+            [{
+                label: 'Население',
+                data: popYears.map((y) => (popSeries[y] === undefined ? null : popSeries[y])),
+                borderColor: '#2563EB',
+                backgroundColor: 'rgba(37, 99, 235, 0.12)',
+                tension: 0.25,
+                spanGaps: false,
+                fill: true,
+            }],
+            'чел.',
+            false
+        );
+        renderPassportLineChart(
+            'passport-chart-bd',
+            bdYears,
+            [
+                {
+                    label: 'Родившихся',
+                    data: bdYears.map((y) => (bSeries[y] === undefined ? null : bSeries[y])),
+                    borderColor: '#10B981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.25,
+                    spanGaps: false,
+                },
+                {
+                    label: 'Умерших',
+                    data: bdYears.map((y) => (dSeries[y] === undefined ? null : dSeries[y])),
+                    borderColor: '#EF4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    tension: 0.25,
+                    spanGaps: false,
+                },
+            ],
+            'чел.',
+            true
+        );
+    } else if (tab === 'economy') {
+        const invSeries = (inds.investments_per_capita && inds.investments_per_capita.series) || {};
+        const invYears = Object.keys(invSeries).sort();
+        const agSeries = (inds.agriculture_output && inds.agriculture_output.series) || {};
+        const agYears = Object.keys(agSeries).sort();
+
+        body.innerHTML = `
+            <div class="passport-grid">
+                ${buildPassportKpiCard('Инвестиции в основной капитал на 1 чел.', inds.investments_per_capita, indMeta.investments_per_capita, 'номинальные цены')}
+                ${buildPassportKpiCard('Продукция сельского хозяйства (все категории)', inds.agriculture_output, indMeta.agriculture_output, 'номинальные цены')}
+            </div>
+            <div class="passport-chart-card">
+                <div class="passport-chart-title">Инвестиции в основной капитал на душу населения (в номинальных ценах)</div>
+                <div class="passport-chart-sub">Код 41.8109003 · Единица: рубль · Без бюджетных средств · Источник: Росстат / «Если быть точным»</div>
+                <div class="passport-chart-wrap"><canvas id="passport-chart-inv"></canvas></div>
+            </div>
+            <div class="passport-chart-card">
+                <div class="passport-chart-title">Продукция сельского хозяйства (хозяйства всех категорий, в номинальных ценах)</div>
+                <div class="passport-chart-sub">Код 7.8007010 · Единица: тысяча рублей · Источник: Росстат / «Если быть точным»</div>
+                <div class="passport-chart-wrap"><canvas id="passport-chart-agri"></canvas></div>
+            </div>
+        `;
+        renderPassportLineChart(
+            'passport-chart-inv',
+            invYears,
+            [{
+                label: 'Инвестиции на душу',
+                data: invYears.map((y) => (invSeries[y] === undefined ? null : invSeries[y])),
+                borderColor: '#F59E0B',
+                backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                tension: 0.25,
+                spanGaps: false,
+                fill: true,
+            }],
+            '₽',
+            true
+        );
+        renderPassportLineChart(
+            'passport-chart-agri',
+            agYears,
+            [{
+                label: 'Продукция с/х',
+                data: agYears.map((y) => (agSeries[y] === undefined ? null : agSeries[y])),
+                borderColor: '#059669',
+                backgroundColor: 'rgba(5, 150, 105, 0.12)',
+                tension: 0.25,
+                spanGaps: false,
+                fill: true,
+            }],
+            'тыс. ₽',
+            true
+        );
+    } else if (tab === 'infrastructure') {
+        const hSeries = (inds.housing_commissioned && inds.housing_commissioned.series) || {};
+        const hYears = Object.keys(hSeries).sort();
+
+        body.innerHTML = `
+            <div class="passport-grid">
+                ${buildPassportKpiCard('Введено в действие жилых домов', inds.housing_commissioned, indMeta.housing_commissioned)}
+            </div>
+            <div class="passport-chart-card">
+                <div class="passport-chart-title">Динамика ввода в действие жилых домов</div>
+                <div class="passport-chart-sub">Код 37.8010001 · Единица: квадратный метр общей площади · Источник: Росстат / «Если быть точным»</div>
+                <div class="passport-chart-wrap"><canvas id="passport-chart-housing"></canvas></div>
+            </div>
+        `;
+        renderPassportLineChart(
+            'passport-chart-housing',
+            hYears,
+            [{
+                label: 'Ввод жилья',
+                data: hYears.map((y) => (hSeries[y] === undefined ? null : hSeries[y])),
+                borderColor: '#8B5CF6',
+                backgroundColor: 'rgba(139, 92, 246, 0.12)',
+                tension: 0.25,
+                spanGaps: false,
+                fill: true,
+            }],
+            'м²',
+            true
+        );
+    }
+
+    if (footerEl) {
+        footerEl.innerHTML = `
+            <strong>Источники и лицензии:</strong> ${escapeHtml(meta.attribution || 'Росстат; обработка: «Если быть точным»')} (лицензия <strong>${escapeHtml(meta.license || 'CC BY 4.0')}</strong>, версия ${escapeHtml(meta.dataset_version || 'v20260928')}).
+            Границы: OpenStreetMap (лицензия <strong>ODbL 1.0</strong>).
+            Отсутствующие значения отображаются как «Нет данных» и не заменяются нулями.
+        `;
+    }
+}
+
+async function openTerritoryPassport(oktmo8, centerName) {
+    const cleanOktmo = normalizeOktmo8(oktmo8);
+    window._passportState = { oktmo: cleanOktmo, center: centerName || '', tab: 'overview' };
+    const overlay = ensurePassportModalDom();
+    overlay.classList.add('open');
+
+    const titleEl = document.getElementById('passport-modal-title');
+    const subEl = document.getElementById('passport-modal-subtitle');
+    const bodyEl = document.getElementById('passport-modal-body');
+    const footerEl = document.getElementById('passport-modal-footer');
+
+    if (!window._rostovPassportsCache) {
+        destroyPassportCharts();
+        if (titleEl) titleEl.textContent = 'Географический паспорт территории';
+        if (subEl) subEl.textContent = `ОКТМО: ${cleanOktmo || '—'}`;
+        if (bodyEl) bodyEl.innerHTML = '<div class="passport-state-box">⏳ Загрузка статистических данных паспорта...</div>';
+        if (footerEl) footerEl.textContent = '';
+    }
+
+    try {
+        await loadRostovPassportsData();
+        renderActivePassportView();
+    } catch (err) {
+        destroyPassportCharts();
+        if (bodyEl) {
+            bodyEl.innerHTML = `<div class="passport-state-box">⚠️ Не удалось загрузить данные географического паспорта (${escapeHtml(err && err.message ? err.message : 'ошибка сети')}). Вы можете продолжать работу с базовой карточкой района.</div>`;
+        }
+    }
+}
+
+window.openTerritoryPassport = openTerritoryPassport;
+window.closeTerritoryPassport = closeTerritoryPassport;

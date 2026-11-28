@@ -169,3 +169,12 @@ def test_etl_fixture_slice_filtering_nulls_and_duplicate_guard():
     dup_zip = _make_csv_zip(dup_rows, base_fields)
     with pytest.raises(ValueError, match="Duplicate observation"):
         etl.parse_indicator_zip(dup_zip, etl.INDICATORS_SPEC[0], set(valid_oktmos))
+
+
+def test_rostov_passports_endpoint_auth_and_payload(anon_client, client):
+    assert anon_client.get("/public/maps/rostov_passports.json").status_code == 401
+    ok = client.get("/public/maps/rostov_passports.json")
+    assert ok.status_code == 200
+    body = ok.json()
+    assert body["metadata"]["total_territories"] == 55
+    assert len(body["territories"]) == 55
