@@ -16,7 +16,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import geopandas as gpd
+
+def _import_geopandas():
+    """Lazy import of geopandas so module load never crashes if numpy/gdal ABI fails."""
+    try:
+        import geopandas as gpd  # type: ignore
+        return gpd, None
+    except Exception as exc:
+        return None, f"{type(exc).__name__}: {exc}"
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -308,19 +315,23 @@ def _validate_passport_json(
         if not geom_path.exists():
             warnings.append(f"Связанный файл геометрии не найден: {geom_rel}")
         else:
-            try:
-                gdf = gpd.read_file(geom_path)
-                legacy_map = entry.get("legacy_oktmo_map") or {}
-                shp_oktmos = {
-                    legacy_map.get(_normalize_oktmo8(ok), _normalize_oktmo8(ok))
-                    for ok in gdf["oktmo"]
-                }
-                if shp_oktmos != seen_oktmos:
-                    errors.append(
-                        f"Расхождение ОКТМО с геометрией ({len(shp_oktmos)} в SHP vs {len(seen_oktmos)} в JSON)"
-                    )
-            except Exception as exc:
-                warnings.append(f"Не удалось проверить геометрию {geom_rel}: {exc}")
+            gpd, gpd_err = _import_geopandas()
+            if gpd is None:
+                warnings.append(f"Проверка геометрии {geom_rel} пропущена (GeoPandas недоступен): {gpd_err}")
+            else:
+                try:
+                    gdf = gpd.read_file(geom_path)
+                    legacy_map = entry.get("legacy_oktmo_map") or {}
+                    shp_oktmos = {
+                        legacy_map.get(_normalize_oktmo8(ok), _normalize_oktmo8(ok))
+                        for ok in gdf["oktmo"]
+                    }
+                    if shp_oktmos != seen_oktmos:
+                        errors.append(
+                            f"Расхождение ОКТМО с геометрией ({len(shp_oktmos)} в SHP vs {len(seen_oktmos)} в JSON)"
+                        )
+                except Exception as exc:
+                    warnings.append(f"Не удалось проверить геометрию {geom_rel}: {exc}")
 
     # Per-indicator checks
     ind_meta_map = meta.get("indicators") or {}
@@ -427,21 +438,25 @@ def _validate_spatial_entry(entry: Dict[str, Any], base_dir: Path) -> Dict[str, 
         }
 
     if entry["kind"] == "shapefile":
-        try:
-            gdf = gpd.read_file(target)
-            territory_count = len(gdf)
-            exp = entry.get("expected_territories")
-            if exp is not None and territory_count != exp:
-                errors.append(f"Ожидалось {exp} объектов, найдено {territory_count}")
-            if entry.get("require_oktmo"):
-                if "oktmo" not in gdf.columns:
-                    errors.append("Отсутствует обязательный атрибут oktmo")
-                else:
-                    null_ok = int(gdf["oktmo"].isna().sum())
-                    if null_ok > 0:
-                        errors.append(f"Пропущен код ОКТМО у {null_ok} объектов")
-        except Exception as exc:
-            errors.append(f"Ошибка чтения Shapefile: {exc}")
+        gpd, gpd_err = _import_geopandas()
+        if gpd is None:
+            warnings.append(f"Проверка Shapefile пропущена (GeoPandas недоступен): {gpd_err}")
+        else:
+            try:
+                gdf = gpd.read_file(target)
+                territory_count = len(gdf)
+                exp = entry.get("expected_territories")
+                if exp is not None and territory_count != exp:
+                    errors.append(f"Ожидалось {exp} объектов, найдено {territory_count}")
+                if entry.get("require_oktmo"):
+                    if "oktmo" not in gdf.columns:
+                        errors.append("Отсутствует обязательный атрибут oktmo")
+                    else:
+                        null_ok = int(gdf["oktmo"].isna().sum())
+                        if null_ok > 0:
+                            errors.append(f"Пропущен код ОКТМО у {null_ok} объектов")
+            except Exception as exc:
+                errors.append(f"Ошибка чтения Shapefile: {exc}")
     elif entry["kind"] == "shapefile_dir":
         shps = list(target.glob("*.shp"))
         territory_count = len(shps)

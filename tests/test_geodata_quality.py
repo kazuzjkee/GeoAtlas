@@ -153,3 +153,40 @@ def test_admin_quality_endpoints_and_public_sources_safety(anon_client, client, 
     assert "Py_Geo" not in pub_json
     assert "sha256" not in pub_json
     assert len(pub.json()["sources"]) >= 2
+
+
+def test_server_survives_when_geodata_monitor_unavailable(anon_client, client, auth_headers, monkeypatch):
+    import server
+
+    def _broken_monitor():
+        raise ImportError("cannot import name '_multiarray_umath' from 'numpy._core'")
+
+    monkeypatch.setattr(server, "_import_geodata_monitor", _broken_monitor)
+
+    assert anon_client.get("/").status_code == 200
+    assert anon_client.get("/api/passports/demo").status_code == 200
+
+    dq = client.get("/api/admin/data-quality", headers=auth_headers)
+    assert dq.status_code == 200
+    dq_body = dq.json()
+    assert dq_body["monitor_available"] is False
+    assert dq_body["summary"]["overall_status"] == "unavailable"
+    assert "недоступен" in dq_body["message"]
+
+    pub = anon_client.get("/api/data-sources")
+    assert pub.status_code == 200
+    assert pub.json()["monitor_available"] is False
+
+
+def test_geodata_monitor_survives_when_geopandas_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        geodata_monitor,
+        "_import_geopandas",
+        lambda: (None, "ImportError: numpy._core._multiarray_umath"),
+    )
+    report = geodata_monitor.build_quality_report(check_remote=False)
+    assert report["summary"]["total_datasets"] == len(geodata_monitor.DATA_REGISTRY)
+    assert any(
+        any("GeoPandas недоступен" in w for w in ds.get("warnings", []))
+        for ds in report["datasets"]
+    )

@@ -1,8 +1,9 @@
 fastapi
 uvicorn[standard]
-geopandas
-shapely
-folium
+numpy>=1.26.4,<2.5
+geopandas>=1.0,<2.0
+shapely>=2.0,<3.0
+folium>=0.16,<2.0
 pydantic
 python-multipart
 python-dotenv==1.0.0

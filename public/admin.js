@@ -1779,6 +1779,12 @@ let allResults = [];
             lastDataQualityReport = report;
             const s = report.summary || {};
 
+            if (report.monitor_available === false || s.overall_status === 'unavailable') {
+                if (summaryBox) summaryBox.innerHTML = '';
+                tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:#D97706;padding:18px;">⚠️ ${escapeHtml(report.message || 'Мониторинг геоданных временно недоступен в текущем окружении.')}</td></tr>`;
+                return;
+            }
+
             if (summaryBox) {
                 summaryBox.innerHTML = `
                     <div class="exec-metric-card" style="background: var(--bg-sunken); border: 1px solid var(--border); padding: 14px; border-radius: 10px;">

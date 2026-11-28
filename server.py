@@ -32,7 +32,6 @@ import urllib.error
 import urllib.parse
 import db
 import auth_service
-import geodata_monitor
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db.init_db()
@@ -1226,17 +1225,86 @@ def get_all_students(teacher: Dict[str, Any] = Depends(check_admin)) -> List[Dic
     return list(students_map.values())
 
 
+def _load_cached_quality_report() -> Optional[Dict[str, Any]]:
+    """Loads a pre-generated Data Monitor JSON report if available on disk."""
+    candidates = [
+        os.path.join(os.environ.get("GEOATLAS_DATA_DIR") or os.path.join(BASE_DIR, "data"), "quality_report.json"),
+        os.path.join(BASE_DIR, "quality_report.json"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict) and "datasets" in data and "summary" in data:
+                    data.setdefault("monitor_available", True)
+                    data["from_cached_report"] = True
+                    return data
+            except Exception:
+                continue
+    return None
+
+
+def _import_geodata_monitor():
+    """Lazy import of geodata_monitor so main app startup never fails on geo/numpy errors."""
+    import importlib
+    return importlib.import_module("geodata_monitor")
+
+
 @app.get("/api/admin/data-quality")
 def get_admin_data_quality(
     check_remote: bool = False,
     teacher: Dict[str, Any] = Depends(check_admin),
 ) -> Dict[str, Any]:
-    return geodata_monitor.build_quality_report(check_remote=check_remote)
+    try:
+        gm = _import_geodata_monitor()
+        report = gm.build_quality_report(check_remote=check_remote)
+        report.setdefault("monitor_available", True)
+        return report
+    except Exception as exc:
+        cached = _load_cached_quality_report()
+        if cached is not None:
+            cached["monitor_warning"] = f"Живая проверка недоступна ({type(exc).__name__}), показан сохранённый отчёт."
+            return cached
+        return {
+            "generated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "check_remote": bool(check_remote),
+            "monitor_available": False,
+            "message": f"Модуль мониторинга геоданных (Data Monitor) недоступен: {type(exc).__name__}: {exc}",
+            "summary": {
+                "total_datasets": 0,
+                "passed": 0,
+                "warned": 0,
+                "failed": 0,
+                "stale": 0,
+                "unknown": 0,
+                "overall_status": "unavailable",
+            },
+            "datasets": [],
+        }
 
 
 @app.get("/api/data-sources")
 def get_public_data_sources() -> Dict[str, Any]:
-    return geodata_monitor.get_public_sources_summary()
+    try:
+        gm = _import_geodata_monitor()
+        return gm.get_public_sources_summary()
+    except Exception as exc:
+        cached = _load_cached_quality_report()
+        if cached is not None:
+            sources = [
+                {
+                    "name": ds.get("name"),
+                    "region": ds.get("region"),
+                    "source": ds.get("source"),
+                    "license": ds.get("license"),
+                    "updated_at": ds.get("generated_at") or ds.get("published_at") or ds.get("last_downloaded_at"),
+                }
+                for ds in cached.get("datasets", [])
+                if ds.get("kind") in ("passport_json", "shapefile")
+            ]
+            return {"sources": sources}
+        return {"sources": [], "monitor_available": False, "message": f"Data Monitor недоступен: {type(exc).__name__}"}
 
 
 @app.get("/api/passports/demo")
